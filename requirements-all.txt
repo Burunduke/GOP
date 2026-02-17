@@ -1,0 +1,56 @@
+# Все зависимости для GOP проекта
+# Установить с: pip install -r requirements-all.txt
+
+# Включает основные зависимости
+-r requirements.txt
+
+# GUI зависимости
+PyQt6>=6.4.0,<7.0.0
+
+# Продвинутая обработка
+pywavelets>=1.4.0,<2.0.0
+xarray>=2023.1.0,<2024.0.0
+dask>=2023.1.0,<2024.0.0
+
+# Облачное хранение
+boto3>=1.26.0,<2.0.0
+google-cloud-storage>=2.7.0,<3.0.0
+azure-storage-blob>=12.14.0,<13.0.0
+
+# GPU ускорение (только для Linux/Windows)
+cupy-cuda11x>=12.0.0,<13.0.0; sys_platform != "darwin"
+
+# Разработка
+black>=23.0.0,<24.0.0
+flake8>=6.0.0,<7.0.0
+mypy>=1.0.0,<2.0.0
+pre-commit>=3.0.0,<4.0.0
+isort>=5.12.0,<6.0.0
+pylint>=2.17.0,<3.0.0
+
+# Тестирование
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-mock>=3.10.0,<4.0.0
+pytest-xdist>=3.0.0,<4.0.0
+
+# Документация
+sphinx>=7.0.0,<8.0.0
+sphinx-rtd-theme>=1.2.0,<2.0.0
+sphinx-autodoc-typehints>=1.24.0,<2.0.0
+
+# Безопасность
+bandit>=1.7.5,<2.0.0
+safety>=2.3.0,<3.0.0
+
+# Профилирование
+memory-profiler>=0.61.0,<1.0.0
+line-profiler>=4.1.0,<5.0.0
+
+# Проверка зависимостей
+pip-audit>=2.5.0,<3.0.0
+pipdeptree>=2.13.0,<3.0.0
+
+# Типизация
+types-PyYAML>=6.0.0,<7.0.0
+types-requests>=2.31.0,<3.0.0

@@ -1,0 +1,13 @@
+- id: docs-check
+  name: Check documentation
+  entry: docs/check_docs.sh
+  language: script
+  files: ^(src/|docs/)
+  pass_filenames: false
+
+- id: docs-generate
+  name: Generate documentation
+  entry: docs/generate_docs.sh
+  language: script
+  files: ^(src/|docs/)
+  pass_filenames: false

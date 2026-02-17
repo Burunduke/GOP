@@ -1,0 +1,172 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-coverage-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-coverage-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Generate coverage report
+      run: |
+        pytest tests/ --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing --cov-fail-under=70
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: htmlcov/
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read coverage summary
+          const coveragePath = 'coverage.xml';
+          if (fs.existsSync(coveragePath)) {
+            const coverage = fs.readFileSync(coveragePath, 'utf8');
+            
+            // Extract line coverage percentage
+            const lineCoverageMatch = coverage.match(/line-rate="([^"]+)"/);
+            const lineCoverage = lineCoverageMatch ? parseFloat(lineCoverageMatch[1]) * 100 : 0;
+            
+            // Create comment
+            const comment = `
+            ## 📊 Coverage Report
+            
+            **Line Coverage:** ${lineCoverage.toFixed(2)}%
+            
+            ${lineCoverage >= 70 ? '✅ Coverage threshold met!' : '❌ Coverage below 70% threshold'}
+            
+            [View detailed coverage report](https://codecov.io/gh/${{ github.repository }}/pull/${{ github.event.number }})
+            `;
+            
+            // Find existing coverage comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.find(comment => 
+              comment.body.includes('📊 Coverage Report') && 
+              comment.user.type === 'Bot'
+            );
+            
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment,
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment,
+              });
+            }
+          }
+
+  coverage-diff:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        pip install -e .
+
+    - name: Generate coverage for base branch
+      run: |
+        git checkout origin/${{ github.base_ref }}
+        pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing -o coverage_file=coverage_base.xml
+
+    - name: Generate coverage for PR branch
+      run: |
+        git checkout ${{ github.sha }}
+        pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing -o coverage_file=coverage_pr.xml
+
+    - name: Compare coverage
+      run: |
+        python -c "
+        import xml.etree.ElementTree as ET
+        
+        def get_coverage(filename):
+            tree = ET.parse(filename)
+            root = tree.getroot()
+            return float(root.attrib.get('line-rate', 0)) * 100
+        
+        try:
+            base_coverage = get_coverage('coverage_base.xml')
+            pr_coverage = get_coverage('coverage_pr.xml')
+            diff = pr_coverage - base_coverage
+            
+            print(f'Base coverage: {base_coverage:.2f}%')
+            print(f'PR coverage: {pr_coverage:.2f}%')
+            print(f'Difference: {diff:+.2f}%')
+            
+            with open('coverage_diff.txt', 'w') as f:
+                f.write(f'{diff:+.2f}')
+        except Exception as e:
+            print(f'Error comparing coverage: {e}')
+            with open('coverage_diff.txt', 'w') as f:
+                f.write('N/A')
+        "
+
+    - name: Upload coverage diff
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-diff
+        path: coverage_diff.txt

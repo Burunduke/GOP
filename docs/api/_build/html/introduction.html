@@ -1,0 +1,228 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="ru" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Введение в GOP &mdash; документация GOP 2.0.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=3fb1527c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="_static/translations.js?v=cd1d70c9"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Алфавитный указатель" href="genindex.html" />
+    <link rel="search" title="Поиск" href="search.html" />
+    <link rel="next" title="Быстрое начало работы" href="quickstart.html" />
+    <link rel="prev" title="GOP - Гиперспектральная обработка и анализ растений" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            GOP
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Поиск в документации" aria-label="Поиск в документации" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Меню навигации">
+              <p class="caption" role="heading"><span class="caption-text">Содержание:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Введение в GOP</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#id1">Назначение библиотеки</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id2">Архитектура проекта</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id3">Основные модули</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#id4">Научная методология</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id5">Поддерживаемые форматы данных</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id6">Требования к системе</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id7">Научные публикации</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#id8">Лицензия</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Быстрое начало работы</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/modules.html">src</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples.html">Примеры использования</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Вклад в проект GOP</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Меню навигации для мобильных устройств" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">GOP</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Навигация по страницам">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Введение в GOP</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/introduction.rst.txt" rel="nofollow"> Просмотреть исходный код страницы</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gop">
+<h1>Введение в GOP<a class="headerlink" href="#gop" title="Ссылка на этот заголовок"></a></h1>
+<p>GOP (Гиперспектральная Обработка Растений) - это научно-ориентированная библиотека Python, предназначенная для обработки гиперспектральных данных и анализа состояния растений с использованием вегетационных индексов.</p>
+<section id="id1">
+<h2>Назначение библиотеки<a class="headerlink" href="#id1" title="Ссылка на этот заголовок"></a></h2>
+<p>Библиотека разработана для научных исследований в области:</p>
+<ul class="simple">
+<li><p>Дистанционного зондирования Земли</p></li>
+<li><p>Точного земледелия</p></li>
+<li><p>Мониторинга состояния растительности</p></li>
+<li><p>Агрономических исследований</p></li>
+<li><p>Экологического мониторинга</p></li>
+</ul>
+</section>
+<section id="id2">
+<h2>Архитектура проекта<a class="headerlink" href="#id2" title="Ссылка на этот заголовок"></a></h2>
+<p>Проект построен по модульному принципу с четким разделением ответственности:</p>
+<section id="id3">
+<h3>Основные модули<a class="headerlink" href="#id3" title="Ссылка на этот заголовок"></a></h3>
+<dl class="simple">
+<dt><strong>core</strong> - Ядро системы</dt><dd><ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Pipeline</span></code> - Основной пайплайн обработки</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Config</span></code> - Управление конфигурацией</p></li>
+</ul>
+</dd>
+<dt><strong>processing</strong> - Модули обработки данных</dt><dd><ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">HyperspectralProcessor</span></code> - Обработка гиперспектральных данных</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">OrthophotoProcessor</span></code> - Создание ортофотопланов</p></li>
+</ul>
+</dd>
+<dt><strong>indices</strong> - Расчет вегетационных индексов</dt><dd><ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">VegetationIndexCalculator</span></code> - Калькулятор индексов</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">IndexDefinitions</span></code> - Определения индексов</p></li>
+</ul>
+</dd>
+<dt><strong>segmentation</strong> - Сегментация изображений</dt><dd><ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ImageSegmenter</span></code> - Сегментатор изображений</p></li>
+</ul>
+</dd>
+<dt><strong>utils</strong> - Вспомогательные утилиты</dt><dd><ul class="simple">
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">setup_logger</span></code> - Настройка логирования</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">visualize_indices</span></code> - Визуализация результатов</p></li>
+</ul>
+</dd>
+</dl>
+</section>
+</section>
+<section id="id4">
+<h2>Научная методология<a class="headerlink" href="#id4" title="Ссылка на этот заголовок"></a></h2>
+<p>Библиотека реализует современные научные подходы к обработке гиперспектральных данных:</p>
+<ol class="arabic simple">
+<li><p><strong>Предварительная обработка</strong>
+* Радиометрическая коррекция
+* Атмосферная коррекция
+* Шумоподавление (PCA, MNF, вейвлеты)
+* Спектральная калибровка</p></li>
+<li><p><strong>Анализ данных</strong>
+* Расчет вегетационных индексов
+* Статистический анализ
+* Корреляционный анализ
+* Пространственный анализ</p></li>
+<li><p><strong>Визуализация</strong>
+* Создание ортофотопланов
+* Визуализация индексов
+* Научные графики и диаграммы</p></li>
+</ol>
+</section>
+<section id="id5">
+<h2>Поддерживаемые форматы данных<a class="headerlink" href="#id5" title="Ссылка на этот заголовок"></a></h2>
+<p><strong>Входные форматы:</strong>
+* BIL (Band Interleaved by Line)
+* HDR (Header files)
+* TIFF/GeoTIFF
+* IMG</p>
+<p><strong>Выходные форматы:</strong>
+* GeoTIFF
+* JSON (результаты анализа)
+* PNG/JPG (визуализация)</p>
+</section>
+<section id="id6">
+<h2>Требования к системе<a class="headerlink" href="#id6" title="Ссылка на этот заголовок"></a></h2>
+<p><strong>Минимальные требования:</strong>
+* Python 3.9+
+* 8 ГБ оперативной памяти
+* 2 ГБ свободного дискового пространства</p>
+<p><strong>Рекомендуемые требования:</strong>
+* Python 3.10+
+* 16 ГБ оперативной памяти
+* 10 ГБ свободного дискового пространства
+* GPU с поддержкой CUDA (для ускорения обработки)</p>
+</section>
+<section id="id7">
+<h2>Научные публикации<a class="headerlink" href="#id7" title="Ссылка на этот заголовок"></a></h2>
+<p>Методология, реализованная в библиотеке, основана на следующих научных работах:</p>
+<ol class="arabic simple">
+<li><p>Индыков Д.А. «Разработка методов обработки гиперспектральных данных для мониторинга состояния растений» (2024)</p></li>
+<li><p>Индыков Д.А. «Применение вегетационных индексов для анализа сельскохозяйственных угодий» (2023)</p></li>
+<li><p>Индыков Д.А. «Методы сегментации изображений сверхвысокого разрешения для задач точного земледелия» (2022)</p></li>
+</ol>
+</section>
+<section id="id8">
+<h2>Лицензия<a class="headerlink" href="#id8" title="Ссылка на этот заголовок"></a></h2>
+<p>Библиотека распространяется под лицензией MIT, что позволяет свободное использование в научных и коммерческих целях.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Нижняя область">
+        <a href="index.html" class="btn btn-neutral float-left" title="GOP - Гиперспектральная обработка и анализ растений" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Предыдущая</a>
+        <a href="quickstart.html" class="btn btn-neutral float-right" title="Быстрое начало работы" accesskey="n" rel="next">Следующая <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Авторские права 2024, Индыков Дмитрий Андреевич. </p>
+  </div>
+
+  Собрано при помощи <a href="https://www.sphinx-doc.org/">Sphinx</a> с использованием
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">темы,</a>
+    предоставленной <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

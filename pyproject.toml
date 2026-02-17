@@ -1,0 +1,234 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gop-hyperspectral"
+version = "2.0.0"
+description = "Научная библиотека для гиперспектральной обработки и анализа растений"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Индыков Дмитрий Андреевич", email = "indykovdm@example.com"}
+]
+maintainers = [
+    {name = "Индыков Дмитрий Андреевич", email = "indykovdm@example.com"}
+]
+keywords = [
+    "hyperspectral",
+    "remote sensing",
+    "vegetation indices",
+    "orthophoto",
+    "agriculture",
+    "precision farming",
+    "image segmentation",
+    "plant analysis",
+    "scientific computing",
+    "гиперспектральная съемка",
+    "вегетационные индексы",
+    "ортофотоплан",
+    "сельское хозяйство",
+    "точное земледелие",
+    "научные вычисления"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Agriculture",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Natural Language :: Russian"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24.0,<2.0.0",
+    "scipy>=1.10.0,<2.0.0",
+    "matplotlib>=3.7.0,<4.0.0",
+    "scikit-image>=0.20.0,<1.0.0",
+    "scikit-learn>=1.3.0,<2.0.0",
+    "gdal>=3.7.0,<4.0.0",
+    "rasterio>=1.3.0,<2.0.0",
+    "geopandas>=0.13.0,<1.0.0",
+    "fiona>=1.9.0,<2.0.0",
+    "pyproj>=3.5.0,<4.0.0",
+    "spectral>=0.22.4",
+    "spectral-python>=0.22.4",
+    "torch>=2.0.0,<3.0.0",
+    "torchvision>=0.15.0,<1.0.0",
+    "opencv-python>=4.7.0,<5.0.0",
+    "pyyaml>=6.0,<7.0.0",
+    "click>=8.1.0,<9.0.0",
+    "tqdm>=4.65.0,<5.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "seaborn>=0.12.0,<1.0.0",
+    "plotly>=5.15.0,<6.0.0",
+    "Pillow>=9.0.0,<11.0.0",
+    "pywavelets>=1.4.0,<2.0.0",
+    "xarray>=2023.1.0,<2024.0.0",
+    "dask>=2023.1.0,<2024.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-mock>=3.10.0,<4.0.0",
+    "pytest-xdist>=3.0.0,<4.0.0",
+    "black>=23.0.0,<24.0.0",
+    "flake8>=6.0.0,<7.0.0",
+    "mypy>=1.0.0,<2.0.0",
+    "sphinx>=7.0.0,<8.0.0",
+    "sphinx-rtd-theme>=1.2.0,<2.0.0",
+    "sphinx-autodoc-typehints>=1.24.0,<2.0.0",
+    "pre-commit>=3.0.0,<4.0.0",
+    "isort>=5.12.0,<6.0.0",
+    "pylint>=2.17.0,<3.0.0"
+]
+gui = [
+    "PyQt6>=6.4.0,<7.0.0"
+]
+gpu = [
+    "cupy-cuda11x>=12.0.0,<13.0.0; sys_platform != 'darwin'"
+]
+advanced = [
+    "pywavelets>=1.4.0,<2.0.0",
+    "xarray>=2023.1.0,<2024.0.0",
+    "dask>=2023.1.0,<2024.0.0"
+]
+cloud = [
+    "boto3>=1.26.0,<2.0.0",
+    "google-cloud-storage>=2.7.0,<3.0.0",
+    "azure-storage-blob>=12.14.0,<13.0.0"
+]
+all = [
+    "PyQt6>=6.4.0,<7.0.0",
+    "cupy-cuda11x>=12.0.0,<13.0.0; sys_platform != 'darwin'",
+    "pywavelets>=1.4.0,<2.0.0",
+    "xarray>=2023.1.0,<2024.0.0",
+    "dask>=2023.1.0,<2024.0.0",
+    "boto3>=1.26.0,<2.0.0",
+    "google-cloud-storage>=2.7.0,<3.0.0",
+    "azure-storage-blob>=12.14.0,<13.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/indykovdm/GOP"
+Documentation = "https://github.com/indykovdm/GOP/wiki"
+Repository = "https://github.com/indykovdm/GOP"
+"Bug Tracker" = "https://github.com/indykovdm/GOP/issues"
+"Source Code" = "https://github.com/indykovdm/GOP"
+"Scientific Papers" = "https://github.com/indykovdm/GOP/papers"
+
+[project.scripts]
+gop = "cli:cli"
+gop-process = "cli:process"
+gop-batch = "cli:batch"
+gop-info = "cli:info"
+gop-create-rgb = "cli:create_rgb"
+gop-list-indices = "cli:list_indices"
+gop-show-config = "cli:show_config"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gop = ["config/*.yaml", "data/*.json", "models/*.pth"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["gop"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "cv2.*",
+    "gdal.*",
+    "osgeo.*",
+    "spectral.*",
+    "sklearn.*",
+    "torch.*",
+    "torchvision.*"
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests"
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:"
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+skips = ["B101", "B601"]
