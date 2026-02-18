@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from .config import config
-from ..processing.hyperspectral import HyperspectralProcessor
+from src.processing.hyperspectral import HyperspectralProcessor
 from ..processing.orthophoto import OrthophotoProcessor
 from ..segmentation.segmenter import ImageSegmenter
 from ..indices.calculator import VegetationIndexCalculator
