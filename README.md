@@ -7,11 +7,50 @@
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Scientific](https://img.shields.io/badge/purpose-scientific-orange.svg)](https://github.com/indykovdm/GOP)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](docs/api/_build/html/index.html)
-[![Docs Status](https://img.shields.io/badge/docs%20status-complete-brightgreen.svg)](docs/README.md)
 
 **Версия 2.0.0 - Чистая научная архитектура без GUI**
 
 Научная библиотека для обработки гиперспектральных данных и анализа состояния растений с использованием вегетационных индексов. Разработана на основе современных научных методов и алгоритмов обработки данных дистанционного зондирования.
+
+## 🚀 Быстрый старт
+
+### Установка
+
+```bash
+# Клонирование репозитория
+git clone https://github.com/indykovdm/GOP.git
+cd GOP
+
+# Установка зависимостей
+pip install -r requirements.txt
+
+# Проверка установки
+python -c "import src.core.pipeline; print('GOP успешно установлен')"
+```
+
+### Первый запуск
+
+```bash
+# Запуск примера обработки
+python examples/basic_processing.py
+```
+
+## 📚 Документация
+
+### Для пользователей
+- **[Установка и настройка](docs/INSTALLATION.md)** - Полное руководство по установке
+- **[Руководство пользователя](docs/USER_GUIDE.md)** - Как использовать GOP
+- **[GUI руководство](docs/GUI_GUIDE.md)** - Веб-интерфейс для GOP
+
+### Для разработчиков
+- **[Руководство разработчика](docs/DEVELOPER.md)** - API документация и разработка
+- **[Тестирование](docs/TESTING.md)** - Тестирование и CI/CD
+- **[Архитектура](docs/ARCHITECTURE.md)** - Системная архитектура
+
+### Научные материалы
+- **[Магистерская диссертация](docs/research/MASTER_THESIS.md)** - Полный текст диссертации
+- **[Бакалаврская работа](docs/research/BACHELOR_THESIS.md)** - Исходная бакалаврская работа
+- **[Технические заметки](docs/research/TECHNICAL_NOTES.md)** - Технические заметки и исследования
 
 ## 🌟 Основные возможности
 
@@ -31,406 +70,101 @@
 - **Индексы озеленения**: GNDVI, MCARI, MNLI, OSAVI, TVI, NDVI
 - **Индексы стресса**: SIPI2, mARI, PRI, CRI
 - **Индексы водного режима**: NDWI, MSI, WI, NDII
-- **Пигментные индексы**: CARI, PSRI, SIPI
-- **Структурные индексы**: MSR, MSAVI, TVI
 
-### 🎯 Сегментация изображений
-- Каскадный подход с DeepLabV3+ и CascadePSP
-- Обработка изображений сверхвысокого разрешения
-- Уточнение границ и оценка качества
-- Адаптивные параметры обработки
-
-### 🔬 Научный анализ
-- Статистический анализ индексов
-- Корреляционный анализ
-- Пространственный анализ (индекс Морана, горячие точки)
-- Классификация состояния растений
-- Экспорт научных данных
-
-## 🚀 Быстрый старт
-
-### Установка
-
-```bash
-# Клонирование репозитория
-git clone https://github.com/indykovdm/GOP.git
-cd GOP
-
-# Установка зависимостей
-pip install -r requirements.txt
-
-# Установка библиотеки
-pip install -e .
-```
-
-### Базовое использование
-
-```bash
-# Обработка одного файла
-python main.py input.bil output/ --sensor-type Hyperspectral
-
-# Пакетная обработка
-python main.py --batch input_dir/ output/ --pattern "*.bil"
-
-# Информация о файле
-python main.py --list-indices
-
-# Показать конфигурацию
-python main.py --show-config
-
-# Создание RGB композита (через Python API)
-python -c "from src.core.pipeline import Pipeline; p=Pipeline(); p.create_rgb_composite('orthophoto.tif', 'rgb_composite.tif', rgb_bands=[30,20,10])"
-```
-
-### Использование в Python
-
-```python
-from src.core.pipeline import Pipeline
-
-# Создание пайплайна
-pipeline = Pipeline()
-
-# Обработка данных
-results = pipeline.process(
-    input_path='data/input.bil',
-    output_dir='results/',
-    sensor_type='Hyperspectral',
-    selected_indices=['GNDVI', 'NDWI', 'MCARI']
-)
-
-# Получение результатов
-print(f"Ортофотоплан: {results['orthophoto_path']}")
-print(f"Состояние растений: {results['plant_condition']['classification']['class']}")
-
-# Экспорт научных данных
-pipeline.export_scientific_data('results/')
-```
-
-## 📖 Научная основа
-
-### Методология обработки
-
-Библиотека реализует комплексную методику обработки гиперспектральных данных, основанную на современных научных подходах:
-
-1. **Предварительная обработка**
-   - Радиометрическая коррекция методом эмпирической линии
-   - Упрощенная атмосферная коррекция
-   - Шумоподавление с помощью анализа главных компонент (PCA)
-
-2. **Создание ортофотопланов**
-   - Использование OpenDroneMap для фотограмметрической обработки
-   - Альтернативные методы на основе GDAL
-   - Оптимизация геопривязки и качества мозаики
-
-3. **Сегментация изображений**
-   - Каскадный подход: DeepLabV3+ → CascadePSP
-   - Обработка изображений сверхвысокого разрешения
-   - Адаптивное сжатие для оптимизации производительности
-
-4. **Расчет вегетационных индексов**
-   - Систематизация индексов по функциональным группам
-   - Нормализация и комплексная оценка
-   - Научная классификация состояния растений
-
-### Вегетационные индексы
-
-#### Индексы озеленения (Greenness indices)
-- **GNDVI** = (NIR - Green) / (NIR + Green)
-- **MCARI** = ((RedEdge - Red) - 0.2 × (RedEdge - Green)) × (RedEdge / Red)
-- **MNLI** = (NIR² - Red) / (NIR² + Red)
-- **OSAVI** = (NIR - Red) / (NIR + Red + 0.16)
-- **TVI** = 0.5 × (120 × (NIR - Green) - 200 × (Red - Green))
-
-#### Индексы стресса (Stress indices)
-- **SIPI2** = (NIR - Blue) / (NIR - Red)
-- **mARI** = (Green - Red) / (Green + Red)
-
-#### Индексы водного режима (Water content indices)
-- **NDWI** = (Green - NIR) / (Green + NIR)
-- **MSI** = NIR / SWIR
-
-### Научный анализ
-
-Библиотека предоставляет комплексные инструменты для научного анализа:
-
-#### Статистический анализ
-- Описательная статистика индексов
-- Анализ распределения (асимметрия, эксцесс)
-- Выявление выбросов и аномалий
-
-#### Корреляционный анализ
-- Матрица корреляций между индексами
-- Выявление сильных корреляций
-- Статистическая значимость связей
-
-#### Пространственный анализ
-- Индекс пространственной автокорреляции Морана
-- Анализ горячих и холодных точек
-- Индекс фрагментации ландшафта
-
-#### Классификация состояния растений
-- Научная классификация на основе комплексной оценки
-- Учет вариабельности и пространственной структуры
-- Количественная оценка уверенности классификации
+### 🔬 Анализ растительности
+- Сегментация изображений
+- Статистический анализ
+- Визуализация результатов
+- Экспорт данных
 
 ## 📁 Структура проекта
 
 ```
 GOP/
-├── main.py               # Главная точка входа
-├── cli.py                # CLI интерфейс
-├── setup.py              # Установка пакета
-├── requirements.txt      # Зависимости
-├── config/
-│   └── config.yaml       # Научная конфигурация
-├── src/
-│   ├── core/
-│   │   ├── config.py     # Управление конфигурацией
-│   │   └── pipeline.py   # Основной пайплайн
-│   ├── processing/
-│   │   ├── hyperspectral.py # Обработка гиперспектральных данных
-│   │   └── orthophoto.py  # Создание ортофотопланов
-│   ├── indices/
-│   │   ├── calculator.py # Калькулятор индексов
-│   │   └── definitions.py # Определения индексов
-│   ├── segmentation/
-│   │   └── segmenter.py  # Сегментация изображений
-│   └── utils/
-│       ├── file_utils.py    # Утилиты работы с файлами
-│       ├── image_utils.py   # Утилиты работы с изображениями
-│       ├── logger.py        # Логирование
-│       └── visualization.py # Визуализация
-├── docs/                 # Научная документация
-├── tests/                # Тесты
-├── examples/             # Примеры использования
-└── data/                 # Данные для примеров
+├── src/                    # Исходный код
+│   ├── core/              # Основные классы и пайплайны
+│   ├── processing/        # Обработка данных
+│   ├── indices/           # Вегетационные индексы
+│   ├── segmentation/      # Сегментация изображений
+│   └── utils/             # Вспомогательные утилиты
+├── examples/              # Примеры использования
+├── tests/                 # Тесты
+├── docs/                  # Документация
+└── data/                  # Примеры данных
 ```
 
-## 🔧 Конфигурация
+## 💻 Использование
 
-Библиотека использует YAML конфигурацию с научными параметрами:
+### Веб-интерфейс
 
-```yaml
-# Обработка данных
-processing:
-  radiometric_correction:
-    method: "empirical_line"
-  noise_reduction:
-    method: "pca"
-    n_components: 0.95
+Запустите веб-интерфейс с помощью команды:
 
-# Научный анализ
-scientific_analysis:
-  statistics:
-    confidence_level: 0.95
-  correlation:
-    method: "pearson"
-    threshold: 0.7
-  spatial:
-    morans_i: true
-    hotspot_analysis: true
+```bash
+python main.py
 ```
 
-## 📊 Примеры использования
+Или напрямую:
 
-### Базовая обработка
+```bash
+python gui.py
+```
+
+После запуска откройте браузер и перейдите по адресу `http://localhost:8050`
+
+### Программный интерфейс
 
 ```python
 from src.core.pipeline import Pipeline
+from src.indices.calculator import IndexCalculator
 
-# Создание пайплайна с пользовательской конфигурацией
-pipeline = Pipeline('config/custom_config.yaml')
-
-# Обработка с научным анализом
-results = pipeline.process(
-    input_path='field_data.bil',
-    output_dir='analysis_results/',
-    sensor_type='Hyperspectral',
-    selected_indices=['GNDVI', 'MCARI', 'NDWI', 'MSI'],
-    use_refinement=True,
-    compression_ratio=0.125
-)
-
-# Анализ результатов
-scientific_analysis = results['scientific_analysis']
-print(f"Корреляция GNDVI-MCARI: {scientific_analysis['correlation_analysis']['strong_correlations']}")
-print(f"Пространственная автокорреляция: {scientific_analysis['spatial_analysis']['overall']['spatial_autocorrelation']}")
-```
-
-### Пакетная обработка
-
-```python
-import glob
-import os
-from src.core.pipeline import Pipeline
-
+# Создание пайплайна
 pipeline = Pipeline()
 
-# Поиск всех BIL файлов
-input_files = glob.glob('data/*.bil')
-
-for file_path in input_files:
-    try:
-        results = pipeline.process(
-            input_path=file_path,
-            output_dir=f'results/{os.path.basename(file_path)}/',
-            sensor_type='Hyperspectral'
-        )
-        
-        # Сохранение научных данных
-        pipeline.export_scientific_data(results['output_dir'])
-        
-    except Exception as e:
-        print(f"Ошибка обработки {file_path}: {e}")
-```
-
-### Научный анализ индексов
-
-```python
-from src.indices.calculator import VegetationIndexCalculator
-
-calculator = VegetationIndexCalculator()
-
-# Расчет индексов
-indices_results = calculator.calculate(
-    orthophoto_path='orthophoto.tif',
-    segmentation_mask='mask.tif',
-    sensor_type='Hyperspectral',
-    selected_indices=['GNDVI', 'MCARI', 'NDWI', 'MSI'],
-    output_dir='indices/'
+# Обработка данных
+result = pipeline.process(
+    input_path="data.hdr",
+    output_dir="results/",
+    indices=["ndvi", "gndvi"]
 )
 
-# Комплексная оценка состояния растений
-plant_condition = calculator.assess_plant_condition(indices_results)
-classification = plant_condition['classification']
-
-print(f"Состояние растений: {classification['class']}")
-print(f"Уверенность: {classification['confidence']:.2f}")
-print(f"Оценка: {classification['overall_score']:.3f}")
+# Расчет индексов
+calculator = IndexCalculator()
+indices = calculator.calculate("orthophoto.tif", ["ndvi", "ndwi"])
 ```
 
-## 🧪 Тестирование
+## 🔧 Зависимости
 
-```bash
-# Запуск всех тестов
-python -m pytest tests/
+Основные зависимости:
+- `numpy` - Научные вычисления
+- `scipy` - Научные алгоритмы
+- `opencv-python` - Обработка изображений
+- `gdal` - Геопространственные данные
+- `rasterio` - Работа с растровыми данными
+- `plotly` - Визуализация
 
-# Запуск с покрытием кода
-python -m pytest --cov=src tests/
-
-# Запуск конкретных тестов
-python -m pytest tests/test_pipeline.py
-python -m pytest tests/test_indices.py
-
-# Запуск научных тестов
-python -m pytest tests/test_scientific_pipeline.py
-```
-
-## 📖 Документация
-
-### API Документация
-
-Полная API документация проекта доступна в директории [`docs/`](docs/) и включает:
-
-- **[Введение](docs/api/introduction.rst)** - Обзор проекта и его возможностей
-- **[Быстрое начало](docs/api/quickstart.rst)** - Пошаговое руководство по использованию
-- **[Примеры использования](docs/api/examples.rst)** - Практические примеры кода
-- **[API Reference](docs/api/api/modules.rst)** - Полная документация по всем модулям:
-  - [`core`](docs/api/api/core.rst) - Основной пайплайн и конфигурация
-  - [`processing`](docs/api/api/processing.rst) - Обработка гиперспектральных данных и ортофотопланов
-  - [`indices`](docs/api/api/indices.rst) - Вегетационные индексы и их расчет
-  - [`segmentation`](docs/api/api/segmentation.rst) - Сегментация изображений
-  - [`utils`](docs/api/api/utils.rst) - Вспомогательные утилиты
-
-### Генерация документации
-
-Для локальной генерации документации:
-
-```bash
-# Использование Makefile (рекомендуется)
-cd docs
-make all
-
-# Или использование Python скрипта
-cd docs
-python generate_docs.py --clean --build
-
-# Просмотр документации
-open api/_build/html/index.html  # macOS
-xdg-open api/_build/html/index.html  # Linux
-```
-
-### Автоматическая генерация
-
-Документация автоматически генерируется при:
-
-- Изменениях в исходном коде (`src/`)
-- Изменениях в файлах документации (`docs/`)
-- Push в ветки `main` и `develop`
-
-Автоматическая генерация настроена через:
-- **GitHub Actions** - [`.github/workflows/docs.yml`](.github/workflows/docs.yml)
-- **Pre-commit hooks** - [`docs/check_docs.sh`](docs/check_docs.sh)
-
-### Структура документации
-
-```
-docs/
-├── README.md                 # Инструкция по использованию документации
-├── Makefile                  # Makefile для удобной генерации
-├── generate_docs.py          # Скрипт автоматической генерации
-├── check_docs.sh             # Скрипт проверки документации
-├── api/                      # Исходники Sphinx
-│   ├── conf.py               # Конфигурация Sphinx
-│   ├── index.rst             # Главный индекс
-│   ├── introduction.rst      # Введение
-│   ├── quickstart.rst        # Быстрое начало
-│   ├── examples.rst          # Примеры
-│   ├── contributing.rst      # Руководство для контрибьюторов
-│   └── api/                  # Автогенерируемые RST файлы
-└── _build/html/              # Сгенерированная HTML документация
-```
-
-## 📚 Научные публикации
-
-Библиотека основана на следующих научных работах:
-
-1. **Митрофанов Е.П., Петрушин А.Ф.** Использование данных аэрофотосъемки для обоснования прецизионных агроприемов применения агрохимикатов // Материалы конференции DZZ2018. 2018.
-
-2. **Chen L. et al.** Rethinking Atrous Convolution for Semantic Image Segmentation // arXiv preprint arXiv:1706.05587. 2017.
-
-3. **CascadePSP: Toward Class-Agnostic and Very High-Resolution Segmentation via Global and Local Refinement** // arXiv preprint arXiv:2005.02551. 2020.
-
-4. **Janoušek J. et al.** Using UAV-Based Photogrammetry to Obtain Correlation between the Vegetation Indices and Chemical Analysis of Agricultural Crops // Remote Sensing. 2021.
+Полный список зависимостей в [`requirements.txt`](requirements.txt).
 
 ## 🤝 Вклад в проект
 
-Мы приветствуем вклад в развитие научной библиотеки! Основные направления:
-
-- 📊 Улучшение алгоритмов обработки данных
-- 🔬 Добавление новых вегетационных индексов
-- 📈 Оптимизация производительности
-- 📝 Расширение документации
-- 🧪 Написание тестов
+Мы приветствуем вклад в проект! Пожалуйста, ознакомьтесь с:
+- [Руководством для контрибьюторов](docs/DEVELOPER.md#вклад-в-проект)
+- [Кодексом поведения](CODE_OF_CONDUCT.md)
+- [Шаблоном issue](.github/ISSUE_TEMPLATE.md)
 
 ## 📄 Лицензия
 
-Проект распространяется под лицензией MIT. Подробности в файле [LICENSE](LICENSE).
+Этот проект распространяется под лицензией MIT. Подробнее в файле [LICENSE](LICENSE).
 
 ## 📞 Контакты
 
-- **Автор**: Индыков Дмитрий Андреевич
-- **Email**: indykovdm@example.com
-- **Репозиторий**: https://github.com/indykovdm/GOP
-- **Документация**: https://github.com/indykovdm/GOP/wiki
-- **Issues**: https://github.com/indykovdm/GOP/issues
+- **Автор**: Дмитрий Индыков
+- **Email**: indykovdm@gmail.com
+- **GitHub**: [indykovdm](https://github.com/indykovdm)
 
 ## 🙏 Благодарности
 
-- Научному руководителю: Митрофанову Евгению Павловичу
-- Рецензенту: Петрушину Алексею Федоровичу
-- Санкт-Петербургскому государственному университету
+Проект разработан в рамках научных исследований в Санкт-Петербургском государственном университете.
 
 ---
 
-**GOP v2.0.0** - Научная библиотека для гиперспектральной обработки и анализа растений
+*Последнее обновление: 2024*

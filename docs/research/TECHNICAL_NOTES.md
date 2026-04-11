@@ -1,7 +1,7 @@
 # Создание ортофотоплана на основе гиперспектральной съемки
 
-1. Конвертировать bil в tiff, как-то заебенить в metashape, достать оттуда готовый ортофотоплан и приебенить к остальным каналам. [Хуйня 1](https://www.geoscan.ru/ru/blog/sovmestnaya-obrabotka-materialov-aerofotosemki-s-kamer-vidimogo-diapazona-rgb-i-blizhnego-ik),   
-2. При помощи открытого репозитория OpenDroneMap сделать всю хуйню. [Гит](https://github.com/OpenDroneMap/ODM/tree/master), [статья](https://gis-lab.info/qa/opendronemap-intro.html#OpenDroneMap)
+1. Конвертировать bil в tiff, использовать Metashape для создания ортофотоплана и объединения с остальными каналами. [Совместная обработка материалов аэрофотосъемки](https://www.geoscan.ru/ru/blog/sovmestnaya-obrabotka-materialov-aerofotosemki-s-kamer-vidimogo-diapazona-rgb-i-blizhnego-ik),
+2. Использовать OpenDroneMap для создания ортофотоплана. [GitHub](https://github.com/OpenDroneMap/ODM/tree/master), [статья](https://gis-lab.info/qa/opendronemap-intro.html#OpenDroneMap)
 
 [bill в tiff](https://community.esri.com/t5/data-management-questions/converting-hundreds-of-bil-hdr-rasters-to-tiff/td-p/139758) 
 
