@@ -4,4 +4,4 @@
 
 from .segmenter import ImageSegmenter
 
-__all__ = ['ImageSegmenter']
+__all__ = ["ImageSegmenter"]

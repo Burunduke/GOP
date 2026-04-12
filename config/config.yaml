@@ -196,7 +196,11 @@ performance:
     enabled: true
     cache_dir: "cache"
     max_cache_size: "1GB"
+    max_memory_entries: 100
     ttl: 3600  # 1 час
+    cleanup_interval: 86400  # 24 часа
+    compression: true
+    stats_enabled: true
 
 # Валидация и контроль качества
 validation:

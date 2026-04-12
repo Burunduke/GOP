@@ -3,6 +3,7 @@
 """
 
 import os
+import secrets
 from pathlib import Path
 
 
@@ -11,7 +12,15 @@ class GUIConfig:
     
     # Основные настройки
     DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-    SECRET_KEY = os.getenv('SECRET_KEY', 'gop-gui-secret-key-2024')
+    SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
+    
+    # Warn if using default generated key
+    if not os.getenv('SECRET_KEY'):
+        import warnings
+        warnings.warn(
+            "Using auto-generated SECRET_KEY. For production, set SECRET_KEY environment variable.",
+            UserWarning
+        )
     
     # Настройки сервера
     HOST = os.getenv('HOST', '0.0.0.0')

@@ -1,33 +1,33 @@
 # Руководство разработчика GOP
 
-Этот документ содержит информацию для разработчиков, желающих внести вклад в проект GOP или использовать его API.
+Этот документ содержит информацию для разработчиков, которые хотят внести вклад в проект GOP или использовать его API.
 
 ## 🚀 Быстрый старт
 
-### Настройка окружения разработки
+### Настройка среды разработки
 
 ```bash
-# Клонирование репозитория
+# Клонировать репозиторий
 git clone https://github.com/indykovdm/GOP.git
 cd GOP
 
-# Установка зависимостей для разработки
+# Установить зависимости разработки
 pip install -r requirements-dev.txt
 
-# Установка в режиме разработки
+# Установить в режиме разработки
 pip install -e .
 ```
 
 ### Запуск тестов
 
 ```bash
-# Запуск всех тестов
+# Запустить все тесты
 pytest tests/
 
-# Запуск с покрытием кода
+# Запустить с покрытием кода
 pytest tests/ --cov=src --cov-report=html
 
-# Запуск конкретного модуля
+# Запустить определенный модуль
 pytest tests/test_config.py
 ```
 
@@ -35,260 +35,447 @@ pytest tests/test_config.py
 
 ### Основные модули
 
-- **`src.core`** - Основные классы и пайплайны
+- **`src.core`** - Основные классы и конвейеры
 - **`src.processing`** - Обработка гиперспектральных данных и ортофотопланов
 - **`src.indices`** - Расчет вегетационных индексов
 - **`src.segmentation`** - Сегментация изображений
-- **`src.utils`** - Вспомогательные утилиты
+- **`src.utils`** - Вспомогательные функции
 
 ### Ключевые классы
 
 #### Pipeline
-Основной пайплайн обработки данных, координирующий работу всех модулей.
+Основной конвейер обработки данных, который координирует все модули.
 
 ```python
 from src.core.pipeline import Pipeline
 
+# Создать экземпляр конвейера
 pipeline = Pipeline()
+
+# Обработать данные с научным анализом
 results = pipeline.process(
-    input_path="data.hdr",
-    output_dir="results/",
-    indices=["ndvi", "gndvi"]
+    input_path="data/sample.bil",
+    output_dir="results",
+    sensor_type='Hyperspectral',
+    selected_indices=['GNDVI', 'MCARI', 'NDWI']
 )
 ```
 
 #### HyperspectralProcessor
-Обработчик гиперспектральных данных с поддержкой различных форматов.
-
-#### VegetationIndexCalculator
-Калькулятор вегетационных индексов с автоматической классификацией.
-
-#### ImageSegmenter
-Сегментатор изображений для обработки изображений сверхвысокого разрешения.
-
-## 🏗️ Архитектура
-
-### Структура проекта
-
-```
-src/
-├── core/           # Основные классы и пайплайны
-├── processing/     # Обработка данных
-├── indices/        # Вегетационные индексы
-├── segmentation/   # Сегментация изображений
-└── utils/          # Вспомогательные утилиты
-```
-
-### Взаимодействие модулей
-
-```mermaid
-graph TB
-    A[Pipeline] --> B[HyperspectralProcessor]
-    A --> C[VegetationIndexCalculator]
-    A --> D[ImageSegmenter]
-    B --> E[Utils]
-    C --> E
-    D --> E
-```
-
-## 🔧 Разработка
-
-### Стандарты кода
-
-- **Форматирование**: Используйте Black для автоматического форматирования
-- **Линтинг**: Проверяйте код с помощью flake8
-- **Типизация**: Используйте аннотации типов и проверяйте с помощью mypy
-- **Документация**: Добавляйте docstrings ко всем публичным функциям и классам
-
-### Добавление нового модуля
-
-1. Создайте директорию в `src/`
-2. Добавьте `__init__.py` файл
-3. Реализуйте функциональность
-4. Создайте тесты в `tests/`
-5. Обновите документацию
-
-### Пример структуры модуля
+Продвинутый процессор для гиперспектральных данных с научными коррекциями.
 
 ```python
-# src/new_module/__init__.py
-"""
-Новый модуль для GOP.
+from src.processing.hyperspectral import HyperspectralProcessor
 
-Этот модуль предоставляет функциональность для...
-"""
-
-from .core import NewClass
-
-__all__ = ['NewClass']
+processor = HyperspectralProcessor()
+processed_data = processor.process_data(
+    data=hyperspectral_data,
+    config=processing_config
+)
 ```
 
-## 🧪 Тестирование
+#### Улучшенные утилитарные модули (Рефакторинг)
 
-### Типы тестов
+##### Математические утилиты
+```python
+from src.utils.math_utils import safe_divide, safe_normalize
 
-- **Модульные тесты** - Тестирование отдельных функций и классов
-- **Интеграционные тесты** - Тестирование взаимодействия между компонентами
-
-### Запуск тестов
-
-```bash
-# Все тесты
-pytest tests/
-
-# С покрытием кода
-pytest tests/ --cov=src --cov-report=html
-
-# Конкретный тест
-pytest tests/test_module.py::TestClass::test_method
-
-# Только неудачные тесты
-pytest tests/ --lf
+# Безопасные математические операции с обработкой ошибок
+result = safe_divide(numerator, denominator, default=0.0)
+normalized = safe_normalize(values, value_range=(0, 100))
 ```
 
-### Маркеры тестов
+##### Фреймворк валидации
+```python
+from src.utils.validators import validate_data_range, validate_spectral_data
 
-- `@pytest.mark.slow` - Медленные тесты
-- `@pytest.mark.integration` - Интеграционные тесты
-- `@pytest.mark.unit` - Модульные тесты
-- `@pytest.mark.gpu` - Тесты, требующие GPU
+# Комплексная валидация данных
+validate_data_range(data, min_value=0, max_value=10000)
+validate_spectral_data(spectral_data, expected_bands=224)
+```
 
-## 📖 Документация
+##### Иерархия исключений
+```python
+from src.utils.exceptions import GOPError, ValidationError, ProcessingError
 
-### Генерация документации
+# Структурированная обработка ошибок
+try:
+    validate_data_range(data, min_value=0, max_value=10000)
+except ValidationError as e:
+    logger.error(f"Валидация данных не удалась: {e}")
+```
 
+## 🎯 Рекомендации по разработке
+
+### Аннотации типов (Обязательно)
+
+Весь новый код должен включать полные аннотации типов:
+
+```python
+from typing import List, Dict, Optional, Union
+import numpy as np
+
+def calculate_indices(
+    data: np.ndarray,
+    indices: List[str],
+    sensor_type: str = "Hyperspectral"
+) -> Dict[str, np.ndarray]:
+    """Рассчитать вегетационные индексы с типобезопасностью.
+    
+    Args:
+        data: Входной массив спектральных данных
+        indices: Список названий индексов для расчета
+        sensor_type: Тип данных сенсора
+        
+    Returns:
+        Словарь, сопоставляющий названия индексов с рассчитанными значениями
+        
+    Raises:
+        ValidationError: Если входные данные недействительны
+        ProcessingError: Если расчет не удался
+    """
+    # Реализация
+    pass
+```
+
+### Обработка ошибок
+
+Используйте иерархическую систему исключений:
+
+```python
+from src.utils.exceptions import GOPError, ValidationError
+
+def validate_input_data(data: np.ndarray) -> None:
+    """Валидировать входные данные с правильной обработкой ошибок."""
+    if data is None:
+        raise ValidationError("Входные данные не могут быть None")
+    
+    if data.size == 0:
+        raise ValidationError("Входные данные не могут быть пустыми")
+    
+    if np.any(np.isnan(data)):
+        raise ValidationError("Входные данные содержат значения NaN")
+```
+
+### Соображения производительности
+
+#### Эффективность памяти
+```python
+import numpy as np
+from typing import Generator
+
+def process_large_dataset(
+    data: np.ndarray,
+    chunk_size: int = 1024
+) -> Generator[np.ndarray, None, None]:
+    """Обрабатывать большие наборы данных порциями для эффективности памяти."""
+    for i in range(0, data.shape[0], chunk_size):
+        chunk = data[i:i + chunk_size]
+        yield process_chunk(chunk)
+```
+
+#### Кэширование
+```python
+from functools import lru_cache
+from src.processing.hyperspectral.cache import ProcessingCache
+
+@lru_cache(maxsize=100)
+def calculate_expensive_operation(
+    data_hash: str,
+    parameters: tuple
+) -> np.ndarray:
+    """Кэшировать дорогостоящие операции для производительности."""
+    pass
+```
+
+### Рекомендации по тестированию
+
+#### Модульные тесты
+```python
+import pytest
+from src.utils.math_utils import safe_divide
+
+class TestSafeDivide:
+    """Тестовые случаи для функции safe_divide."""
+    
+    def test_divide_valid_numbers(self):
+        """Тест деления действительных чисел."""
+        assert safe_divide(10, 2) == 5.0
+        assert safe_divide(15, 3) == 5.0
+    
+    def test_divide_by_zero(self):
+        """Тест деления на ноль возвращает значение по умолчанию."""
+        import numpy as np
+        assert np.isnan(safe_divide(10, 0))
+        assert safe_divide(10, 0, default=0.0) == 0.0
+```
+
+#### Интеграционные тесты
+```python
+import pytest
+from src.core.pipeline import Pipeline
+
+class TestPipelineIntegration:
+    """Интеграционные тесты для конвейера обработки."""
+    
+    def test_complete_processing_workflow(self, sample_data):
+        """Тест полного рабочего процесса обработки."""
+        pipeline = Pipeline()
+        results = pipeline.process(
+            input_path=sample_data,
+            output_dir="/tmp/results"
+        )
+        
+        assert 'orthophoto_path' in results
+        assert 'segmentation_mask' in results
+        assert 'vegetation_indices' in results
+```
+
+## 🔧 Стандарты качества кода
+
+### Форматирование кода
+
+Используйте Black для автоматического форматирования кода:
 ```bash
-# Перейти в директорию docs
-cd docs
+black src/ tests/ examples/
+```
 
-# Полная генерация документации
-make all
+### Проверка типов
 
-# Только HTML документация
+Используйте MyPy для статической проверки типов:
+```bash
+mypy src/
+```
+
+### Линтинг
+
+Используйте Flake8 для качества кода:
+```bash
+flake8 src/ tests/
+```
+
+### Сканирование безопасности
+
+Используйте Safety для безопасности зависимостей:
+```bash
+safety check
+```
+
+## 📊 Разработка производительности
+
+### Бенчмаркинг
+
+Создавайте бенчмарки производительности для критических операций:
+```python
+import pytest
+import numpy as np
+
+@pytest.mark.benchmark
+def test_index_calculation_performance(benchmark):
+    """Бенчмарк расчета вегетационных индексов."""
+    data = np.random.random((1000, 1000, 10))
+    
+    def calculate():
+        return calculate_indices(data, ['NDVI', 'GNDVI'])
+    
+    benchmark(calculate)
+```
+
+### Профилирование памяти
+
+Используйте профилирование памяти для выявления проблем с памятью:
+```python
+from memory_profiler import profile
+
+@profile
+def process_large_dataset(data):
+    """Профилировать использование памяти при обработке данных."""
+    # Код обработки
+    pass
+```
+
+## 🔍 Отладка и устранение неполадок
+
+### Логирование
+
+Используйте структурированное логирование для отладки:
+```python
+import logging
+from src.utils.logger import setup_logger
+
+logger = setup_logger('module_name', level=logging.DEBUG)
+
+def process_data(data):
+    logger.debug("Начало обработки данных")
+    try:
+        # Код обработки
+        logger.info("Обработка данных успешно завершена")
+    except Exception as e:
+        logger.error(f"Обработка данных не удалась: {e}", exc_info=True)
+        raise
+```
+
+### Отслеживание ошибок
+
+Реализуйте комплексное отслеживание ошибок:
+```python
+from src.utils.exceptions import ProcessingError
+
+def safe_operation():
+    """Операция с комплексным отслеживанием ошибок."""
+    try:
+        # Код операции
+        pass
+    except ValueError as e:
+        raise ProcessingError(f"Ошибка значения в операции: {e}") from e
+    except IOError as e:
+        raise ProcessingError(f"Ошибка ввода-вывода в операции: {e}") from e
+```
+
+## 🧪 Стратегия тестирования
+
+### Категории тестов
+
+#### Модульные тесты
+- Тестировать отдельные функции и методы
+- Использовать моки для внешних зависимостей
+- Покрывать граничные случаи и условия ошибок
+
+#### Интеграционные тесты
+- Тестировать взаимодействие модулей
+- Валидировать поток данных между компонентами
+- Тестировать с образцами реальных данных
+
+#### Тесты производительности
+- Бенчмаркировать критические операции
+- Мониторить использование памяти
+- Тестировать масштабируемость
+
+### Управление тестовыми данными
+
+#### Синтетические данные
+```python
+import numpy as np
+
+@pytest.fixture
+def synthetic_hyperspectral_data():
+    """Генерировать синтетические гиперспектральные данные для тестирования."""
+    return np.random.random((100, 100, 10))
+```
+
+#### Образцы реальных данных
+```python
+@pytest.fixture
+def real_hyperspectral_sample():
+    """Загрузить образец реальных гиперспектральных данных для тестирования."""
+    return load_sample_data('data/samples/sample_001.bil')
+```
+
+## 📚 Стандарты документации
+
+### Документация кода
+
+Используйте Google-style docstrings:
+```python
+def calculate_vegetation_index(
+    red_band: np.ndarray,
+    nir_band: np.ndarray
+) -> np.ndarray:
+    """Рассчитать вегетационный индекс из красного и ближнего инфракрасного каналов.
+    
+    Args:
+        red_band: Данные красного спектрального канала
+        nir_band: Данные ближнего инфракрасного спектрального канала
+        
+    Returns:
+        Рассчитанный массив вегетационного индекса
+        
+    Raises:
+        ValidationError: Если входные каналы недействительны
+        ProcessingError: Если расчет не удался
+        
+    Examples:
+        >>> red = np.array([0.1, 0.2, 0.3])
+        >>> nir = np.array([0.4, 0.5, 0.6])
+        >>> calculate_vegetation_index(red, nir)
+        array([0.6, 0.428..., 0.333...])
+    """
+    # Реализация
+    pass
+```
+
+### Документация API
+
+Генерируйте документацию API с помощью Sphinx:
+```bash
+cd docs/api
 make html
-
-# Очистка сгенерированных файлов
-make clean
 ```
 
-### Структура документации
-
-```
-docs/
-├── api/                      # Директория с исходниками Sphinx
-│   ├── conf.py               # Конфигурация Sphinx
-│   ├── index.rst             # Главный индексный файл
-│   └── _build/               # Сгенерированная HTML документация
-└── *.md                      # Markdown документация
-```
-
-## 🤝 Вклад в проект
-
-### Процесс внесения изменений
-
-1. **Форк репозитория** - Создайте форк проекта
-2. **Создание ветки** - Создайте ветку для ваших изменений
-3. **Внесение изменений** - Реализуйте функциональность или исправьте ошибку
-4. **Тестирование** - Убедитесь, что все тесты проходят
-5. **Создание Pull Request** - Отправьте изменения на ревью
-
-### Требования к коду
-
-- Все публичные методы должны иметь docstrings
-- Код должен проходить линтинг и форматирование
-- Тесты должны покрывать новую функциональность
-- Изменения не должны ломать существующие тесты
-
-### Шаблон Pull Request
-
-```markdown
-## Описание изменений
-
-Краткое описание того, что было изменено.
-
-## Тип изменений
-
-- [ ] Исправление ошибки
-- [ ] Новая функциональность
-- [ ] Изменение существующей функциональности
-- [ ] Документация
-
-## Чеклист
-
-- [ ] Код соответствует стандартам проекта
-- [ ] Тесты добавлены/обновлены
-- [ ] Документация обновлена
-- [ ] Все тесты проходят
-```
-
-## 🔄 CI/CD
+## 🔄 Непрерывная интеграция
 
 ### GitHub Actions
 
-Тесты автоматически запускаются при:
-- Push в ветки `main` и `develop`
-- Создании Pull Request
+Настройте CI/CD пайплайн для автоматического тестирования:
+```yaml
+name: CI
+on: [push, pull_request]
 
-### Воркфлоу
-
-1. **Тестирование** - Запуск тестов на разных версиях Python
-2. **Качество кода** - Проверка форматирования и линтинга
-3. **Покрытие** - Генерация отчетов о покрытии
-4. **Безопасность** - Проверка зависимостей
-
-## 🐛 Устранение проблем
-
-### Распространенные проблемы
-
-#### Импортные ошибки
-
-```bash
-# Убедитесь, что src в Python path
-export PYTHONPATH="${PYTHONPATH}:$(pwd)/src"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest tests/ --cov=src --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v2
 ```
 
-#### Отсутствующие зависимости
+## 🚀 Рекомендации по развертыванию
 
+### Управление версиями
+
+Используйте семантическое версионирование:
+- **MAJOR** версия для несовместимых изменений API
+- **MINOR** версия для новой функциональности
+- **PATCH** версия для исправления ошибок
+
+### Управление зависимостями
+
+Поддерживайте зависимости в актуальном состоянии:
 ```bash
-# Установите зависимости для разработки
-pip install -r requirements-dev.txt
+# Обновить зависимости
+pip install --upgrade -r requirements.txt
+
+# Проверить на уязвимости безопасности
+safety check
 ```
 
-#### Проблемы с GDAL
+## 🤝 Участие в разработке
 
-```bash
-# Ubuntu/Debian
-sudo apt-get install gdal-bin libgdal-dev
+### Процесс ревью кода
 
-# macOS
-brew install gdal
-```
+1. **Форкнуть репозиторий**
+2. **Создать ветку фичи**
+3. **Реализовать изменения с тестами**
+4. **Запустить все тесты и проверки**
+5. **Отправить pull request**
 
-### Отладка
+### Чеклист для pull request
 
-```bash
-# Запуск с отладочным выводом
-pytest tests/ -v -s
-
-# Остановка при первом неудачном тесте
-pytest tests/ -x
-```
-
-## 📊 Лучшие практики
-
-1. **Изолированные тесты** - Каждый тест должен быть независимым
-2. **Описательные имена** - Имена тестов должны четко описывать, что тестируется
-3. **Мокирование внешних зависимостей** - Используйте моки для файловой системы, сети
-4. **Тестирование граничных случаев** - Проверяйте нулевые значения, исключения
-5. **Регулярный запуск** - Запускайте тесты перед коммитом изменений
-
-## 🔗 Полезные ссылки
-
-- **[Руководство пользователя](USER_GUIDE.md)** - Как использовать GOP
-- **[Архитектура](ARCHITECTURE.md)** - Системная архитектура
-- **[Тестирование](TESTING.md)** - Подробное руководство по тестированию
-- **[API документация](api/_build/html/index.html)** - Полная API документация
+- [ ] Код следует руководствам по стилю
+- [ ] Аннотации типов полные
+- [ ] Тесты включены и проходят
+- [ ] Документация обновлена
+- [ ] Учтено влияние на производительность
 
 ---
 
-*Для получения дополнительной помощи создайте issue на GitHub или обратитесь к существующей документации.*
+**Руководство разработчика GOP v2.0.0** - Создание научного ПО с качеством и производительностью.

@@ -1,27 +1,27 @@
 #!/bin/bash
 
-# Скрипт для генерации документации перед коммитом
+# Script for generating documentation before commit
 
 set -e
 
-echo "Генерация документации..."
+echo "Generating documentation..."
 
-# Проверка зависимостей
+# Check dependencies
 if ! python -c "import sphinx" 2>/dev/null; then
-    echo "❌ Sphinx не установлен. Установите зависимости:"
+    echo "❌ Sphinx not installed. Install dependencies:"
     echo "pip install sphinx sphinx_rtd_theme sphinx_autodoc_typehints"
     exit 1
 fi
 
-# Генерация документации
+# Generate documentation
 cd docs
 python generate_docs.py --clean --build
 
-# Проверка успешной генерации
+# Check if generation was successful
 if [ ! -f "api/_build/html/index.html" ]; then
-    echo "❌ Ошибка генерации документации"
+    echo "❌ Documentation generation error"
     exit 1
 fi
 
-echo "✅ Документация успешно сгенерирована"
-echo "📄 Доступна по адресу: docs/api/_build/html/index.html"
+echo "✅ Documentation successfully generated"
+echo "📄 Available at: docs/api/_build/html/index.html"

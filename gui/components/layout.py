@@ -58,21 +58,25 @@ def _create_modals():
             dbc.ModalHeader(dbc.ModalTitle("Создание нового проекта")),
             dbc.ModalBody([
                 dbc.Form([
-                    dbcFormGroup([
-                        dbc.Label("Название проекта", html_for="project-name-input"),
-                        dbc.Input(
-                            id="project-name-input",
-                            placeholder="Введите название проекта",
-                            type="text"
-                        ),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Название проекта", html_for="project-name-input"),
+                            dbc.Input(
+                                id="project-name-input",
+                                placeholder="Введите название проекта",
+                                type="text"
+                            ),
+                        ]),
                     ]),
-                    dbcFormGroup([
-                        dbc.Label("Описание", html_for="project-description-input"),
-                        dbc.Textarea(
-                            id="project-description-input",
-                            placeholder="Введите описание проекта (необязательно)",
-                            rows=3
-                        ),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Описание", html_for="project-description-input"),
+                            dbc.Textarea(
+                                id="project-description-input",
+                                placeholder="Введите описание проекта (необязательно)",
+                                rows=3
+                            ),
+                        ]),
                     ], className="mt-3"),
                 ])
             ]),
@@ -113,40 +117,46 @@ def _create_modals():
             dbc.ModalHeader(dbc.ModalTitle("Настройки обработки")),
             dbc.ModalBody([
                 dbc.Form([
-                    dbcFormGroup([
-                        dbc.Label("Тип сенсора", html_for="sensor-type-select"),
-                        dbc.Select(
-                            id="sensor-type-select",
-                            options=[
-                                {"label": "Гиперспектральный", "value": "hyperspectral"},
-                                {"label": "Мультиспектральный", "value": "multispectral"},
-                            ],
-                            value="hyperspectral"
-                        ),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Тип сенсора", html_for="sensor-type-select"),
+                            dbc.Select(
+                                id="sensor-type-select",
+                                options=[
+                                    {"label": "Гиперспектральный", "value": "hyperspectral"},
+                                    {"label": "Мультиспектральный", "value": "multispectral"},
+                                ],
+                                value="hyperspectral"
+                            ),
+                        ]),
                     ]),
-                    dbcFormGroup([
-                        dbc.Label("Вегетационные индексы", html_for="indices-select"),
-                        dbc.Select(
-                            id="indices-select",
-                            options=[
-                                {"label": "NDVI", "value": "NDVI"},
-                                {"label": "EVI", "value": "EVI"},
-                                {"label": "SAVI", "value": "SAVI"},
-                            ],
-                            value=["NDVI", "EVI"],
-                            multi=True
-                        ),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Вегетационные индексы", html_for="indices-select"),
+                            dcc.Dropdown(
+                                id="indices-select",
+                                options=[
+                                    {"label": "NDVI", "value": "NDVI"},
+                                    {"label": "EVI", "value": "EVI"},
+                                    {"label": "SAVI", "value": "SAVI"},
+                                ],
+                                value=["NDVI", "EVI"],
+                                multi=True
+                            ),
+                        ]),
                     ], className="mt-3"),
-                    dbcFormGroup([
-                        dbc.Checklist(
-                            id="processing-options",
-                            options=[
-                                {"label": "Применить коррекцию атмосферы", "value": "atmospheric_correction"},
-                                {"label": "Удалить шум", "value": "denoising"},
-                                {"label": "Сегментация растений", "value": "segmentation"},
-                            ],
-                            value=["atmospheric_correction", "denoising"],
-                        ),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Checklist(
+                                id="processing-options",
+                                options=[
+                                    {"label": "Применить коррекцию атмосферы", "value": "atmospheric_correction"},
+                                    {"label": "Удалить шум", "value": "denoising"},
+                                    {"label": "Сегментация растений", "value": "segmentation"},
+                                ],
+                                value=["atmospheric_correction", "denoising"],
+                            ),
+                        ]),
                     ], className="mt-3"),
                 ])
             ]),
@@ -157,8 +167,3 @@ def _create_modals():
         ], id="processing-settings-modal", centered=True, size="lg"),
     ])
 
-
-# Вспомогательный компонент для группировки форм
-def dbcFormGroup(children, **kwargs):
-    """Обертка для dbc.FormGroup для совместимости"""
-    return html.Div(children, className="mb-3", **kwargs)

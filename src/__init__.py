@@ -15,8 +15,8 @@ from .segmentation import ImageSegmenter
 from .indices import VegetationIndexCalculator
 
 __all__ = [
-    'Pipeline',
-    'HyperspectralProcessor',
-    'ImageSegmenter',
-    'VegetationIndexCalculator'
+    "Pipeline",
+    "HyperspectralProcessor",
+    "ImageSegmenter",
+    "VegetationIndexCalculator",
 ]

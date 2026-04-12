@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-Пример научного анализа гиперспектральных данных
-с использованием библиотеки GOP v2.0
+Scientific Analysis Pipeline Example
+using GOP Scientific Library v2.0
+
+This example demonstrates:
+- Full scientific pipeline from src/core/pipeline.py
+- Statistical analysis of hyperspectral data
+- Correlation analysis between vegetation indices
+- Plant condition assessment
+- Advanced data quality metrics
 """
 
 import os
@@ -12,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-# Добавление src в Python path
+# Add src to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.core.pipeline import Pipeline
@@ -21,387 +28,253 @@ from src.processing.hyperspectral import HyperspectralProcessor
 from src.utils.logger import setup_logger
 
 
+def create_research_data(file_path):
+    """Create synthetic research data for scientific analysis"""
+    try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        # Create more realistic hyperspectral data for research
+        # 512x512 pixels, 224 bands (AVIRIS-like)
+        data = np.random.rand(512, 512, 224).astype(np.float32)
+        
+        wavelengths = np.linspace(400, 2500, 224)
+        
+        # Add realistic vegetation patterns with different health levels
+        # Healthy vegetation area
+        healthy_area = data[100:300, 100:300, :]
+        for i, wl in enumerate(wavelengths):
+            if 500 <= wl <= 700:  # Photosynthetic active radiation
+                healthy_area[:, :, i] *= 0.08 + 0.15 * np.sin(wl/100)
+            elif 700 <= wl <= 1300:  # Near-infrared plateau
+                healthy_area[:, :, i] *= 0.45 + 0.25 * np.cos(wl/200)
+            elif 1300 <= wl <= 2500:  # Short-wave infrared
+                healthy_area[:, :, i] *= 0.03 + 0.08 * np.sin(wl/300)
+        
+        # Stressed vegetation area
+        stressed_area = data[350:450, 50:150, :]
+        for i, wl in enumerate(wavelengths):
+            if 500 <= wl <= 700:
+                stressed_area[:, :, i] *= 0.12 + 0.18 * np.sin(wl/100)
+            elif 700 <= wl <= 1300:
+                stressed_area[:, :, i] *= 0.25 + 0.15 * np.cos(wl/200)
+            elif 1300 <= wl <= 2500:
+                stressed_area[:, :, i] *= 0.08 + 0.12 * np.sin(wl/300)
+        
+        # Save as binary file
+        data.tofile(file_path)
+        
+        # Create header file
+        header_file = file_path.replace('.bil', '.hdr')
+        with open(header_file, 'w') as f:
+            f.write("ENVI\n")
+            f.write("samples = 512\n")
+            f.write("lines = 512\n")
+            f.write("bands = 224\n")
+            f.write("header offset = 0\n")
+            f.write("file type = ENVI Standard\n")
+            f.write("data type = 4\n")
+            f.write("interleave = bil\n")
+            f.write("byte order = 0\n")
+            f.write("wavelength = {}".format(",".join(map(str, wavelengths))))
+        
+        print(f"Created research data: {file_path}")
+        
+    except Exception as e:
+        print(f"Error creating research data: {e}")
+
+
+def perform_scientific_analysis(pipeline, results, output_dir):
+    """Perform comprehensive scientific analysis"""
+    try:
+        # Create analysis directory
+        analysis_dir = os.path.join(output_dir, 'scientific_analysis')
+        os.makedirs(analysis_dir, exist_ok=True)
+        plots_dir = os.path.join(analysis_dir, 'plots')
+        os.makedirs(plots_dir, exist_ok=True)
+        
+        # Get scientific analysis results
+        scientific_analysis = results.get('scientific_analysis', {})
+        
+        # 1. Statistical Analysis
+        print("\n1. STATISTICAL ANALYSIS")
+        print("-" * 40)
+        
+        if 'index_statistics' in scientific_analysis:
+            stats = scientific_analysis['index_statistics']
+            
+            # Create statistical summary plot
+            plt.figure(figsize=(12, 8))
+            
+            index_names = list(stats.keys())
+            means = [stats[name]['mean'] for name in index_names]
+            stds = [stats[name]['std'] for name in index_names]
+            
+            plt.bar(range(len(index_names)), means, yerr=stds, 
+                   capsize=5, alpha=0.7, color='skyblue')
+            plt.xticks(range(len(index_names)), index_names, rotation=45)
+            plt.ylabel('Mean Value')
+            plt.title('Vegetation Index Statistics')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(plots_dir, 'index_statistics.png'), 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Print statistics
+            for name in index_names[:5]:  # Show first 5 indices
+                stat = stats[name]
+                print(f"{name}:")
+                print(f"  Mean: {stat['mean']:.4f}")
+                print(f"  Std: {stat['std']:.4f}")
+                print(f"  Min: {stat['min']:.4f}")
+                print(f"  Max: {stat['max']:.4f}")
+        
+        # 2. Correlation Analysis
+        print("\n2. CORRELATION ANALYSIS")
+        print("-" * 40)
+        
+        if 'correlation_analysis' in scientific_analysis:
+            corr_analysis = scientific_analysis['correlation_analysis']
+            
+            if 'correlation_matrix' in corr_analysis:
+                corr_matrix = corr_analysis['correlation_matrix']
+                
+                # Create correlation heatmap
+                plt.figure(figsize=(10, 8))
+                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', 
+                           center=0, fmt='.2f')
+                plt.title('Vegetation Index Correlation Matrix')
+                plt.tight_layout()
+                plt.savefig(os.path.join(plots_dir, 'correlation_matrix.png'), 
+                           dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                print("Correlation matrix generated")
+            
+            if 'strong_correlations' in corr_analysis:
+                strong_corr = corr_analysis['strong_correlations']
+                print(f"Strong correlations found: {len(strong_corr)}")
+                for corr in strong_corr[:3]:  # Show top 3
+                    print(f"  {corr['index1']} - {corr['index2']}: {corr['correlation']:.3f}")
+        
+        # 3. Spatial Analysis
+        print("\n3. SPATIAL ANALYSIS")
+        print("-" * 40)
+        
+        if 'spatial_analysis' in scientific_analysis:
+            spatial = scientific_analysis['spatial_analysis']
+            
+            if 'overall' in spatial:
+                overall = spatial['overall']
+                print(f"Spatial autocorrelation: {overall.get('spatial_autocorrelation', 0):.3f}")
+                print(f"Spatial heterogeneity: {overall.get('spatial_heterogeneity', 0):.3f}")
+        
+        # 4. Plant Condition Assessment
+        print("\n4. PLANT CONDITION ASSESSMENT")
+        print("-" * 40)
+        
+        plant_condition = results.get('plant_condition', {})
+        if 'classification' in plant_condition:
+            classification = plant_condition['classification']
+            print(f"Plant condition class: {classification['class']}")
+            print(f"Description: {classification['description']}")
+            print(f"Overall score: {classification['overall_score']:.3f}")
+            print(f"Confidence: {classification['confidence']:.2f}")
+        
+        # 5. Data Quality Assessment
+        print("\n5. DATA QUALITY ASSESSMENT")
+        print("-" * 40)
+        
+        data_quality = results['processed_data'].get('data_quality', {})
+        if 'overall_quality' in data_quality:
+            quality = data_quality['overall_quality']
+            print(f"Overall quality score: {quality.get('quality_score', 0):.3f}")
+            print(f"Average SNR: {quality.get('average_snr', 0):.2f}")
+            print(f"Data completeness: {quality.get('completeness', 0):.1f}%")
+        
+        print(f"\nScientific analysis results saved to: {analysis_dir}")
+        
+    except Exception as e:
+        print(f"Error in scientific analysis: {e}")
+
+
 def main():
-    """Основная функция научного анализа"""
+    """Main function for scientific analysis example"""
     
-    # Настройка логирования
+    # Setup logging
     logger = setup_logger('GOP_Scientific', level=logging.INFO)
-    logger.info("Начало научного анализа гиперспектральных данных")
+    logger.info("Starting scientific analysis pipeline example")
     
     try:
-        # Путь к данным
+        # Path to research data
         input_path = "data/research_field.bil"
         output_dir = "results/scientific_analysis"
         
-        # Проверка наличия данных
+        # Check if data exists
         if not os.path.exists(input_path):
-            logger.error(f"Входной файл не найден: {input_path}")
-            return
+            logger.error(f"Input file not found: {input_path}")
+            logger.info("Creating research data for analysis")
+            create_research_data(input_path)
         
-        # Создание выходной директории
+        # Create output directory
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(os.path.join(output_dir, 'plots'), exist_ok=True)
         
-        # Инициализация компонентов
-        logger.info("Инициализация научных компонентов")
+        # Initialize pipeline
+        logger.info("Initializing scientific pipeline")
         pipeline = Pipeline()
-        processor = HyperspectralProcessor()
-        calculator = VegetationIndexCalculator()
         
-        # Шаг 1: Анализ качества данных
-        logger.info("Шаг 1: Анализ качества исходных данных")
-        dataset, image_data, wavelengths = processor._read_hyperspectral_data(input_path)
-        data_quality = processor._analyze_data_quality(image_data)
-        
-        print("\n" + "="*60)
-        print("АНАЛИЗ КАЧЕСТВА ДАННЫХ")
-        print("="*60)
-        
-        print(f"Размер изображения: {image_data.shape}")
-        print(f"Всего пикселей: {data_quality['total_pixels']:,}")
-        print(f"Всего каналов: {data_quality['total_bands']}")
-        
-        if 'overall_quality' in data_quality:
-            quality = data_quality['overall_quality']
-            print(f"Общая оценка качества: {quality['quality_score']:.3f}")
-            print(f"Среднее SNR: {quality['average_snr']:.2f}")
-        
-        # Шаг 2: Обработка данных
-        logger.info("Шаг 2: Научная обработка данных")
+        # Process data with comprehensive analysis
+        logger.info(f"Processing research data: {input_path}")
         results = pipeline.process(
             input_path=input_path,
             output_dir=output_dir,
             sensor_type='Hyperspectral',
-            selected_indices=['GNDVI', 'MCARI', 'MNLI', 'OSAVI', 'TVI', 
-                            'SIPI2', 'mARI', 'NDWI', 'MSI'],
+            selected_indices=['NDVI', 'GNDVI', 'EVI', 'SAVI', 'MSAVI', 'NDWI', 'MSI', 'SIPI2'],
             use_refinement=True,
-            compression_ratio=0.125
+            compression_ratio=0.1,
+            enable_scientific_analysis=True
         )
         
-        # Шаг 3: Детальный научный анализ
-        logger.info("Шаг 3: Детальный научный анализ")
-        scientific_analysis = results.get('scientific_analysis', {})
+        # Perform scientific analysis
+        logger.info("Performing comprehensive scientific analysis")
+        perform_scientific_analysis(pipeline, results, output_dir)
         
-        print("\n" + "="*60)
-        print("НАУЧНЫЙ АНАЛИЗ")
-        print("="*60)
+        # Save results
+        results_file = os.path.join(output_dir, 'scientific_results.json')
+        pipeline.save_results(results_file)
         
-        # Статистический анализ
-        if 'index_statistics' in scientific_analysis:
-            stats = scientific_analysis['index_statistics']
-            print(f"\nСТАТИСТИЧЕСКИЙ АНАЛИЗ ИНДЕКСОВ:")
-            print(f"{'Индекс':<10} {'Среднее':<10} {'СКО':<10} {'Асимметрия':<12} {'Эксцесс':<10}")
-            print("-" * 60)
-            
-            for index_name, index_stats in stats.items():
-                print(f"{index_name:<10} {index_stats['mean']:<10.3f} "
-                      f"{index_stats['std']:<10.3f} {index_stats['skewness']:<12.3f} "
-                      f"{index_stats['kurtosis']:<10.3f}")
-        
-        # Корреляционный анализ
-        if 'correlation_analysis' in scientific_analysis:
-            corr_analysis = scientific_analysis['correlation_analysis']
-            
-            print(f"\nКОРРЕЛЯЦИОННЫЙ АНАЛИЗ:")
-            if 'strong_correlations' in corr_analysis:
-                strong_corr = corr_analysis['strong_correlations']
-                print(f"Найдено сильных корреляций (|r| > 0.7): {len(strong_corr)}")
-                
-                for corr in strong_corr:
-                    corr_type = "положительная" if corr['correlation'] > 0 else "отрицательная"
-                    print(f"  {corr['index1']} - {corr['index2']}: "
-                          f"{corr['correlation']:.3f} ({corr_type})")
-            
-            # Визуализация корреляционной матрицы
-            if 'correlation_matrix' in corr_analysis:
-                plot_correlation_matrix(corr_analysis, output_dir)
-        
-        # Пространственный анализ
-        if 'spatial_analysis' in scientific_analysis:
-            spatial = scientific_analysis['spatial_analysis']
-            
-            print(f"\nПРОСТРАНСТВЕННЫЙ АНАЛИЗ:")
-            for condition_name, spatial_data in spatial.items():
-                if isinstance(spatial_data, dict):
-                    print(f"\n{condition_name.upper()}:")
-                    print(f"  Индекс Морана: {spatial_data.get('spatial_autocorrelation', 0):.3f}")
-                    
-                    if 'hotspot_analysis' in spatial_data:
-                        hotspot = spatial_data['hotspot_analysis']
-                        print(f"  Горячие точки: {hotspot.get('hotspots', 0)} "
-                              f"({hotspot.get('hotspot_percentage', 0):.1f}%)")
-                        print(f"  Холодные точки: {hotspot.get('coldspots', 0)} "
-                              f"({hotspot.get('coldspot_percentage', 0):.1f}%)")
-                    
-                    print(f"  Индекс фрагментации: {spatial_data.get('fragmentation_index', 0):.3f}")
-        
-        # Шаг 4: Классификация состояния растений
-        logger.info("Шаг 4: Классификация состояния растений")
-        plant_condition = results.get('plant_condition', {})
-        
-        if 'classification' in plant_condition:
-            classification = plant_condition['classification']
-            
-            print(f"\nКЛАССИФИКАЦИЯ СОСТОЯНИЯ РАСТЕНИЙ:")
-            print(f"Класс: {classification['class']}")
-            print(f"Описание: {classification['description']}")
-            print(f"Количественная оценка: {classification['overall_score']:.3f}")
-            print(f"Уверенность классификации: {classification['confidence']:.2f}")
-            print(f"Вариабельность: {classification['variability']:.3f}")
-        
-        # Шаг 5: Спектральный анализ
-        logger.info("Шаг 5: Спектральный анализ")
-        if 'scientific_report' in results['processed_data']:
-            report = results['processed_data']['scientific_report']
-            
-            if 'spectral_analysis' in report:
-                spectral = report['spectral_analysis']
-                print(f"\nСПЕКТРАЛЬНЫЙ АНАЛИЗ:")
-                print(f"Спектральная корреляция (оригинал-финал): {spectral.get('spectral_correlation', 0):.3f}")
-                print(f"Спектральное расстояние: {spectral.get('spectral_distance', 0):.3f}")
-        
-        # Шаг 6: Создание научных визуализаций
-        logger.info("Шаг 6: Создание научных визуализаций")
-        create_scientific_plots(results, output_dir)
-        
-        # Шаг 7: Генерация научного отчета
-        logger.info("Шаг 7: Генерация научного отчета")
-        generate_scientific_report(results, data_quality, output_dir)
-        
-        # Шаг 8: Экспорт данных для дальнейшего анализа
-        logger.info("Шаг 8: Экспорт научных данных")
+        # Export scientific data
         pipeline.export_scientific_data(output_dir)
         
+        # Display summary
         print("\n" + "="*60)
-        print("НАУЧНЫЙ АНАЛИЗ ЗАВЕРШЕН")
+        print("SCIENTIFIC ANALYSIS SUMMARY")
         print("="*60)
-        print(f"Результаты сохранены в: {output_dir}")
-        print(f"Научные данные экспортированы: {output_dir}/scientific_export/")
-        print(f"Визуализации: {output_dir}/plots/")
-        print(f"Отчет: {output_dir}/scientific_report.txt")
+        
+        print(f"Input file: {input_path}")
+        print(f"Output directory: {output_dir}")
+        print(f"Results file: {results_file}")
+        print(f"Scientific data exported to: {output_dir}/scientific_export/")
+        
+        print("\nAnalysis includes:")
+        print("- Statistical analysis of vegetation indices")
+        print("- Correlation analysis between indices")
+        print("- Spatial pattern analysis")
+        print("- Plant condition assessment")
+        print("- Data quality metrics")
+        
+        print("\n" + "="*60)
+        print("Scientific analysis example completed successfully!")
+        print("="*60)
         
     except Exception as e:
-        logger.error(f"Ошибка в научном анализе: {e}")
-        print(f"Ошибка: {e}")
+        logger.error(f"Error in scientific analysis example: {e}")
+        print(f"Error: {e}")
         return 1
     
     return 0
-
-
-def plot_correlation_matrix(corr_analysis, output_dir):
-    """Создание визуализации корреляционной матрицы"""
-    try:
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        
-        if 'correlation_matrix' not in corr_analysis or 'index_names' not in corr_analysis:
-            return
-        
-        matrix = np.array(corr_analysis['correlation_matrix'])
-        names = corr_analysis['index_names']
-        
-        plt.figure(figsize=(12, 10))
-        sns.heatmap(matrix, 
-                   xticklabels=names, 
-                   yticklabels=names,
-                   annot=True, 
-                   cmap='coolwarm', 
-                   center=0,
-                   square=True,
-                   fmt='.2f')
-        
-        plt.title('Корреляционная матрица вегетационных индексов', fontsize=16)
-        plt.tight_layout()
-        
-        plot_path = os.path.join(output_dir, 'plots', 'correlation_matrix.png')
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"Корреляционная матрица сохранена: {plot_path}")
-        
-    except Exception as e:
-        print(f"Ошибка при создании корреляционной матрицы: {e}")
-
-
-def create_scientific_plots(results, output_dir):
-    """Создание научных визуализаций"""
-    try:
-        import matplotlib.pyplot as plt
-        
-        indices_results = results.get('indices', {})
-        normalized_indices = indices_results.get('normalized_indices', {})
-        
-        if not normalized_indices:
-            return
-        
-        # График распределения индексов
-        fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-        axes = axes.flatten()
-        
-        for i, (index_name, index_data) in enumerate(normalized_indices.items()):
-            if i >= 9:
-                break
-                
-            if isinstance(index_data, np.ndarray):
-                valid_data = index_data[index_data > 0]
-                if len(valid_data) > 0:
-                    axes[i].hist(valid_data, bins=50, alpha=0.7, edgecolor='black')
-                    axes[i].set_title(f'{index_name}')
-                    axes[i].set_xlabel('Значение')
-                    axes[i].set_ylabel('Частота')
-                    axes[i].grid(True, alpha=0.3)
-        
-        # Скрытие пустых subplot'ов
-        for i in range(len(normalized_indices), 9):
-            axes[i].set_visible(False)
-        
-        plt.tight_layout()
-        plot_path = os.path.join(output_dir, 'plots', 'index_distributions.png')
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"Распределения индексов сохранены: {plot_path}")
-        
-        # График сравнения индексов
-        if len(normalized_indices) >= 2:
-            fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-            
-            # Выбор пар индексов для сравнения
-            index_pairs = [
-                ('GNDVI', 'MCARI'),
-                ('NDWI', 'MSI'),
-                ('SIPI2', 'mARI'),
-                ('OSAVI', 'TVI')
-            ]
-            
-            for i, (idx1, idx2) in enumerate(index_pairs):
-                if idx1 in normalized_indices and idx2 in normalized_indices:
-                    data1 = normalized_indices[idx1].flatten()
-                    data2 = normalized_indices[idx2].flatten()
-                    
-                    # Фильтрация валидных данных
-                    valid_mask = (data1 > 0) & (data2 > 0)
-                    data1_valid = data1[valid_mask]
-                    data2_valid = data2[valid_mask]
-                    
-                    if len(data1_valid) > 100:
-                        axes[i//2, i%2].scatter(data1_valid[:1000], data2_valid[:1000], 
-                                             alpha=0.5, s=1)
-                        axes[i//2, i%2].set_xlabel(idx1)
-                        axes[i//2, i%2].set_ylabel(idx2)
-                        axes[i//2, i%2].set_title(f'{idx1} vs {idx2}')
-                        axes[i//2, i%2].grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            plot_path = os.path.join(output_dir, 'plots', 'index_comparisons.png')
-            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-            plt.close()
-            
-            print(f"Сравнения индексов сохранены: {plot_path}")
-        
-    except Exception as e:
-        print(f"Ошибка при создании визуализаций: {e}")
-
-
-def generate_scientific_report(results, data_quality, output_dir):
-    """Генерация текстового научного отчета"""
-    try:
-        report_path = os.path.join(output_dir, 'scientific_report.txt')
-        
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write("НАУЧНЫЙ ОТЧЕТ\n")
-            f.write("Анализ гиперспектральных данных и состояния растений\n")
-            f.write("="*60 + "\n\n")
-            
-            # Информация о данных
-            f.write("1. ИНФОРМАЦИЯ О ДАННЫХ\n")
-            f.write("-" * 30 + "\n")
-            processed_data = results['processed_data']
-            f.write(f"Размер изображения: {processed_data['shape']}\n")
-            f.write(f"Количество каналов: {processed_data['bands']}\n")
-            
-            if 'wavelengths' in processed_data and processed_data['wavelengths']:
-                wavelengths = processed_data['wavelengths']
-                f.write(f"Спектральный диапазон: {min(wavelengths):.1f} - {max(wavelengths):.1f} нм\n")
-            
-            f.write(f"Тип сенсора: {results['sensor_type']}\n\n")
-            
-            # Качество данных
-            f.write("2. КАЧЕСТВО ДАННЫХ\n")
-            f.write("-" * 30 + "\n")
-            if 'overall_quality' in data_quality:
-                quality = data_quality['overall_quality']
-                f.write(f"Общая оценка качества: {quality['quality_score']:.3f}\n")
-                f.write(f"Среднее SNR: {quality['average_snr']:.2f}\n")
-            
-            missing = data_quality.get('missing_values', {})
-            f.write(f"Пропущенные значения: {missing.get('nan_percentage', 0):.2f}%\n")
-            f.write(f"Бесконечные значения: {missing.get('inf_percentage', 0):.2f}%\n\n")
-            
-            # Результаты обработки
-            f.write("3. РЕЗУЛЬТАТЫ ОБРАБОТКИ\n")
-            f.write("-" * 30 + "\n")
-            f.write(f"Ортофотоплан: {results['orthophoto_path']}\n")
-            f.write(f"Маска сегментации: {results['segmentation_mask']}\n")
-            
-            indices_results = results.get('indices', {})
-            f.write(f"Рассчитано индексов: {len(indices_results.get('calculated_indices', []))}\n\n")
-            
-            # Состояние растений
-            f.write("4. СОСТОЯНИЕ РАСТЕНИЙ\n")
-            f.write("-" * 30 + "\n")
-            plant_condition = results.get('plant_condition', {})
-            if 'classification' in plant_condition:
-                classification = plant_condition['classification']
-                f.write(f"Класс состояния: {classification['class']}\n")
-                f.write(f"Описание: {classification['description']}\n")
-                f.write(f"Количественная оценка: {classification['overall_score']:.3f}\n")
-                f.write(f"Уверенность: {classification['confidence']:.2f}\n\n")
-            
-            # Научный анализ
-            f.write("5. НАУЧНЫЙ АНАЛИЗ\n")
-            f.write("-" * 30 + "\n")
-            scientific_analysis = results.get('scientific_analysis', {})
-            
-            if 'index_statistics' in scientific_analysis:
-                f.write("Статистика индексов:\n")
-                stats = scientific_analysis['index_statistics']
-                for index_name, index_stats in stats.items():
-                    f.write(f"  {index_name}: среднее={index_stats['mean']:.3f}, "
-                           f"СКО={index_stats['std']:.3f}\n")
-                f.write("\n")
-            
-            if 'correlation_analysis' in scientific_analysis:
-                corr_analysis = scientific_analysis['correlation_analysis']
-                if 'strong_correlations' in corr_analysis:
-                    f.write("Сильные корреляции:\n")
-                    for corr in corr_analysis['strong_correlations']:
-                        f.write(f"  {corr['index1']} - {corr['index2']}: "
-                               f"{corr['correlation']:.3f}\n")
-                f.write("\n")
-            
-            # Выводы
-            f.write("6. ВЫВОДЫ\n")
-            f.write("-" * 30 + "\n")
-            
-            if 'classification' in plant_condition:
-                classification = plant_condition['classification']
-                f.write(f"Состояние растительности на исследуемом участке: {classification['class']}\n")
-                f.write(f"Количественная оценка: {classification['overall_score']:.3f}\n")
-                
-                if classification['overall_score'] > 0.7:
-                    f.write("Растения находятся в отличном состоянии, высокий уровень фотосинтетической активности.\n")
-                elif classification['overall_score'] > 0.4:
-                    f.write("Растения в удовлетворительном состоянии, наблюдаются умеренные стрессовые факторы.\n")
-                else:
-                    f.write("Растения в плохом состоянии, требуется вмешательство и дополнительный анализ.\n")
-            
-            f.write("\nНаучный анализ завершен. Рекомендуется провести дополнительный полевой анализ для валидации результатов.\n")
-        
-        print(f"Научный отчет сохранен: {report_path}")
-        
-    except Exception as e:
-        print(f"Ошибка при генерации отчета: {e}")
 
 
 if __name__ == '__main__':
