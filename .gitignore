@@ -229,3 +229,5 @@ plots/
 # Temporary processing files
 processing_temp/
 temp_processing/
+
+*.pth

@@ -46,7 +46,7 @@ processing:
 
 # Сегментация изображений
 segmentation:
-  model_path: "models/deeplabv3_resnet101.pth"
+  model_path: "models/segmentation/best_deeplabv3plus_resnet50_voc_os16.pth"
   device: "auto"  # auto, cpu, cuda
   confidence_threshold: 0.5
   

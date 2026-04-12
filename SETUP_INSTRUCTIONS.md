@@ -53,17 +53,17 @@
 # Создать директорию моделей
 mkdir -p models/segmentation
 
-# Скачать модель DeepLabV3+ (пример - заменить на реальный источник)
+# Скачать модель DeepLabV3+ (пример - заменить на реальный источник) https://github.com/VainF/DeepLabV3Plus-Pytorch
 wget -O models/segmentation/deeplabv3_resnet50_coco.pth \
     https://download.pytorch.org/models/deeplabv3_resnet50_coco-586e9e4e.pth
 
 # Обновить файл конфигурации
-sed -i 's|models/deeplabv3_resnet101.pth|models/segmentation/deeplabv3_resnet50_coco.pth|' config/config.yaml
+sed -i 's|models/deeplabv3_resnet101.pth|models/segmentation/best_deeplabv3plus_resnet50_voc_os16.pth|' config/config.yaml
 ```
 
 **Модель CascadePSP:**
 ```bash
-# Скачать модель CascadePSP (пример - заменить на реальный источник)
+# Скачать модель CascadePSP (пример - заменить на реальный источник) https://github.com/hkchengrex/CascadePSP
 wget -O models/segmentation/cascade_psp.pth \
     https://example.com/models/cascade_psp.pth
 ```
