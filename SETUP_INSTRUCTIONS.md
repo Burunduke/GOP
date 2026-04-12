@@ -188,10 +188,10 @@ cd GOP
 
 ### 2. Установить зависимости Python
 ```bash
-# Используя pip
+# Используя pip (рекомендуется с requirements.txt)
 pip install -r requirements.txt
 
-# Или используя Poetry (рекомендуется)
+# Или используя Poetry (альтернативный способ)
 poetry install
 poetry shell
 ```
@@ -429,7 +429,10 @@ services:
 
 1. **Обновление зависимостей:**
 ```bash
+# Обновить зависимости через pip
 pip install --upgrade -r requirements.txt
+
+# Или через Poetry
 poetry update
 ```
 

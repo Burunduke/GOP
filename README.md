@@ -18,6 +18,31 @@
 
 ### Установка
 
+#### Способ 1: Через pip (рекомендуется)
+```bash
+# Установить все зависимости
+pip install -r requirements.txt
+
+# Проверить установку
+python -c "import src.core.pipeline; print('GOP успешно установлен')"
+```
+
+#### Способ 2: Через Poetry (для разработки)
+```bash
+# Установить Poetry
+pip install poetry
+
+# Установить зависимости
+poetry install
+
+# Активировать виртуальное окружение
+poetry shell
+
+# Проверить установку
+python -c "import src.core.pipeline; print('GOP успешно установлен')"
+```
+
+#### Способ 3: Клонирование репозитория
 ```bash
 # Клонировать репозиторий
 git clone https://github.com/indykovdm/GOP.git
@@ -232,16 +257,28 @@ cd docs && python check_docs.py
 ## 📋 Требования
 
 ### Основные зависимости
-- Python 3.9+
-- NumPy, SciPy, pandas
-- GDAL, rasterio
-- OpenCV, scikit-learn
-- Matplotlib, seaborn
+Все зависимости включены в файл [`requirements.txt`](requirements.txt):
+- **Научные библиотеки**: NumPy, SciPy, pandas, matplotlib
+- **Обработка изображений**: OpenCV, scikit-image, scikit-learn, PyTorch
+- **Геоданные**: GDAL, rasterio, GeoPandas, Fiona
+- **Гиперспектральная обработка**: spectral
+- **Визуализация**: seaborn, plotly
+- **GUI**: Dash, Flask, Dash Bootstrap Components
+- **Базы данных**: SQLAlchemy, Redis, psycopg2-binary
+- **Утилиты**: PyYAML, tqdm, python-dotenv
 
-### Опциональные зависимости
-- Jupyter (для интерактивных примеров)
-- Redis (для распределенного кэширования)
-- PostgreSQL (для хранения в базе данных)
+### Дополнительные зависимости для разработки
+- **Тестирование**: pytest, pytest-cov, pytest-mock
+- **Форматирование**: black, flake8, isort, pylint
+- **Типизация**: mypy, types-PyYAML
+- **Документация**: sphinx, sphinx-rtd-theme
+- **Безопасность**: bandit, safety, pip-audit
+
+### Системные требования
+- **Python**: 3.9+
+- **Оперативная память**: 8GB+ (рекомендуется 16GB)
+- **Дисковое пространство**: 2GB+ для установки зависимостей
+- **Операционная система**: Linux, macOS, Windows
 
 ## 🤝 Участие в разработке
 
@@ -260,8 +297,8 @@ cd GOP
 python -m venv venv
 source venv/bin/activate
 
-# Установить зависимости разработки
-pip install -r requirements-dev.txt
+# Установить все зависимости (включая dev)
+pip install -r requirements.txt
 pip install -e .
 
 # Запустить тесты
