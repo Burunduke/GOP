@@ -10,8 +10,8 @@ from dash import Input, Output, State, callback_context, html
 import dash_bootstrap_components as dbc
 import plotly.graph_objs as go
 
-from .data_upload import create_file_list_item, format_filesize
-from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
+from .data_upload import create_file_list_item, format_filesize, create_data_upload_component
+from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure, create_visualization_component
 from .dashboard import create_dashboard
 from .documentation import create_documentation_component
 
@@ -26,11 +26,22 @@ def register_callbacks(app):
     )
     def display_page(pathname):
         """Обработка URL маршрутов"""
+        # DEBUG: Log the pathname to verify navigation is triggering
+        print(f"[DEBUG] Navigation triggered - pathname: {pathname}")
+        
         if pathname is None:
             return create_dashboard()
         
         if pathname == '/':
             return create_dashboard()
+        elif pathname == '/projects':
+            return create_projects_page()
+        elif pathname == '/upload':
+            return create_data_upload_component()
+        elif pathname == '/processing':
+            return create_processing_page()
+        elif pathname == '/analysis':
+            return create_visualization_component()
         elif pathname == '/docs/user-guide':
             return create_documentation_component('user_guide')
         elif pathname == '/docs/faq':
@@ -38,6 +49,8 @@ def register_callbacks(app):
         elif pathname == '/docs/api':
             return create_documentation_component('api')
         else:
+            # DEBUG: Log unhandled routes
+            print(f"[DEBUG] Unhandled route: {pathname} - defaulting to dashboard")
             # Default to dashboard for unknown routes
             return create_dashboard()
     
@@ -64,6 +77,9 @@ def register_callbacks(app):
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
+        # DEBUG: Log which navigation button was clicked
+        print(f"[DEBUG] Navigation button clicked: {button_id}")
+        
         if button_id == 'nav-dashboard' or button_id == 'nav-brand':
             return '/'
         elif button_id == 'nav-projects':
@@ -82,9 +98,6 @@ def register_callbacks(app):
             return '/docs/faq'
         else:
             return '/'
-            return create_visualization_component()
-        
-        return create_dashboard()
     
     # Подсветка активной вкладки навигации
     @app.callback(
