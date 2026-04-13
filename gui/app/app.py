@@ -87,6 +87,12 @@ def _setup_static_files(server):
         from flask import send_from_directory
         static_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
         return send_from_directory(static_dir, filename)
+    
+    @server.route('/docs/<path:filename>')
+    def serve_docs(filename):
+        from flask import send_from_directory
+        docs_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'docs')
+        return send_from_directory(docs_dir, filename)
 
 
 def main():

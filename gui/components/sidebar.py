@@ -87,21 +87,24 @@ def create_sidebar():
             html.H6("Помощь", className="mb-3"),
             dbc.ListGroup([
                 dbc.ListGroupItem(
-                    "Документация",
+                    [html.I(className="fas fa-book me-2"), "Документация API"],
                     action=True,
-                    href="/docs",
+                    href="/docs/api/_build/html/index.html",
+                    target="_blank",
                     className="small"
                 ),
                 dbc.ListGroupItem(
-                    "Руководство пользователя",
+                    [html.I(className="fas fa-user me-2"), "Руководство пользователя"],
                     action=True,
-                    href="/user-guide",
+                    href="/docs/USER_GUIDE.md",
+                    target="_blank",
                     className="small"
                 ),
                 dbc.ListGroupItem(
-                    "Часто задаваемые вопросы",
+                    [html.I(className="fas fa-question-circle me-2"), "Часто задаваемые вопросы"],
                     action=True,
-                    href="/faq",
+                    href="/docs/FAQ.md",
+                    target="_blank",
                     className="small"
                 ),
                 dbc.ListGroupItem(
