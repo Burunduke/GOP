@@ -16,7 +16,7 @@ def create_sidebar():
                 [html.I(className="fas fa-plus me-2"), "Новый проект"],
                 id="new-project-btn",
                 color="primary",
-                className="w-100 mb-2",
+                className="w-100 mb-2 mt-3",
                 outline=True
             ),
             dbc.Button(
@@ -48,7 +48,7 @@ def create_sidebar():
                             html.Span("3 файла", className="text-muted small"),
                         ])
                     ])
-                ], action=True, href="#"),
+                ], action=True, href="#", id="project-1", n_clicks=0),
                 dbc.ListGroupItem([
                     html.Div([
                         html.H6("Демо проект 2", className="mb-1"),
@@ -58,7 +58,7 @@ def create_sidebar():
                             html.Span("2 файла", className="text-muted small"),
                         ])
                     ])
-                ], action=True, href="#"),
+                ], action=True, href="#", id="project-2", n_clicks=0),
             ], flush=True),
         ], className="px-3 mb-4"),
         
@@ -81,14 +81,46 @@ def create_sidebar():
             ])
         ], className="px-3 mb-4"),
         
-        # Информация о системе
+        # Секция помощи
+        html.Div([
+            html.Hr(className="my-3"),
+            html.H6("Помощь", className="mb-3"),
+            dbc.ListGroup([
+                dbc.ListGroupItem(
+                    "Документация",
+                    action=True,
+                    href="/docs",
+                    className="small"
+                ),
+                dbc.ListGroupItem(
+                    "Руководство пользователя",
+                    action=True,
+                    href="/user-guide",
+                    className="small"
+                ),
+                dbc.ListGroupItem(
+                    "Часто задаваемые вопросы",
+                    action=True,
+                    href="/faq",
+                    className="small"
+                ),
+                dbc.ListGroupItem(
+                    [html.I(className="fas fa-envelope me-2"), "st087204@student.spbu.ru"],
+                    action=True,
+                    href="mailto:st087204@student.spbu.ru",
+                    className="small"
+                ),
+            ], flush=True),
+        ], className="px-3 mb-4"),
+
+        # Информация о системе (в самом низу)
         html.Div([
             html.Hr(className="my-3"),
             html.Div([
                 html.P("GOP GUI v1.0.0", className="text-muted small text-center mb-1"),
                 html.P("Гиперспектральный анализ", className="text-muted small text-center"),
             ])
-        ], className="px-3"),
+        ], className="px-3 mt-auto"),
         
     ], className="sidebar bg-light border-end", style={
         "width": "300px",

@@ -21,6 +21,13 @@ def create_data_upload_component():
                         html.Li("BIL/HDR - стандартный формат гиперспектральных данных"),
                         html.Li("TIFF/TIFF - геопространственные изображения"),
                         html.Li("DAT - сырые данные спектрометра"),
+                    ]),
+                    html.H6("Источники данных:", className="alert-heading mt-3"),
+                    html.Ul([
+                        html.Li(html.A("NASA EarthData", href="https://search.earthdata.nasa.gov/", target="_blank")),
+                        html.Li(html.A("GLIHT Data", href="https://glihtdata.gsfc.nasa.gov/", target="_blank")),
+                        html.Li(html.A("Open Aerial Map", href="https://map.openaerialmap.org/", target="_blank")),
+                        html.Li(html.A("AVIRIS Data", href="https://popo.jpl.nasa.gov/mmgis-aviris/", target="_blank")),
                     ])
                 ], color="info", className="mb-4"),
                 

@@ -211,6 +211,33 @@ def register_callbacks(app):
             return True
         return False
     
+    # Обработка кликов по проектам в сайдбаре
+    @app.callback(
+        Output('notification-toast', 'is_open'),
+        [Input('project-1', 'n_clicks'),
+         Input('project-2', 'n_clicks')],
+        [State('notification-toast', 'is_open')],
+        prevent_initial_call=True
+    )
+    def handle_project_click(project1_clicks, project2_clicks, is_open):
+        """Обработка кликов по проектам в сайдбаре"""
+        ctx = callback_context
+        if not ctx.triggered:
+            return False
+        
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        
+        if button_id == 'project-1':
+            # Загрузка данных проекта 1
+            # В реальном приложении здесь будет загрузка данных проекта
+            return True
+        elif button_id == 'project-2':
+            # Загрузка данных проекта 2
+            # В реальном приложении здесь будет загрузка данных проекта
+            return True
+        
+        return False
+
     # Прогресс обработки
     @app.callback(
         Output('progress-interval', 'disabled'),
