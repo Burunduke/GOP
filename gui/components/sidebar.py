@@ -79,28 +79,6 @@ def create_sidebar(projects=None, statistics=None):
             ], flush=True),
         ], className="px-3 mb-4"),
         
-        # Статистика
-        html.Div([
-            html.H6("Статистика", className="mb-3"),
-            html.Div([
-                html.Div([
-                    html.Span("Всего проектов:", className="text-muted"),
-                    html.Span(str(statistics.get("total_projects", 0)), 
-                             className="fw-bold ms-2"),
-                ], className="d-flex justify-content-between mb-2"),
-                html.Div([
-                    html.Span("Активных задач:", className="text-muted"),
-                    html.Span(str(statistics.get("status_counts", {}).get("processing", 0)), 
-                             className="fw-bold ms-2 text-warning"),
-                ], className="d-flex justify-content-between mb-2"),
-                html.Div([
-                    html.Span("Загружено файлов:", className="text-muted"),
-                    html.Span(str(statistics.get("total_files", 0)), 
-                             className="fw-bold ms-2"),
-                ], className="d-flex justify-content-between"),
-            ])
-        ], className="px-3 mb-4"),
-        
         # Секция помощи
         html.Div([
             html.Hr(className="my-3"),

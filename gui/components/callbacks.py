@@ -13,8 +13,6 @@ import dash_bootstrap_components as dbc
 
 from gui.components.dashboard import create_dashboard
 from gui.components.sidebar import create_sidebar
-from gui.components.data_upload import create_data_upload_component
-from gui.components.visualization import create_visualization_component
 from gui.components.documentation import create_documentation_component
 from gui.components.project_detail import create_project_detail
 from gui.models.project import Project, ProjectStatus, PipelineStage
@@ -44,12 +42,6 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
                 return create_dashboard(statistics=stats, recent_projects=recent_dicts)
             return create_dashboard()
         
-        elif pathname == "/upload":
-            return create_data_upload_component()
-        
-        elif pathname == "/analysis":
-            return create_visualization_component()
-        
         elif pathname == "/docs/api":
             return create_documentation_component('api')
         elif pathname == "/docs/user-guide":
@@ -67,9 +59,6 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         elif pathname == "/projects":
             return _create_projects_page()
-        
-        elif pathname == "/processing":
-            return _create_processing_page()
         
         # Default
         if project_manager:
@@ -95,33 +84,34 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
     
     # === 3. Navigation callback (keep existing) ===
     @app.callback(
-        Output('url', 'pathname'),
+        Output('url', 'pathname', allow_duplicate=True),
         [Input('nav-dashboard', 'n_clicks'),
          Input('nav-projects', 'n_clicks'),
-         Input('nav-upload', 'n_clicks'),
-         Input('nav-processing', 'n_clicks'),
-         Input('nav-analysis', 'n_clicks'),
          Input('nav-brand', 'n_clicks'),
          Input('nav-api-docs', 'n_clicks'),
          Input('nav-user-guide', 'n_clicks'),
          Input('nav-faq', 'n_clicks')],
         prevent_initial_call=True
     )
-    def navigate_to_page(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks,
-                            analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
+    def navigate_to_page(dashboard_clicks, projects_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
         """Обработка навигации между страницами"""
         ctx = callback_context
         if not ctx.triggered:
             return dash.no_update
         
         # Check if this is an initial call (all clicks are None)
-        all_clicks = [dashboard_clicks, projects_clicks, upload_clicks, processing_clicks,
-                      analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks]
+        all_clicks = [dashboard_clicks, projects_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks]
         
         if all(click is None for click in all_clicks):
             return dash.no_update
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        
+        # Filter out non-navigation button clicks (like project items)
+        valid_nav_buttons = ['nav-dashboard', 'nav-projects', 'nav-brand', 'nav-api-docs', 'nav-user-guide', 'nav-faq']
+        
+        if button_id not in valid_nav_buttons:
+            return dash.no_update
         
         # DEBUG: Log which navigation button was clicked
         print(f"[DEBUG] Navigation button clicked: {button_id}")
@@ -130,12 +120,6 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
             return '/'
         elif button_id == 'nav-projects':
             return '/projects'
-        elif button_id == 'nav-upload':
-            return '/upload'
-        elif button_id == 'nav-processing':
-            return '/processing'
-        elif button_id == 'nav-analysis':
-            return '/analysis'
         elif button_id == 'nav-api-docs':
             return '/docs/api'
         elif button_id == 'nav-user-guide':
@@ -148,38 +132,26 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
     # === 4. Active nav highlighting (keep existing) ===
     @app.callback(
         [Output('nav-dashboard', 'active'),
-         Output('nav-projects', 'active'),
-         Output('nav-upload', 'active'),
-         Output('nav-processing', 'active'),
-         Output('nav-analysis', 'active')],
+         Output('nav-projects', 'active')],
         [Input('nav-dashboard', 'n_clicks'),
          Input('nav-projects', 'n_clicks'),
-         Input('nav-upload', 'n_clicks'),
-         Input('nav-processing', 'n_clicks'),
-         Input('nav-analysis', 'n_clicks'),
          Input('nav-brand', 'n_clicks')],
         prevent_initial_call=True
     )
-    def update_active_tab(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks):
+    def update_active_tab(dashboard_clicks, projects_clicks, brand_clicks):
         """Обновление подсветки активной вкладки"""
         ctx = callback_context
         if not ctx.triggered:
-            return True, False, False, False, False  # Dashboard активен по умолчанию
+            return True, False  # Dashboard активен по умолчанию
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
         if button_id == 'nav-dashboard' or button_id == 'nav-brand':
-            return True, False, False, False, False
+            return True, False
         elif button_id == 'nav-projects':
-            return False, True, False, False, False
-        elif button_id == 'nav-upload':
-            return False, False, True, False, False
-        elif button_id == 'nav-processing':
-            return False, False, False, True, False
-        elif button_id == 'nav-analysis':
-            return False, False, False, False, True
+            return False, True
         
-        return True, False, False, False, False  # По умолчанию dashboard
+        return True, False  # По умолчанию dashboard
 
     # === 5. Create project modal ===
     @app.callback(
@@ -574,20 +546,3 @@ def _create_projects_page():
         ])
     ])
 
-
-def _create_processing_page():
-    """Создание страницы обработки"""
-    return html.Div([
-        html.H2("Обработка данных", className="mb-4"),
-        dbc.Row([
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardBody([
-                        html.H5("Настройки обработки"),
-                        html.P("Здесь будут настройки для обработки гиперспектральных данных"),
-                        dbc.Button("Начать обработку", color="success", className="mt-3")
-                    ])
-                ])
-            ])
-        ])
-    ])
