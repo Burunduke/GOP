@@ -85,35 +85,31 @@ def create_sidebar():
         html.Div([
             html.Hr(className="my-3"),
             html.H6("Помощь", className="mb-3"),
-            dbc.ListGroup([
-                dbc.ListGroupItem(
+            dbc.Nav([
+                dbc.NavLink(
                     [html.I(className="fas fa-book me-2"), "Документация API"],
-                    action=True,
                     href="/docs/api/_build/html/index.html",
                     target="_blank",
-                    className="small"
+                    className="small text-decoration-none"
                 ),
-                dbc.ListGroupItem(
+                dbc.NavLink(
                     [html.I(className="fas fa-user me-2"), "Руководство пользователя"],
-                    action=True,
                     href="/docs/USER_GUIDE.md",
                     target="_blank",
-                    className="small"
+                    className="small text-decoration-none"
                 ),
-                dbc.ListGroupItem(
+                dbc.NavLink(
                     [html.I(className="fas fa-question-circle me-2"), "Часто задаваемые вопросы"],
-                    action=True,
                     href="/docs/FAQ.md",
                     target="_blank",
-                    className="small"
+                    className="small text-decoration-none"
                 ),
-                dbc.ListGroupItem(
+                dbc.NavLink(
                     [html.I(className="fas fa-envelope me-2"), "st087204@student.spbu.ru"],
-                    action=True,
                     href="mailto:st087204@student.spbu.ru",
-                    className="small"
+                    className="small text-decoration-none"
                 ),
-            ], flush=True),
+            ], vertical=True, pills=True, className="flex-column"),
         ], className="px-3 mb-4"),
 
         # Информация о системе (в самом низу)
