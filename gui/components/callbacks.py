@@ -69,12 +69,12 @@ def register_callbacks(app):
         Output('upload-files-modal', 'is_open'),
         [Input('upload-files-btn', 'n_clicks'),
          Input('quick-upload-btn', 'n_clicks'),
-         Input('upload-files-btn', 'n_clicks'),
+         Input('upload-files-modal-btn', 'n_clicks'),
          Input('cancel-upload', 'n_clicks')],
         [State('upload-files-modal', 'is_open')],
         prevent_initial_call=True
     )
-    def toggle_upload_files_modal(sidebar_btn, quick_btn, upload_btn, cancel_btn, is_open):
+    def toggle_upload_files_modal(sidebar_btn, quick_btn, modal_btn, cancel_btn, is_open):
         """Управление модальным окном загрузки файлов"""
         if sidebar_btn or quick_btn:
             return True

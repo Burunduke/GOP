@@ -107,7 +107,7 @@ def _create_modals():
                 html.Div(id='upload-file-list', className="mt-3"),
             ]),
             dbc.ModalFooter([
-                dbc.Button("Загрузить", id="upload-files-btn", color="primary", className="me-2"),
+                dbc.Button("Загрузить", id="upload-files-modal-btn", color="primary", className="me-2"),
                 dbc.Button("Отмена", id="cancel-upload", color="secondary")
             ])
         ], id="upload-files-modal", centered=True, size="lg"),
