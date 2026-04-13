@@ -63,12 +63,12 @@ body {
 }
 
 /* Заголовок панели управления в боковой панели */
-.sidebar h5 {
+#sidebar-dashboard {
     cursor: pointer;
     transition: color 0.2s ease;
 }
 
-.sidebar h5:hover {
+#sidebar-dashboard:hover {
     color: var(--primary-color);
 }
 
