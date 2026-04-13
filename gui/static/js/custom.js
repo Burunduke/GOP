@@ -145,8 +145,8 @@ function setupEventListeners() {
         form.addEventListener('submit', handleFormSubmit);
     });
     
-    // Обработка кнопок
-    const actionButtons = document.querySelectorAll('[data-action]');
+    // Обработка кнопок (только для кнопок с data-action, исключая кнопки с id)
+    const actionButtons = document.querySelectorAll('[data-action]:not([id])');
     actionButtons.forEach(button => {
         button.addEventListener('click', handleActionButton);
     });

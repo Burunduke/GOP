@@ -192,16 +192,26 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         
+        # Debug logging to help identify the issue
+        print(f"[DEBUG] Modal trigger: {trigger_id}, clicks: new={new_btn}, create={create_btn}, cancel={cancel_btn}")
+        
+        # Additional safety check: ensure we only respond to actual button clicks
         if trigger_id == "new-project-btn":
-            return True
+            # Only open if new-project-btn was actually clicked and we have a valid click count
+            if new_btn is not None and new_btn > 0:
+                return True
+            return no_update
         
         if trigger_id == "create-project-btn":
             if name and project_manager:
                 project_manager.create_project(name=name, description=description or "")
             return False
-        
+
         if trigger_id == "cancel-create-project":
             return False
+        
+        # If we get here, it's an unexpected trigger - don't change modal state
+        return no_update
         
         return not is_open
     

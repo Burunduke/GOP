@@ -488,3 +488,23 @@ body {
 .main-content::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* Модальные окна */
+.modal {
+    z-index: 1060;
+}
+
+.modal-backdrop {
+    z-index: 1059;
+}
+
+/* Кнопка создания проекта - предотвращение перекрытия */
+#new-project-btn {
+    position: relative;
+    z-index: 1;
+}
+
+/* Предотвращение случайных кликов на кнопку */
+#new-project-btn:not(:focus) {
+    pointer-events: auto;
+}
