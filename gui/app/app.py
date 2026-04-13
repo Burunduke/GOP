@@ -91,6 +91,11 @@ def create_app(config_name='default'):
 
 def _setup_static_files(server):
     """Настройка статических файлов"""
+    @server.route('/')
+    def serve_root():
+        from flask import redirect
+        return redirect('/dashboard')
+    
     @server.route('/static/<path:filename>')
     def serve_static(filename):
         from flask import send_from_directory
