@@ -141,7 +141,7 @@ def create_sidebar(projects=None, statistics=None):
             ])
         ], className="px-3 mt-auto"),
         
-    ], className="sidebar bg-light border-end", style={
+    ], id="sidebar", className="sidebar bg-light border-end", style={
         "width": "300px",
         "min-height": "calc(100vh - 56px)",  # Высота экрана минус высота навбара
         "overflow-y": "auto"

@@ -14,9 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 try:
     from src.core.pipeline import Pipeline
-    from src.indices.calculator import IndicesCalculator
-    from src.processing.hyperspectral import HyperspectralProcessor
-    from src.segmentation.segmenter import PlantSegmenter
+    from src.indices.calculator import VegetationIndexCalculator
+    from src.processing.hyperspectral.processor import HyperspectralProcessor
+    from src.segmentation.segmenter import ImageSegmenter
     GOP_AVAILABLE = True
 except ImportError:
     GOP_AVAILABLE = False
@@ -39,9 +39,9 @@ class GOPAdapter:
         if GOP_AVAILABLE:
             try:
                 self.pipeline = Pipeline(self.config_path)
-                self.indices_calculator = IndicesCalculator()
+                self.indices_calculator = VegetationIndexCalculator()
                 self.hyperspectral_processor = HyperspectralProcessor()
-                self.segmenter = PlantSegmenter()
+                self.segmenter = ImageSegmenter()
                 self.gop_mode = "full"
             except Exception as e:
                 print(f"Ошибка инициализации GOP: {e}")
