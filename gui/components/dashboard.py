@@ -113,7 +113,7 @@ def create_dashboard():
                         
                     ])
                 ])
-            ], width=8),
+            ], width=12),
             
         ]),
     ], className="dashboard")

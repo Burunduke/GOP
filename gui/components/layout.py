@@ -10,6 +10,7 @@ from .sidebar import create_sidebar
 from .dashboard import create_dashboard
 from .data_upload import create_data_upload_component
 from .visualization import create_visualization_component
+from .documentation import create_documentation_component, create_documentation_layout
 
 
 def create_main_layout():
@@ -20,6 +21,9 @@ def create_main_layout():
         dcc.Store(id='project-store'),
         dcc.Store(id='processing-store'),
         
+        # URL routing
+        dcc.Location(id='url', refresh=False),
+        
         # Навигационная панель
         create_navigation(),
         
@@ -29,9 +33,7 @@ def create_main_layout():
             create_sidebar(),
             
             # Основное содержимое
-            html.Div(id='main-content', children=[
-                create_dashboard()
-            ], className="main-content flex-grow-1 p-4"),
+            html.Div(id='page-content', className="main-content flex-grow-1 p-4"),
         ], className="d-flex main-container"),
         
         # Модальные окна

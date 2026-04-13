@@ -88,20 +88,20 @@ def create_sidebar():
             dbc.Nav([
                 dbc.NavLink(
                     [html.I(className="fas fa-book me-2"), "Документация API"],
-                    href="docs/api/_build/html/index.html",
-                    target="_blank",
+                    href="/docs/api",
+                    id="nav-api-docs",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(
                     [html.I(className="fas fa-user me-2"), "Руководство пользователя"],
-                    href="docs/USER_GUIDE.md",
-                    target="_blank",
+                    href="/docs/user-guide",
+                    id="nav-user-guide",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(
                     [html.I(className="fas fa-question-circle me-2"), "Часто задаваемые вопросы"],
-                    href="docs/FAQ.md",
-                    target="_blank",
+                    href="/docs/faq",
+                    id="nav-faq",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(

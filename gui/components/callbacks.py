@@ -13,41 +13,75 @@ import plotly.graph_objs as go
 from .data_upload import create_file_list_item, format_filesize
 from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
 from .dashboard import create_dashboard
+from .documentation import create_documentation_component
 
 
 def register_callbacks(app):
     """Регистрация всех колбэков приложения"""
     
+    # URL routing
+    @app.callback(
+        Output('page-content', 'children'),
+        [Input('url', 'pathname')]
+    )
+    def display_page(pathname):
+        """Обработка URL маршрутов"""
+        if pathname is None:
+            return create_dashboard()
+        
+        if pathname == '/':
+            return create_dashboard()
+        elif pathname == '/docs/user-guide':
+            return create_documentation_component('user_guide')
+        elif pathname == '/docs/faq':
+            return create_documentation_component('faq')
+        elif pathname == '/docs/api':
+            return create_documentation_component('api')
+        else:
+            # Default to dashboard for unknown routes
+            return create_dashboard()
+    
     # Навигация
     @app.callback(
-        Output('main-content', 'children'),
+        Output('url', 'pathname'),
         [Input('nav-dashboard', 'n_clicks'),
          Input('nav-projects', 'n_clicks'),
          Input('nav-upload', 'n_clicks'),
          Input('nav-processing', 'n_clicks'),
          Input('nav-analysis', 'n_clicks'),
-         Input('nav-brand', 'n_clicks')],
+         Input('nav-brand', 'n_clicks'),
+         Input('nav-api-docs', 'n_clicks'),
+         Input('nav-user-guide', 'n_clicks'),
+         Input('nav-faq', 'n_clicks')],
         prevent_initial_call=True
     )
-    def navigate_to_page(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks):
+    def navigate_to_page(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks,
+                        analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
         """Обработка навигации между страницами"""
         ctx = callback_context
         if not ctx.triggered:
-            return create_dashboard()
+            return '/'
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
         if button_id == 'nav-dashboard' or button_id == 'nav-brand':
-            return create_dashboard()
+            return '/'
         elif button_id == 'nav-projects':
-            return create_projects_page()
+            return '/projects'
         elif button_id == 'nav-upload':
-            from .data_upload import create_data_upload_component
-            return create_data_upload_component()
+            return '/upload'
         elif button_id == 'nav-processing':
-            return create_processing_page()
+            return '/processing'
         elif button_id == 'nav-analysis':
-            from .visualization import create_visualization_component
+            return '/analysis'
+        elif button_id == 'nav-api-docs':
+            return '/docs/api'
+        elif button_id == 'nav-user-guide':
+            return '/docs/user-guide'
+        elif button_id == 'nav-faq':
+            return '/docs/faq'
+        else:
+            return '/'
             return create_visualization_component()
         
         return create_dashboard()
