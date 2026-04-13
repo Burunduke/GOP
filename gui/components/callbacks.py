@@ -83,7 +83,7 @@ def register_callbacks(app):
         """Управление модальным окном загрузки файлов"""
         if sidebar_btn or quick_btn:
             return True
-        elif upload_btn or cancel_btn:
+        elif modal_btn or cancel_btn:
             return False
         return is_open
     
