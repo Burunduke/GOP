@@ -29,6 +29,7 @@ def create_navigation():
         ],
         brand="GOP - Гиперспектральный анализ",
         brand_href="#",
+        brand_id="nav-brand",
         color="primary",
         dark=True,
         className="mb-0",

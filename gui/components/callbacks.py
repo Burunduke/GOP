@@ -12,6 +12,7 @@ import plotly.graph_objs as go
 
 from .data_upload import create_file_list_item, format_filesize
 from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
+from .dashboard import create_dashboard
 
 
 def register_callbacks(app):
@@ -23,10 +24,12 @@ def register_callbacks(app):
         [Input('nav-projects', 'n_clicks'),
          Input('nav-upload', 'n_clicks'),
          Input('nav-processing', 'n_clicks'),
-         Input('nav-analysis', 'n_clicks')],
+         Input('nav-analysis', 'n_clicks'),
+         Input('nav-brand', 'n_clicks'),
+         Input('sidebar-dashboard', 'n_clicks')],
         prevent_initial_call=True
     )
-    def navigate_to_page(projects_clicks, upload_clicks, processing_clicks, analysis_clicks):
+    def navigate_to_page(projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks, dashboard_clicks):
         """Обработка навигации между страницами"""
         ctx = callback_context
         if not ctx.triggered:
@@ -44,6 +47,8 @@ def register_callbacks(app):
         elif button_id == 'nav-analysis':
             from .visualization import create_visualization_component
             return create_visualization_component()
+        elif button_id == 'nav-brand' or button_id == 'sidebar-dashboard':
+            return create_dashboard()
         
         return html.Div("Страница в разработке")
     

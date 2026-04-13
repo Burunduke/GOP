@@ -37,6 +37,12 @@ body {
 .navbar-brand {
     font-weight: 600;
     font-size: 1.25rem;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.navbar-brand:hover {
+    opacity: 0.8;
 }
 
 /* Основной контейнер */
@@ -54,6 +60,16 @@ body {
     border-right: 1px solid #dee2e6;
     overflow-y: auto;
     transition: all 0.3s ease;
+}
+
+/* Заголовок панели управления в боковой панели */
+.sidebar h5 {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.sidebar h5:hover {
+    color: var(--primary-color);
 }
 
 .sidebar .list-group-item {

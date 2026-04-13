@@ -11,7 +11,7 @@ def create_sidebar():
     return html.Div([
         # Заголовок боковой панели
         html.Div([
-            html.H5("Панель управления", className="text-center mb-4"),
+            html.H5("Панель управления", className="text-center mb-4", id="sidebar-dashboard"),
             html.Hr(className="my-2"),
         ], className="p-3"),
         
