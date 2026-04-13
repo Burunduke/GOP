@@ -4,10 +4,24 @@
 
 import dash_bootstrap_components as dbc
 from dash import html
+from datetime import datetime
 
 
-def create_sidebar():
-    """Создание боковой панели"""
+def create_sidebar(projects=None, statistics=None):
+    """Создание боковой панели с реальными данными проектов"""
+    if projects is None:
+        projects = []
+    if statistics is None:
+        statistics = {"total_projects": 0, "status_counts": {}, "total_files": 0}
+    
+    # Форматирование даты в русском формате
+    def format_date(date_str):
+        try:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except:
+            return date_str
+    
     return html.Div([
         
         # Кнопки действий
@@ -39,26 +53,29 @@ def create_sidebar():
         html.Div([
             html.H6("Проекты", className="mb-3"),
             dbc.ListGroup([
-                dbc.ListGroupItem([
-                    html.Div([
-                        html.H6("Демо проект 1", className="mb-1"),
-                        html.P("Анализ поля пшеницы", className="mb-1 text-muted small"),
+                *[
+                    dbc.ListGroupItem([
                         html.Div([
-                            dbc.Badge("Завершен", color="success", className="me-1"),
-                            html.Span("3 файла", className="text-muted small"),
+                            html.H6(project.get("name", "Без названия"), className="mb-1"),
+                            html.P(project.get("description", "") or "Описание отсутствует", 
+                                   className="mb-1 text-muted small"),
+                            html.Div([
+                                dbc.Badge(
+                                    project.get("status_display", "Новый"), 
+                                    color=project.get("status_color", "secondary"), 
+                                    className="me-1"
+                                ),
+                                html.Span(f"{len(project.get('files', []))} файл(ов)", 
+                                         className="text-muted small"),
+                                html.Span(f"{format_date(project.get('updated_at', ''))}", 
+                                         className="text-muted small ms-2"),
+                            ], className="d-flex align-items-center")
                         ])
-                    ])
-                ], action=True, href="#", id="project-1", n_clicks=0),
-                dbc.ListGroupItem([
-                    html.Div([
-                        html.H6("Демо проект 2", className="mb-1"),
-                        html.P("Тестирование индексов", className="mb-1 text-muted small"),
-                        html.Div([
-                            dbc.Badge("В обработке", color="warning", className="me-1"),
-                            html.Span("2 файла", className="text-muted small"),
-                        ])
-                    ])
-                ], action=True, href="#", id="project-2", n_clicks=0),
+                    ], action=True, href="#", 
+                       id={"type": "project-item", "index": project.get("id", "")}, 
+                       n_clicks=0)
+                    for project in projects
+                ]
             ], flush=True),
         ], className="px-3 mb-4"),
         
@@ -68,15 +85,18 @@ def create_sidebar():
             html.Div([
                 html.Div([
                     html.Span("Всего проектов:", className="text-muted"),
-                    html.Span("2", className="fw-bold ms-2"),
+                    html.Span(str(statistics.get("total_projects", 0)), 
+                             className="fw-bold ms-2"),
                 ], className="d-flex justify-content-between mb-2"),
                 html.Div([
                     html.Span("Активных задач:", className="text-muted"),
-                    html.Span("1", className="fw-bold ms-2 text-warning"),
+                    html.Span(str(statistics.get("status_counts", {}).get("processing", 0)), 
+                             className="fw-bold ms-2 text-warning"),
                 ], className="d-flex justify-content-between mb-2"),
                 html.Div([
                     html.Span("Загружено файлов:", className="text-muted"),
-                    html.Span("5", className="fw-bold ms-2"),
+                    html.Span(str(statistics.get("total_files", 0)), 
+                             className="fw-bold ms-2"),
                 ], className="d-flex justify-content-between"),
             ])
         ], className="px-3 mb-4"),

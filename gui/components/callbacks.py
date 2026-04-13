@@ -1,60 +1,98 @@
 """
-Callbacks для GUI приложения GOP
+Callbacks для GUI приложения GOP с интеграцией управления проектами.
 """
 
 import json
-import base64
-import io
+import logging
 from datetime import datetime
-from dash import Input, Output, State, callback_context, html
+
+from dash import Input, Output, State, callback_context, no_update, ALL, MATCH, html
+from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
-import plotly.graph_objs as go
 
-from .data_upload import create_file_list_item, format_filesize, create_data_upload_component
-from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure, create_visualization_component
-from .dashboard import create_dashboard
-from .documentation import create_documentation_component
+from gui.components.dashboard import create_dashboard
+from gui.components.sidebar import create_sidebar
+from gui.components.data_upload import create_data_upload_component
+from gui.components.visualization import create_visualization_component
+from gui.components.documentation import create_documentation_component
+from gui.components.project_detail import create_project_detail
+from gui.models.project import Project, ProjectStatus, PipelineStage
+
+logger = logging.getLogger(__name__)
 
 
-def register_callbacks(app):
-    """Регистрация всех колбэков приложения"""
+def register_callbacks(app, project_manager=None, pipeline_executor=None):
+    """Register all application callbacks."""
     
-    # URL routing
+    # === 1. Page routing callback ===
     @app.callback(
-        Output('page-content', 'children'),
-        [Input('url', 'pathname')]
+        Output("page-content", "children"),
+        Input("url", "pathname"),
+        State("current-project-store", "data"),
     )
-    def display_page(pathname):
-        """Обработка URL маршрутов"""
-        # DEBUG: Log the pathname to verify navigation is triggering
-        print(f"[DEBUG] Navigation triggered - pathname: {pathname}")
-        
+    def display_page(pathname, current_project_data):
+        """Route to appropriate page based on URL."""
         if pathname is None:
+            raise PreventUpdate
+        
+        if pathname == "/" or pathname == "/dashboard":
+            if project_manager:
+                stats = project_manager.get_statistics()
+                recent = project_manager.get_recent_projects(5)
+                recent_dicts = [p.to_dict() for p in recent]
+                return create_dashboard(statistics=stats, recent_projects=recent_dicts)
             return create_dashboard()
         
-        if pathname == '/':
-            return create_dashboard()
-        elif pathname == '/projects':
-            return create_projects_page()
-        elif pathname == '/upload':
+        elif pathname == "/upload":
             return create_data_upload_component()
-        elif pathname == '/processing':
-            return create_processing_page()
-        elif pathname == '/analysis':
+        
+        elif pathname == "/analysis":
             return create_visualization_component()
-        elif pathname == '/docs/user-guide':
-            return create_documentation_component('user_guide')
-        elif pathname == '/docs/faq':
-            return create_documentation_component('faq')
-        elif pathname == '/docs/api':
+        
+        elif pathname == "/docs/api":
             return create_documentation_component('api')
-        else:
-            # DEBUG: Log unhandled routes
-            print(f"[DEBUG] Unhandled route: {pathname} - defaulting to dashboard")
-            # Default to dashboard for unknown routes
-            return create_dashboard()
+        elif pathname == "/docs/user-guide":
+            return create_documentation_component('user_guide')
+        elif pathname == "/docs/faq":
+            return create_documentation_component('faq')
+        
+        elif pathname.startswith("/project/"):
+            project_id = pathname.split("/project/")[-1]
+            if project_manager:
+                project = project_manager.get_project(project_id)
+                if project:
+                    return create_project_detail(project.to_dict())
+            return create_project_detail(None)
+        
+        elif pathname == "/projects":
+            return _create_projects_page()
+        
+        elif pathname == "/processing":
+            return _create_processing_page()
+        
+        # Default
+        if project_manager:
+            stats = project_manager.get_statistics()
+            recent = project_manager.get_recent_projects(5)
+            recent_dicts = [p.to_dict() for p in recent]
+            return create_dashboard(statistics=stats, recent_projects=recent_dicts)
+        return create_dashboard()
     
-    # Навигация
+    # === 2. Sidebar update callback ===
+    @app.callback(
+        Output("sidebar", "children"),
+        Input("projects-store", "data"),
+    )
+    def update_sidebar(projects_data):
+        """Update sidebar with current project data."""
+        if project_manager:
+            projects = project_manager.list_projects()
+            projects_dicts = [p.to_dict() for p in projects]
+            stats = project_manager.get_statistics()
+            return create_sidebar(projects=projects_dicts, statistics=stats)
+        return create_sidebar()
+    
+    # === 3. Navigation callback (keep existing) ===
     @app.callback(
         Output('url', 'pathname'),
         [Input('nav-dashboard', 'n_clicks'),
@@ -99,7 +137,7 @@ def register_callbacks(app):
         else:
             return '/'
     
-    # Подсветка активной вкладки навигации
+    # === 4. Active nav highlighting (keep existing) ===
     @app.callback(
         [Output('nav-dashboard', 'active'),
          Output('nav-projects', 'active'),
@@ -135,23 +173,215 @@ def register_callbacks(app):
         
         return True, False, False, False, False  # По умолчанию dashboard
 
-    # Модальные окна
+    # === 5. Create project modal ===
     @app.callback(
-        Output('create-project-modal', 'is_open'),
-        [Input('new-project-btn', 'n_clicks'),
-         Input('create-project-btn', 'n_clicks'),
-         Input('cancel-create-project', 'n_clicks')],
-        [State('create-project-modal', 'is_open')],
-        prevent_initial_call=True
+        Output("create-project-modal", "is_open"),
+        [Input("new-project-btn", "n_clicks"),
+         Input("create-project-btn", "n_clicks"),
+         Input("cancel-create-project", "n_clicks")],
+        [State("create-project-modal", "is_open"),
+         State("project-name-input", "value"),
+         State("project-description-input", "value")],
+        prevent_initial_call=True,
     )
-    def toggle_create_project_modal(new_btn, create_btn, cancel_btn, is_open):
-        """Управление модальным окном создания проекта"""
-        if new_btn:
+    def toggle_create_project_modal(new_btn, create_btn, cancel_btn, is_open, name, description):
+        """Handle create project modal open/close and project creation."""
+        ctx = callback_context
+        if not ctx.triggered:
+            raise PreventUpdate
+        
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        
+        if trigger_id == "new-project-btn":
             return True
-        elif create_btn or cancel_btn:
+        
+        if trigger_id == "create-project-btn":
+            if name and project_manager:
+                project_manager.create_project(name=name, description=description or "")
             return False
+        
+        if trigger_id == "cancel-create-project":
+            return False
+        
+        return not is_open
+    
+    # === 6. Refresh projects store after creation ===
+    @app.callback(
+        Output("projects-store", "data"),
+        [Input("create-project-modal", "is_open"),
+         Input("delete-project-modal", "is_open"),
+         Input("url", "pathname")],
+        prevent_initial_call=True,
+    )
+    def refresh_projects_store(create_modal_open, delete_modal_open, pathname):
+        """Refresh projects store when modals close or navigation happens."""
+        if project_manager:
+            projects = project_manager.list_projects()
+            return [p.to_dict() for p in projects]
+        return []
+    
+    # === 7. Project item click -> navigate to project detail ===
+    @app.callback(
+        Output("url", "pathname", allow_duplicate=True),
+        Input({"type": "project-item", "index": ALL}, "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def navigate_to_project(n_clicks):
+        """Navigate to project detail when project item is clicked."""
+        ctx = callback_context
+        if not ctx.triggered or not any(n_clicks):
+            raise PreventUpdate
+        
+        trigger = ctx.triggered[0]
+        # Extract project ID from the trigger
+        prop_id = trigger["prop_id"]
+        # prop_id format: '{"index":"project-id","type":"project-item"}.n_clicks'
+        id_str = prop_id.split(".")[0]
+        id_dict = json.loads(id_str)
+        project_id = id_dict["index"]
+        
+        return f"/project/{project_id}"
+    
+    # === 8. Dashboard project button click -> navigate to project detail ===
+    @app.callback(
+        Output("url", "pathname", allow_duplicate=True),
+        Input({"type": "dashboard-project-btn", "index": ALL}, "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def navigate_to_project_from_dashboard(n_clicks):
+        """Navigate to project detail when dashboard project button is clicked."""
+        ctx = callback_context
+        if not ctx.triggered or not any(n_clicks):
+            raise PreventUpdate
+        
+        trigger = ctx.triggered[0]
+        prop_id = trigger["prop_id"]
+        id_str = prop_id.split(".")[0]
+        id_dict = json.loads(id_str)
+        project_id = id_dict["index"]
+        
+        return f"/project/{project_id}"
+    
+    # === 9. Start processing callback ===
+    @app.callback(
+        [Output("project-processing-progress", "value"),
+         Output("project-processing-progress", "label"),
+         Output("project-processing-progress", "style")],
+        Input("project-start-processing-btn", "n_clicks"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def start_project_processing(n_clicks, pathname):
+        """Start processing for the current project."""
+        if not n_clicks or not pathname or not pathname.startswith("/project/") or not pipeline_executor:
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        if project_id:
+            pipeline_executor.execute_project(project_id)
+            return 0, "Запуск...", {"display": "block"}
+        
+        raise PreventUpdate
+    
+    # === 10. Cancel processing callback ===
+    @app.callback(
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Input("project-cancel-processing-btn", "n_clicks"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def cancel_project_processing(n_clicks, pathname):
+        """Cancel processing for the current project."""
+        if not n_clicks or not pathname or not pathname.startswith("/project/") or not pipeline_executor:
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        if project_id:
+            pipeline_executor.cancel_project(project_id)
+            return True
+        
+        raise PreventUpdate
+    
+    # === 11. Processing progress polling ===
+    @app.callback(
+        Output("page-content", "children", allow_duplicate=True),
+        Input("progress-interval", "n_intervals"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def update_processing_progress(n_intervals, pathname):
+        """Poll for processing progress updates."""
+        if not pathname or not pathname.startswith("/project/") or not project_manager:
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        project = project_manager.get_project(project_id)
+        if project and project.status == ProjectStatus.PROCESSING.value:
+            return create_project_detail(project.to_dict())
+        
+        raise PreventUpdate
+    
+    # === 12. Delete project callbacks ===
+    @app.callback(
+        Output("delete-project-modal", "is_open"),
+        [Input({"type": "project-delete-btn", "index": ALL}, "n_clicks"),
+         Input("confirm-delete-project-btn", "n_clicks"),
+         Input("cancel-delete-project-btn", "n_clicks")],
+        State("delete-project-modal", "is_open"),
+        prevent_initial_call=True,
+    )
+    def toggle_delete_modal(delete_clicks, confirm_click, cancel_click, is_open):
+        """Handle delete project modal."""
+        ctx = callback_context
+        if not ctx.triggered:
+            raise PreventUpdate
+        
+        trigger = ctx.triggered[0]["prop_id"]
+        
+        if "confirm-delete-project-btn" in trigger:
+            # Actually delete - handled in separate callback
+            return False
+        elif "cancel-delete-project-btn" in trigger:
+            return False
+        elif "project-delete-btn" in trigger and any(c for c in (delete_clicks or []) if c):
+            return True
+        
         return is_open
     
+    # === 13. File upload to project ===
+    @app.callback(
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Input("project-file-upload", "contents"),
+        State("project-file-upload", "filename"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def handle_file_upload(contents, filenames, pathname):
+        """Handle file upload to current project."""
+        if not contents or not pathname or not pathname.startswith("/project/"):
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        
+        if project_manager and filenames:
+            import base64
+            for content, filename in zip(
+                contents if isinstance(contents, list) else [contents],
+                filenames if isinstance(filenames, list) else [filenames]
+            ):
+                # Decode base64 content
+                content_type, content_string = content.split(",")
+                decoded = base64.b64decode(content_string)
+                project_manager.add_file_to_project(project_id, filename, decoded)
+            
+            return True, f"Загружено файлов: {len(filenames) if isinstance(filenames, list) else 1}"
+        
+        raise PreventUpdate
+    
+    # === Keep existing callbacks that still work ===
+    
+    # Модальные окна
     @app.callback(
         Output('upload-files-modal', 'is_open'),
         [Input('upload-files-btn', 'n_clicks'),
@@ -194,10 +424,10 @@ def register_callbacks(app):
          State('file-upload', 'last_modified')],
         prevent_initial_call=True
     )
-    def handle_file_upload(contents, filenames, last_modified):
-        """Обработка загрузки файлов"""
+    def handle_file_upload_legacy(contents, filenames, last_modified):
+        """Обработка загрузки файлов (legacy)"""
         if not contents:
-            return html.P("Файлы еще не загружены", className="text-muted text-center py-3"), "", True
+            return "Файлы еще не загружены", "", True
         
         file_items = []
         total_size = 0
@@ -213,13 +443,17 @@ def register_callbacks(app):
             upload_time = datetime.fromtimestamp(modified / 1000).strftime('%H:%M:%S')
             
             file_items.append(
-                create_file_list_item(filename, file_size, upload_time)
+                html.Div([
+                    html.H6(filename, className="mb-1"),
+                    html.P(f"Размер: {file_size} байт | Время: {upload_time}", 
+                           className="text-muted small"),
+                ], className="border-bottom pb-2 mb-2")
             )
         
         file_info = dbc.Alert([
             html.H6("Информация о загруженных файлах:", className="alert-heading"),
             html.P(f"Всего файлов: {len(filenames)}"),
-            html.P(f"Общий размер: {format_filesize(total_size)}"),
+            html.P(f"Общий размер: {total_size} байт"),
         ], color="success")
         
         return file_items, file_info, False
@@ -234,6 +468,8 @@ def register_callbacks(app):
     )
     def update_visualization(viz_type, index_name, colormap):
         """Обновление визуализации"""
+        from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
+        
         if viz_type == 'index_map':
             return create_index_map_figure(None, index_name, colormap)
         elif viz_type == 'histogram':
@@ -241,38 +477,6 @@ def register_callbacks(app):
         else:
             return create_empty_figure()
     
-    # Уведомления и обработка кликов по проектам
-    @app.callback(
-        Output('notification-toast', 'is_open'),
-        [Input('create-project-btn', 'n_clicks'),
-         Input('project-1', 'n_clicks'),
-         Input('project-2', 'n_clicks')],
-        [State('project-name-input', 'value'),
-         State('notification-toast', 'is_open')],
-        prevent_initial_call=True
-    )
-    def handle_notifications(create_click, project1_clicks, project2_clicks, project_name, is_open):
-        """Обработка уведомлений и кликов по проектам"""
-        ctx = callback_context
-        if not ctx.triggered:
-            return False
-        
-        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        
-        if button_id == 'create-project-btn' and project_name:
-            # Уведомление о создании проекта
-            return True
-        elif button_id == 'project-1':
-            # Загрузка данных проекта 1
-            # В реальном приложении здесь будет загрузка данных проекта
-            return True
-        elif button_id == 'project-2':
-            # Загрузка данных проекта 2
-            # В реальном приложении здесь будет загрузка данных проекта
-            return True
-        
-        return False
-
     # Прогресс обработки
     @app.callback(
         Output('progress-interval', 'disabled'),
@@ -286,7 +490,7 @@ def register_callbacks(app):
         return True  # Выключить интервал
 
 
-def create_projects_page():
+def _create_projects_page():
     """Создание страницы проектов"""
     return html.Div([
         html.H2("Проекты", className="mb-4"),
@@ -340,7 +544,7 @@ def create_projects_page():
     ])
 
 
-def create_processing_page():
+def _create_processing_page():
     """Создание страницы обработки"""
     return html.Div([
         html.H2("Обработка данных", className="mb-4"),

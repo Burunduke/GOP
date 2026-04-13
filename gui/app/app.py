@@ -71,8 +71,17 @@ def create_app(config_name='default'):
     # Настройка основного layout
     app.layout = create_main_layout()
     
-    # Регистрация колбэков
-    register_callbacks(app)
+    # Инициализация сервисов
+    from gui.services.project_manager import ProjectManager
+    from gui.services.pipeline_executor import PipelineExecutor
+    from gui.services.gop_adapter import GOPAdapter
+
+    project_manager = ProjectManager(projects_dir=app_config.PROJECTS_FOLDER)
+    gop_adapter = GOPAdapter()
+    pipeline_executor = PipelineExecutor(project_manager=project_manager, gop_adapter=gop_adapter)
+
+    # Регистрация колбэков с сервисами
+    register_callbacks(app, project_manager=project_manager, pipeline_executor=pipeline_executor)
     
     # Настройка статических файлов
     _setup_static_files(server)

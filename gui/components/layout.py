@@ -20,6 +20,8 @@ def create_main_layout():
         dcc.Store(id='session-store', storage_type='session'),
         dcc.Store(id='project-store'),
         dcc.Store(id='processing-store'),
+        dcc.Store(id='projects-store'),
+        dcc.Store(id='current-project-store'),
         
         # URL routing
         dcc.Location(id='url', refresh=False),
@@ -30,7 +32,7 @@ def create_main_layout():
         # Основной контейнер
         html.Div([
             # Боковая панель
-            create_sidebar(),
+            create_sidebar(),  # Will be populated dynamically via callbacks
             
             # Основное содержимое
             html.Div(id='page-content', className="main-content flex-grow-1 p-4"),
@@ -167,5 +169,15 @@ def _create_modals():
                 dbc.Button("Отмена", id="cancel-processing", color="secondary")
             ])
         ], id="processing-settings-modal", centered=True, size="lg"),
+        
+        # Модальное окно удаления проекта
+        dbc.Modal([
+            dbc.ModalHeader("Удаление проекта"),
+            dbc.ModalBody("Вы уверены, что хотите удалить этот проект?"),
+            dbc.ModalFooter([
+                dbc.Button("Отмена", id="cancel-delete-project-btn", className="me-2"),
+                dbc.Button("Удалить", id="confirm-delete-project-btn", color="danger"),
+            ]),
+        ], id="delete-project-modal", is_open=False),
     ])
 
