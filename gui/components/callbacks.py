@@ -8,6 +8,7 @@ from datetime import datetime
 
 from dash import Input, Output, State, callback_context, no_update, ALL, MATCH, html
 from dash.exceptions import PreventUpdate
+import dash
 import dash_bootstrap_components as dbc
 
 from gui.components.dashboard import create_dashboard
@@ -107,11 +108,18 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         prevent_initial_call=True
     )
     def navigate_to_page(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks,
-                        analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
+                            analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
         """Обработка навигации между страницами"""
         ctx = callback_context
         if not ctx.triggered:
-            return '/'
+            return dash.no_update
+        
+        # Check if this is an initial call (all clicks are None)
+        all_clicks = [dashboard_clicks, projects_clicks, upload_clicks, processing_clicks,
+                      analysis_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks]
+        
+        if all(click is None for click in all_clicks):
+            return dash.no_update
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
