@@ -71,8 +71,8 @@ def create_sidebar(projects=None, statistics=None):
                                          className="text-muted small ms-2"),
                             ], className="d-flex align-items-center")
                         ])
-                    ], action=True, href="#", 
-                       id={"type": "project-item", "index": project.get("id", "")}, 
+                    ], action=True,
+                       id={"type": "project-item", "index": project.get("id", "")},
                        n_clicks=0)
                     for project in projects
                 ]

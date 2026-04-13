@@ -238,7 +238,20 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
             return [p.to_dict() for p in projects]
         return []
     
-    # === 7. Project item click -> navigate to project detail ===
+    # === 7. New project button click -> navigate to projects page ===
+    @app.callback(
+        Output("url", "pathname", allow_duplicate=True),
+        Input("new-project-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def navigate_to_projects_page(n_clicks):
+        """Navigate to projects page when new project button is clicked."""
+        if n_clicks is None or n_clicks == 0:
+            raise PreventUpdate
+        
+        return "/projects"
+    
+    # === 8. Project item click -> navigate to project detail ===
     @app.callback(
         Output("url", "pathname", allow_duplicate=True),
         Input({"type": "project-item", "index": ALL}, "n_clicks"),
