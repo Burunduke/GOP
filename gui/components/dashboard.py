@@ -111,9 +111,6 @@ def create_dashboard():
                             ], action=True),
                         ], flush=True),
                         
-                        html.Div([
-                            dbc.Button("Все проекты", color="link", className="p-0")
-                        ], className="text-center mt-3")
                     ])
                 ])
             ], width=8),

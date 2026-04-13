@@ -21,23 +21,25 @@ def register_callbacks(app):
     # Навигация
     @app.callback(
         Output('main-content', 'children'),
-        [Input('nav-projects', 'n_clicks'),
+        [Input('nav-dashboard', 'n_clicks'),
+         Input('nav-projects', 'n_clicks'),
          Input('nav-upload', 'n_clicks'),
          Input('nav-processing', 'n_clicks'),
          Input('nav-analysis', 'n_clicks'),
-         Input('nav-brand', 'n_clicks'),
-         Input('sidebar-dashboard', 'n_clicks')],
+         Input('nav-brand', 'n_clicks')],
         prevent_initial_call=True
     )
-    def navigate_to_page(projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks, dashboard_clicks):
+    def navigate_to_page(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks):
         """Обработка навигации между страницами"""
         ctx = callback_context
         if not ctx.triggered:
-            return html.Div("Выберите раздел меню")
+            return create_dashboard()
         
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
-        if button_id == 'nav-projects':
+        if button_id == 'nav-dashboard' or button_id == 'nav-brand':
+            return create_dashboard()
+        elif button_id == 'nav-projects':
             return create_projects_page()
         elif button_id == 'nav-upload':
             from .data_upload import create_data_upload_component
@@ -47,11 +49,45 @@ def register_callbacks(app):
         elif button_id == 'nav-analysis':
             from .visualization import create_visualization_component
             return create_visualization_component()
-        elif button_id == 'nav-brand' or button_id == 'sidebar-dashboard':
-            return create_dashboard()
         
-        return html.Div("Страница в разработке")
+        return create_dashboard()
     
+    # Подсветка активной вкладки навигации
+    @app.callback(
+        [Output('nav-dashboard', 'active'),
+         Output('nav-projects', 'active'),
+         Output('nav-upload', 'active'),
+         Output('nav-processing', 'active'),
+         Output('nav-analysis', 'active')],
+        [Input('nav-dashboard', 'n_clicks'),
+         Input('nav-projects', 'n_clicks'),
+         Input('nav-upload', 'n_clicks'),
+         Input('nav-processing', 'n_clicks'),
+         Input('nav-analysis', 'n_clicks'),
+         Input('nav-brand', 'n_clicks')],
+        prevent_initial_call=True
+    )
+    def update_active_tab(dashboard_clicks, projects_clicks, upload_clicks, processing_clicks, analysis_clicks, brand_clicks):
+        """Обновление подсветки активной вкладки"""
+        ctx = callback_context
+        if not ctx.triggered:
+            return True, False, False, False, False  # Dashboard активен по умолчанию
+        
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        
+        if button_id == 'nav-dashboard' or button_id == 'nav-brand':
+            return True, False, False, False, False
+        elif button_id == 'nav-projects':
+            return False, True, False, False, False
+        elif button_id == 'nav-upload':
+            return False, False, True, False, False
+        elif button_id == 'nav-processing':
+            return False, False, False, True, False
+        elif button_id == 'nav-analysis':
+            return False, False, False, False, True
+        
+        return True, False, False, False, False  # По умолчанию dashboard
+
     # Модальные окна
     @app.callback(
         Output('create-project-modal', 'is_open'),
@@ -192,16 +228,52 @@ def create_projects_page():
     """Создание страницы проектов"""
     return html.Div([
         html.H2("Проекты", className="mb-4"),
+        
+        # Карточки проектов
         dbc.Row([
             dbc.Col([
                 dbc.Card([
+                    dbc.CardHeader([
+                        html.H5("Анализ поля пшеницы", className="mb-0"),
+                    ]),
                     dbc.CardBody([
-                        html.H5("Управление проектами"),
-                        html.P("Здесь будет отображаться список ваших проектов"),
-                        dbc.Button("Создать новый проект", color="primary", className="mt-3")
+                        html.P("NDVI анализ для оценки состояния посевов", className="text-muted"),
+                        html.Div([
+                            dbc.Badge("Завершен", color="success", className="me-2"),
+                            html.Span("15.01.2024", className="text-muted"),
+                        ], className="mb-3"),
+                        dbc.Button("Открыть проект", color="primary", size="sm")
                     ])
-                ])
-            ])
+                ], className="h-100")
+            ], width=6, className="mb-3"),
+            
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H5("Тестирование индексов", className="mb-0"),
+                    ]),
+                    dbc.CardBody([
+                        html.P("Сравнительный анализ различных вегетационных индексов", className="text-muted"),
+                        html.Div([
+                            dbc.Badge("В обработке", color="warning", className="me-2"),
+                            html.Span("16.01.2024", className="text-muted"),
+                        ], className="mb-3"),
+                        dbc.Button("Открыть проект", color="primary", size="sm")
+                    ])
+                ], className="h-100")
+            ], width=6, className="mb-3"),
+        ]),
+        
+        # Кнопка создания нового проекта
+        dbc.Row([
+            dbc.Col([
+                dbc.Button(
+                    [html.I(className="fas fa-plus me-2"), "Создать новый проект"],
+                    color="primary",
+                    size="lg",
+                    className="w-100"
+                )
+            ], width=6, className="mx-auto mt-4")
         ])
     ])
 

@@ -9,11 +9,6 @@ from dash import html
 def create_sidebar():
     """Создание боковой панели"""
     return html.Div([
-        # Заголовок боковой панели
-        html.Div([
-            html.H5("Панель управления", className="text-center mb-4", id="sidebar-dashboard"),
-            html.Hr(className="my-2"),
-        ], className="p-3"),
         
         # Кнопки действий
         html.Div([

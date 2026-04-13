@@ -10,6 +10,7 @@ def create_navigation():
     """Создание навигационной панели"""
     return dbc.NavbarSimple(
         children=[
+            dbc.NavItem(dbc.NavLink("Панель управления", href="#", id="nav-dashboard")),
             dbc.NavItem(dbc.NavLink("Проекты", href="#", id="nav-projects")),
             dbc.NavItem(dbc.NavLink("Загрузка данных", href="#", id="nav-upload")),
             dbc.NavItem(dbc.NavLink("Обработка", href="#", id="nav-processing")),

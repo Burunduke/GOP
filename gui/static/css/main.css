@@ -45,6 +45,30 @@ body {
     opacity: 0.8;
 }
 
+/* Стили для активных вкладок навигации */
+.navbar .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+    margin: 0 0.5rem;
+}
+
+.navbar .nav-link:hover {
+    color: rgba(255, 255, 255, 0.9) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.navbar .nav-link.active {
+    color: white !important;
+    border-bottom-color: white;
+    font-weight: 600;
+}
+
+.navbar .nav-link.active:hover {
+    color: white !important;
+    border-bottom-color: white;
+}
+
 /* Основной контейнер */
 .main-container {
     display: flex;
