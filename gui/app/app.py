@@ -130,7 +130,8 @@ def main():
         host=app_config.HOST,
         port=app_config.PORT,
         debug=app_config.DEBUG,
-        threaded=True
+        threaded=True,
+        use_reloader=False  # Отключаем релоадер для предотвращения двойной инициализации
     )
 
 

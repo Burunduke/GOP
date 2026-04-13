@@ -39,9 +39,10 @@ class GOPAdapter:
         if GOP_AVAILABLE:
             try:
                 self.pipeline = Pipeline(self.config_path)
-                self.indices_calculator = VegetationIndexCalculator()
-                self.hyperspectral_processor = HyperspectralProcessor()
-                self.segmenter = ImageSegmenter()
+                # Используем компоненты из пайплайна вместо создания отдельных экземпляров
+                self.indices_calculator = self.pipeline.index_calculator
+                self.hyperspectral_processor = self.pipeline.hyperspectral_processor
+                self.segmenter = self.pipeline.segmenter
                 self.gop_mode = "full"
             except Exception as e:
                 print(f"Ошибка инициализации GOP: {e}")
