@@ -1,173 +1,173 @@
-# Примеры использования GOP
+# GOP Usage Examples
 
-Эта директория содержит комплексные примеры, демонстрирующие функциональность проекта GOP (Геопространственная обработка ортофотопланов) для обработки гиперспектральных данных и анализа состояния растений.
+This directory contains comprehensive examples demonstrating the functionality of the GOP (Geospatial Orthophoto Processing) project for hyperspectral data processing and plant condition analysis.
 
-## Содержание
+## Contents
 
-### 📁 Базовые примеры
+### 📁 Basic Examples
 
-1. **[`basic_processing.py`](basic_processing.py)** - Базовый рабочий процесс обработки гиперспектральных данных
-   - Демонстрация основного конвейера обработки
-   - Расчет вегетационных индексов
-   - Научный анализ результатов
-   - Оценка качества данных
+1. **[`basic_processing.py`](basic_processing.py)** - Basic hyperspectral data processing workflow
+   - Demonstration of the main processing pipeline
+   - Vegetation index calculation
+   - Scientific analysis of results
+   - Data quality assessment
 
-2. **[`scientific_analysis.py`](scientific_analysis.py)** - Конвейер научного анализа
-   - Детальный статистический анализ
-   - Корреляционный анализ между индексами
-   - Анализ пространственных паттернов
-   - Генерация научных отчетов
+2. **[`scientific_analysis.py`](scientific_analysis.py)** - Scientific analysis pipeline
+   - Detailed statistical analysis
+   - Correlation analysis between indices
+   - Spatial pattern analysis
+   - Scientific report generation
 
-### 📁 Специализированные примеры
+### 📁 Specialized Examples
 
-3. **[`hyperspectral_real_data.py`](hyperspectral_real_data.py)** - Продвинутая обработка гиперспектральных данных
-   - Сравнение методов коррекции данных
-   - Спектральный анализ и визуализация
-   - Расчет специализированных гиперспектральных индексов
-   - Создание RGB композитов
+3. **[`hyperspectral_real_data.py`](hyperspectral_real_data.py)** - Advanced hyperspectral data processing
+   - Comparison of data correction methods
+   - Spectral analysis and visualization
+   - Specialized hyperspectral index calculation
+   - RGB composite creation
 
-4. **[`orthophoto_analysis.py`](orthophoto_analysis.py)** - Анализ ортофотопланов и вегетационных индексов
-   - Валидация и обработка ортофотопланов
-   - Сегментация изображений
-   - Пространственный анализ индексов
-   - Классификация состояния растений
+4. **[`orthophoto_analysis.py`](orthophoto_analysis.py)** - Orthophoto analysis and vegetation indices
+   - Orthophoto validation and processing
+   - Image segmentation
+   - Spatial index analysis
+   - Plant condition classification
 
-5. **[`integration_examples.py`](integration_examples.py)** - Интеграция с другими научными библиотеками
-   - Интеграция с OpenCV для обработки изображений
-   - scikit-learn для машинного обучения
-   - pandas для анализа данных
-   - scipy для научных вычислений
+5. **[`integration_examples.py`](integration_examples.py)** - Integration with other scientific libraries
+   - Integration with OpenCV for image processing
+   - scikit-learn for machine learning
+   - pandas for data analysis
+   - scipy for scientific computing
 
-### 📁 Интерактивные примеры
+### 📁 Interactive Examples
 
-6. **[`interactive_analysis.ipynb`](interactive_analysis.ipynb)** - Jupyter notebook с интерактивными примерами
-   - Интерактивный спектральный анализ
-   - Визуализация вегетационных индексов
-   - Интерактивные графики и виджеты
-   - Экспорт результатов анализа
+6. **[`interactive_analysis.ipynb`](interactive_analysis.ipynb)** - Jupyter notebook with interactive examples
+   - Interactive spectral analysis
+   - Vegetation index visualization
+   - Interactive plots and widgets
+   - Analysis result export
 
-### 📁 Сценарии использования
+### 📁 Use Case Scenarios
 
-7. **[`use_case_scenarios.py`](use_case_scenarios.py)** - Сценарии реального использования
-   - Сельскохозяйственный мониторинг
-   - Экологические исследования
-   - Точное земледелие
-   - Научные исследования
+7. **[`use_case_scenarios.py`](use_case_scenarios.py)** - Real-world usage scenarios
+   - Agricultural monitoring
+   - Environmental research
+   - Precision agriculture
+   - Scientific research
 
-## Новые функции в рефакторизованной кодовой базе
+## New Features in Refactored Codebase
 
-### Улучшенная обработка ошибок
-Все примеры теперь используют новую иерархию исключений:
-- [`GOPError`](../src/utils/exceptions.py) - Базовый класс исключений
-- [`ValidationError`](../src/utils/exceptions.py) - Ошибки валидации данных
-- [`ProcessingError`](../src/utils/exceptions.py) - Ошибки конвейера обработки
-- [`ConfigurationError`](../src/utils/exceptions.py) - Ошибки, связанные с конфигурацией
+### Improved Error Handling
+All examples now use the new exception hierarchy:
+- [`GOPError`](../src/utils/exceptions.py) - Base exception class
+- [`ValidationError`](../src/utils/exceptions.py) - Data validation errors
+- [`ProcessingError`](../src/utils/exceptions.py) - Processing pipeline errors
+- [`ConfigurationError`](../src/utils/exceptions.py) - Configuration-related errors
 
-### Улучшенные утилиты
-Примеры демонстрируют использование новых утилитарных модулей:
-- [`math_utils`](../src/utils/math_utils.py) - Безопасные математические операции
-- [`validators`](../src/utils/validators.py) - Функции валидации данных
-- [`gdal_utils`](../src/utils/gdal_utils.py) - Утилиты интеграции GDAL
-- [`image_utils`](../src/utils/image_utils.py) - Утилиты обработки изображений
+### Enhanced Utilities
+Examples demonstrate the use of new utility modules:
+- [`math_utils`](../src/utils/math_utils.py) - Safe mathematical operations
+- [`validators`](../src/utils/validators.py) - Data validation functions
+- [`gdal_utils`](../src/utils/gdal_utils.py) - GDAL integration utilities
+- [`image_utils`](../src/utils/image_utils.py) - Image processing utilities
 
-### Оптимизация производительности
-Примеры демонстрируют:
-- Эффективную обработку с поточностью
-- Возможности параллельной обработки
-- Механизмы кэширования для повторных операций
-- Оптимизированные расчеты вегетационных индексов
+### Performance Optimization
+Examples demonstrate:
+- Efficient thread-safe processing
+- Parallel processing capabilities
+- Caching mechanisms for repeated operations
+- Optimized vegetation index calculations
 
-## Начало работы
+## Getting Started
 
-### Предварительные требования
+### Prerequisites
 - Python 3.8+
-- Необходимые зависимости (см. [`pyproject.toml`](../pyproject.toml))
-- Примеры данных или ваши собственные гиперспектральные данные
+- Required dependencies (see [`pyproject.toml`](../pyproject.toml))
+- Sample data or your own hyperspectral data
 
-### Запуск примеров
+### Running Examples
 
-1. **Пример базовой обработки**
+1. **Basic Processing Example**
    ```bash
    python examples/basic_processing.py
    ```
 
-2. **Пример научного анализа**
+2. **Scientific Analysis Example**
    ```bash
    python examples/scientific_analysis.py
    ```
 
-3. **Интерактивный анализ (Jupyter)**
+3. **Interactive Analysis (Jupyter)**
    ```bash
    jupyter notebook examples/interactive_analysis.ipynb
    ```
 
-### Требования к данным
+### Data Requirements
 
-Примеры требуют гиперспектральные данные в поддерживаемых форматах:
+Examples require hyperspectral data in supported formats:
 - ENVI (.bil/.hdr)
 - GeoTIFF (.tif)
 - HDF5 (.h5)
 - NetCDF (.nc)
 
-Для тестирования вы можете использовать синтетические данные, сгенерированные примерами, или предоставить свои собственные данные.
+For testing, you can use synthetic data generated by the examples or provide your own data.
 
-## Структура примеров
+## Example Structure
 
-Каждый пример следует согласованной структуре:
+Each example follows a consistent structure:
 
-1. **Настройка** - Импорт модулей и настройка логирования
-2. **Подготовка данных** - Загрузка или генерация примеров данных
-3. **Обработка** - Применение научного конвейера обработки
-4. **Анализ** - Выполнение научного анализа
-5. **Визуализация** - Генерация графиков и визуализаций
-6. **Результаты** - Сохранение и отображение результатов
+1. **Setup** - Module imports and logging configuration
+2. **Data Preparation** - Loading or generating sample data
+3. **Processing** - Applying scientific processing pipeline
+4. **Analysis** - Performing scientific analysis
+5. **Visualization** - Generating plots and visualizations
+6. **Results** - Saving and displaying results
 
-## Настройка
+## Configuration
 
-Примеры могут быть настроены путем:
-- Модификации параметров конфигурации
-- Изменения путей входных данных
-- Настройки параметров обработки
-- Добавления пользовательских шагов анализа
+Examples can be configured by:
+- Modifying configuration parameters
+- Changing input data paths
+- Adjusting processing parameters
+- Adding custom analysis steps
 
-## Устранение неполадок
+## Troubleshooting
 
-### Распространенные проблемы
+### Common Issues
 
-1. **Ошибки импорта**
-   - Убедитесь, что директория `src` находится в пути Python
-   - Проверьте, что все зависимости установлены
+1. **Import Errors**
+   - Ensure the `src` directory is in the Python path
+   - Check that all dependencies are installed
 
-2. **Проблемы загрузки данных**
-   - Проверьте пути к файлам данных
-   - Проверьте совместимость форматов файлов
-   - Убедитесь в достаточном месте на диске
+2. **Data Loading Issues**
+   - Verify data file paths
+   - Check file format compatibility
+   - Ensure sufficient disk space
 
-3. **Проблемы с памятью**
-   - Уменьшите `batch_size` в конфигурации
-   - Включите memory mapping
-   - Обрабатывайте данные меньшими порциями
+3. **Memory Issues**
+   - Reduce `batch_size` in configuration
+   - Enable memory mapping
+   - Process data in smaller chunks
 
-### Получение помощи
+### Getting Help
 
-- Проверьте [основную документацию](../README.md)
-- Изучите [документацию API](../docs/api/index.rst)
-- Ознакомьтесь с [документацией по конфигурации](../config/README.md)
-- Посмотрите тестовые случаи для шаблонов использования
+- Check the [main documentation](../README.md)
+- Review the [API documentation](../docs/api/index.rst)
+- Consult the [configuration documentation](../config/README.md)
+- Look at test cases for usage patterns
 
-## Участие в разработке
+## Contributing
 
-При добавлении новых примеров:
-- Следуйте существующему стилю кода
-- Включайте комплексную документацию
-- Добавляйте обработку ошибок с использованием новой иерархии исключений
-- Тестируйте с различными типами данных
-- Учитывайте соображения производительности
+When adding new examples:
+- Follow the existing code style
+- Include comprehensive documentation
+- Add error handling using the new exception hierarchy
+- Test with various data types
+- Consider performance implications
 
-## Лицензия
+## License
 
-Примеры предоставляются по той же лицензии, что и основной проект GOP.
+Examples are provided under the same license as the main GOP project.
 
 ---
 
-Для подробной документации API см. [Справочник API](../docs/api/index.rst).
+For detailed API documentation, see [API Reference](../docs/api/index.rst).

@@ -1,11 +1,14 @@
 """
-Основной layout для GUI приложения GOP
+Main layout for GOP GUI application
+
+This module provides the main application layout including data stores,
+URL routing, modals, and the overall page structure.
 """
 
+from typing import Any
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 
-from .navigation import create_navigation
 from .sidebar import create_sidebar
 from .dashboard import create_dashboard
 from .data_upload import create_data_upload_component
@@ -13,10 +16,15 @@ from .visualization import create_visualization_component
 from .documentation import create_documentation_component, create_documentation_layout
 
 
-def create_main_layout():
-    """Создание главного макета приложения"""
+def create_main_layout() -> html.Div:
+    """
+    Create main application layout.
+    
+    Returns:
+        Main layout component
+    """
     return html.Div([
-        # Хранилища данных
+        # Data stores
         dcc.Store(id='session-store', storage_type='session'),
         dcc.Store(id='project-store'),
         dcc.Store(id='processing-store'),
@@ -26,58 +34,55 @@ def create_main_layout():
         # URL routing
         dcc.Location(id='url', refresh=False),
         
-        # Навигационная панель
-        create_navigation(),
-        
-        # Основной контейнер
+        # Main container
         html.Div([
-            # Боковая панель
+            # Sidebar
             create_sidebar(),  # Will be populated dynamically via callbacks
             
-            # Основное содержимое
+            # Main content
             html.Div(id='page-content', className="main-content flex-grow-1 p-4"),
         ], className="d-flex main-container"),
         
-        # Модальные окна
+        # Modal windows
         _create_modals(),
         
-        # Уведомления
+        # Notifications
         dbc.Toast(id="notification-toast", is_open=False, duration=4000),
         
-        # Интервал для обновления прогресса
+        # Progress update interval
         dcc.Interval(
             id='progress-interval',
-            interval=1000,  # 1 секунда
+            interval=1000,  # 1 second
             n_intervals=0,
             disabled=True
         ),
     ], className="app-container")
 
 
-def _create_modals():
-    """Создание модальных окон"""
+def _create_modals() -> html.Div:
+    """Create modal windows."""
     return html.Div([
-        # Модальное окно создания проекта
+        # Create project modal
         dbc.Modal([
-            dbc.ModalHeader(dbc.ModalTitle("Создание нового проекта")),
+            dbc.ModalHeader(dbc.ModalTitle("Create New Project")),
             dbc.ModalBody([
                 dbc.Form([
                     dbc.Row([
                         dbc.Col([
-                            dbc.Label("Название проекта", html_for="project-name-input"),
+                            dbc.Label("Project Name", html_for="project-name-input"),
                             dbc.Input(
                                 id="project-name-input",
-                                placeholder="Введите название проекта",
+                                placeholder="Enter project name",
                                 type="text"
                             ),
                         ]),
                     ]),
                     dbc.Row([
                         dbc.Col([
-                            dbc.Label("Описание", html_for="project-description-input"),
+                            dbc.Label("Description", html_for="project-description-input"),
                             dbc.Textarea(
                                 id="project-description-input",
-                                placeholder="Введите описание проекта (необязательно)",
+                                placeholder="Enter project description (optional)",
                                 rows=3
                             ),
                         ]),
@@ -85,24 +90,24 @@ def _create_modals():
                 ])
             ]),
             dbc.ModalFooter([
-                dbc.Button("Создать", id="create-project-btn", color="primary", className="me-2"),
-                dbc.Button("Отмена", id="cancel-create-project", color="secondary")
+                dbc.Button("Create", id="create-project-btn", color="primary", className="me-2"),
+                dbc.Button("Cancel", id="cancel-create-project", color="secondary")
             ])
         ], id="create-project-modal", centered=True, size="lg"),
         
-        # Модальное окно загрузки файлов
+        # File upload modal
         dbc.Modal([
-            dbc.ModalHeader(dbc.ModalTitle("Загрузка файлов")),
+            dbc.ModalHeader(dbc.ModalTitle("File Upload")),
             dbc.ModalBody([
-                html.P("Выберите гиперспектральные данные для загрузки:"),
-                html.P("Поддерживаемые форматы: BIL/HDR, TIFF, DAT", className="text-muted small"),
+                html.P("Select hyperspectral data to upload:"),
+                html.P("Supported formats: BIL/HDR, TIFF, DAT", className="text-muted small"),
                 
                 dcc.Upload(
                     id='file-upload',
                     children=html.Div([
                         html.I(className="fas fa-cloud-upload-alt fa-2x mb-2"),
-                        html.P("Перетащите файлы сюда или нажмите для выбора"),
-                        html.P("Максимальный размер файла: 10GB", className="text-muted small")
+                        html.P("Drag and drop files here or click to select"),
+                        html.P("Maximum file size: 10GB", className="text-muted small")
                     ]),
                     multiple=True,
                     className="upload-area p-4 border border-dashed rounded text-center"
@@ -111,24 +116,24 @@ def _create_modals():
                 html.Div(id='upload-file-list', className="mt-3"),
             ]),
             dbc.ModalFooter([
-                dbc.Button("Загрузить", id="upload-files-modal-btn", color="primary", className="me-2"),
-                dbc.Button("Отмена", id="cancel-upload", color="secondary")
+                dbc.Button("Upload", id="upload-files-modal-btn", color="primary", className="me-2"),
+                dbc.Button("Cancel", id="cancel-upload", color="secondary")
             ])
         ], id="upload-files-modal", centered=True, size="lg"),
         
-        # Модальное окно настроек обработки
+        # Processing settings modal
         dbc.Modal([
-            dbc.ModalHeader(dbc.ModalTitle("Настройки обработки")),
+            dbc.ModalHeader(dbc.ModalTitle("Processing Settings")),
             dbc.ModalBody([
                 dbc.Form([
                     dbc.Row([
                         dbc.Col([
-                            dbc.Label("Тип сенсора", html_for="sensor-type-select"),
+                            dbc.Label("Sensor Type", html_for="sensor-type-select"),
                             dbc.Select(
                                 id="sensor-type-select",
                                 options=[
-                                    {"label": "Гиперспектральный", "value": "hyperspectral"},
-                                    {"label": "Мультиспектральный", "value": "multispectral"},
+                                    {"label": "Hyperspectral", "value": "hyperspectral"},
+                                    {"label": "Multispectral", "value": "multispectral"},
                                 ],
                                 value="hyperspectral"
                             ),
@@ -136,7 +141,7 @@ def _create_modals():
                     ]),
                     dbc.Row([
                         dbc.Col([
-                            dbc.Label("Вегетационные индексы", html_for="indices-select"),
+                            dbc.Label("Vegetation Indices", html_for="indices-select"),
                             dcc.Dropdown(
                                 id="indices-select",
                                 options=[
@@ -154,9 +159,9 @@ def _create_modals():
                             dbc.Checklist(
                                 id="processing-options",
                                 options=[
-                                    {"label": "Применить коррекцию атмосферы", "value": "atmospheric_correction"},
-                                    {"label": "Удалить шум", "value": "denoising"},
-                                    {"label": "Сегментация растений", "value": "segmentation"},
+                                    {"label": "Apply atmospheric correction", "value": "atmospheric_correction"},
+                                    {"label": "Remove noise", "value": "denoising"},
+                                    {"label": "Plant segmentation", "value": "segmentation"},
                                 ],
                                 value=["atmospheric_correction", "denoising"],
                             ),
@@ -165,18 +170,18 @@ def _create_modals():
                 ])
             ]),
             dbc.ModalFooter([
-                dbc.Button("Начать обработку", id="start-processing-btn", color="primary", className="me-2"),
-                dbc.Button("Отмена", id="cancel-processing", color="secondary")
+                dbc.Button("Start Processing", id="start-processing-btn", color="primary", className="me-2"),
+                dbc.Button("Cancel", id="cancel-processing", color="secondary")
             ])
         ], id="processing-settings-modal", centered=True, size="lg"),
         
-        # Модальное окно удаления проекта
+        # Delete project modal
         dbc.Modal([
-            dbc.ModalHeader("Удаление проекта"),
-            dbc.ModalBody("Вы уверены, что хотите удалить этот проект?"),
+            dbc.ModalHeader("Delete Project"),
+            dbc.ModalBody("Are you sure you want to delete this project?"),
             dbc.ModalFooter([
-                dbc.Button("Отмена", id="cancel-delete-project-btn", className="me-2"),
-                dbc.Button("Удалить", id="confirm-delete-project-btn", color="danger"),
+                dbc.Button("Cancel", id="cancel-delete-project-btn", className="me-2"),
+                dbc.Button("Delete", id="confirm-delete-project-btn", color="danger"),
             ]),
         ], id="delete-project-modal", is_open=False),
     ])

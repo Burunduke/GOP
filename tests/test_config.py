@@ -1,24 +1,26 @@
 """
-Тесты для модуля конфигурации
+Tests for configuration module
 """
 
 import unittest
 import tempfile
 import os
+import shutil
 import yaml
-from src.core.config import Config
+from typing import Dict, Any
+from src.core.config import Config, get_config
 
 
 class TestConfig(unittest.TestCase):
-    """Тесты класса конфигурации"""
+    """Test cases for configuration class"""
 
-    def setUp(self):
-        """Подготовка тестовых данных"""
+    def setUp(self) -> None:
+        """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.test_config_path = os.path.join(self.temp_dir, "test_config.yaml")
 
-        # Создание тестовой конфигурации
-        self.test_config = {
+        # Create test configuration
+        self.test_config: Dict[str, Any] = {
             "processing": {
                 "hyperspectral": {
                     "radiometric_correction": True,
@@ -39,18 +41,21 @@ class TestConfig(unittest.TestCase):
             "output": {"save_intermediate": False, "create_visualizations": True},
         }
 
-        # Сохранение тестовой конфигурации
+        # Save test configuration
         with open(self.test_config_path, "w") as f:
             yaml.dump(self.test_config, f)
 
-    def tearDown(self):
-        """Очистка после тестов"""
-        import shutil
+        # Reset singleton instance before each test
+        Config.reset_instance()
 
+    def tearDown(self) -> None:
+        """Clean up after tests"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
+        # Reset singleton instance after each test
+        Config.reset_instance()
 
-    def test_config_initialization_with_path(self):
-        """Тест инициализации конфигурации с путем к файлу"""
+    def test_config_initialization_with_path(self) -> None:
+        """Test configuration initialization with file path"""
         config = Config(self.test_config_path)
 
         self.assertEqual(
@@ -61,74 +66,99 @@ class TestConfig(unittest.TestCase):
             config.config["indices"]["default_indices"], ["GNDVI", "NDWI", "MCARI"]
         )
 
-    def test_config_initialization_without_path(self):
-        """Тест инициализации конфигурации без пути (используется конфигурация по умолчанию)"""
+    def test_config_initialization_without_path(self) -> None:
+        """Test configuration initialization without path (uses default configuration)"""
         config = Config()
 
-        # Проверка наличия основных секций
+        # Check presence of main sections
         self.assertIn("processing", config.config)
         self.assertIn("segmentation", config.config)
         self.assertIn("indices", config.config)
         self.assertIn("output", config.config)
 
-    def test_get_method(self):
-        """Тест метода get"""
-        config = Config(self.test_config_path)
+    def test_get_config_function(self) -> None:
+        """Test get_config function with singleton pattern"""
+        # First call should create instance
+        config1 = get_config()
+        self.assertIsInstance(config1, Config)
 
-        # Тест получения существующего значения
+        # Second call should return same instance
+        config2 = get_config()
+        self.assertIs(config1, config2)
+
+        # Reset and get new instance
+        Config.reset_instance()
+        config3 = get_config()
+        self.assertIsNot(config1, config3)
+
+    def test_get_config_with_custom_instance(self) -> None:
+        """Test get_config function with custom instance"""
+        custom_config = Config(self.test_config_path)
+        config = get_config(custom_config)
+        
+        self.assertIs(config, custom_config)
         self.assertEqual(
             config.get("processing.hyperspectral.radiometric_correction"), True
         )
 
-        # Тест получения значения по умолчанию
+    def test_get_method(self) -> None:
+        """Test get method"""
+        config = Config(self.test_config_path)
+
+        # Test getting existing value
+        self.assertEqual(
+            config.get("processing.hyperspectral.radiometric_correction"), True
+        )
+
+        # Test getting default value
         self.assertEqual(
             config.get("nonexistent.key", "default_value"), "default_value"
         )
 
-        # Тест получения секции
+        # Test getting section
         processing_config = config.get("processing")
         self.assertIsInstance(processing_config, dict)
         self.assertIn("hyperspectral", processing_config)
 
-    def test_set_method(self):
-        """Тест метода set"""
+    def test_set_method(self) -> None:
+        """Test set method"""
         config = Config(self.test_config_path)
 
-        # Тест установки нового значения
+        # Test setting new value
         config.set("test.new_parameter", "test_value")
         self.assertEqual(config.get("test.new_parameter"), "test_value")
 
-        # Тест изменения существующего значения
+        # Test modifying existing value
         config.set("processing.hyperspectral.radiometric_correction", False)
         self.assertEqual(
             config.get("processing.hyperspectral.radiometric_correction"), False
         )
 
-    def test_save_method(self):
-        """Тест метода save"""
+    def test_save_method(self) -> None:
+        """Test save method"""
         config = Config(self.test_config_path)
 
-        # Изменение конфигурации
+        # Modify configuration
         config.set("test.parameter", "test_value")
 
-        # Сохранение в новый файл
+        # Save to new file
         save_path = os.path.join(self.temp_dir, "saved_config.yaml")
         config.save(save_path)
 
-        # Проверка сохранения
+        # Check save
         self.assertTrue(os.path.exists(save_path))
 
-        # Загрузка и проверка
+        # Load and verify
         with open(save_path, "r") as f:
             saved_config = yaml.safe_load(f)
 
         self.assertEqual(saved_config["test"]["parameter"], "test_value")
 
-    def test_update_method(self):
-        """Тест метода update"""
+    def test_update_method(self) -> None:
+        """Test update method"""
         config = Config(self.test_config_path)
 
-        # Обновление конфигурации
+        # Update configuration
         update_dict = {
             "new_section": {"parameter1": "value1", "parameter2": "value2"},
             "processing": {"hyperspectral": {"new_parameter": "new_value"}},
@@ -136,19 +166,19 @@ class TestConfig(unittest.TestCase):
 
         config.update(update_dict)
 
-        # Проверка обновлений
+        # Check updates
         self.assertEqual(config.get("new_section.parameter1"), "value1")
         self.assertEqual(
             config.get("processing.hyperspectral.new_parameter"), "new_value"
         )
 
-        # Проверка сохранения существующих значений
+        # Check preservation of existing values
         self.assertEqual(
             config.get("processing.hyperspectral.radiometric_correction"), True
         )
 
-    def test_deep_update_method(self):
-        """Тест метода _deep_update"""
+    def test_deep_update_method(self) -> None:
+        """Test _deep_update method"""
         config = Config(self.test_config_path)
 
         base_dict = {
@@ -169,49 +199,55 @@ class TestConfig(unittest.TestCase):
 
         config._deep_update(base_dict, update_dict)
 
-        # Проверка результатов
+        # Check results
         self.assertEqual(
             base_dict["section1"]["subsection1"]["param1"], "value1"
-        )  # сохранено
+        )  # preserved
         self.assertEqual(
             base_dict["section1"]["subsection1"]["param2"], "updated_value2"
-        )  # обновлено
+        )  # updated
         self.assertEqual(
             base_dict["section1"]["subsection1"]["param5"], "value5"
-        )  # добавлено
+        )  # added
         self.assertEqual(
             base_dict["section1"]["subsection2"]["param3"], "value3"
-        )  # сохранено
+        )  # preserved
         self.assertEqual(
             base_dict["section1"]["subsection3"]["param6"], "value6"
-        )  # добавлено
-        self.assertEqual(base_dict["section2"]["param4"], "value4")  # сохранено
-        self.assertEqual(base_dict["section3"]["param7"], "value7")  # добавлено
+        )  # added
+        self.assertEqual(base_dict["section2"]["param4"], "value4")  # preserved
+        self.assertEqual(base_dict["section3"]["param7"], "value7")  # added
 
-    def test_invalid_config_path(self):
-        """Тест обработки неверного пути к конфигурации"""
-        with self.assertRaises(FileNotFoundError):
-            Config("/nonexistent/path/config.yaml")
+    def test_invalid_config_path(self) -> None:
+        """Test handling of invalid configuration path"""
+        # New implementation returns default config instead of raising exception
+        config = Config("/nonexistent/path/config.yaml")
+        self.assertIsInstance(config, Config)
+        # Should have default configuration
+        self.assertIsInstance(config.config, dict)
 
-    def test_invalid_yaml_config(self):
-        """Тест обработки некорректного YAML файла"""
+    def test_invalid_yaml_config(self) -> None:
+        """Test handling of invalid YAML file"""
         invalid_config_path = os.path.join(self.temp_dir, "invalid_config.yaml")
 
-        # Создание некорректного YAML файла
+        # Create invalid YAML file
         with open(invalid_config_path, "w") as f:
             f.write("invalid: yaml: content: [")
 
-        with self.assertRaises(yaml.YAMLError):
-            Config(invalid_config_path)
-
-    def test_config_property(self):
-        """Тест свойства config"""
-        config = Config(self.test_config_path)
-
-        # Проверка, что свойство возвращает словарь
+        # New implementation returns default config instead of raising exception
+        config = Config(invalid_config_path)
+        self.assertIsInstance(config, Config)
+        # Should have default configuration
         self.assertIsInstance(config.config, dict)
 
-        # Проверка, что изменение возвращенного словаря не влияет на оригинал
+    def test_config_property(self) -> None:
+        """Test config property"""
+        config = Config(self.test_config_path)
+
+        # Check that property returns a dictionary
+        self.assertIsInstance(config.config, dict)
+
+        # Check that modifying returned dictionary doesn't affect original
         config_dict = config.config
         config_dict["test"] = "value"
 

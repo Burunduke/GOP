@@ -1,5 +1,5 @@
 """
-Dash приложение для GUI GOP
+Dash application for GOP GUI
 """
 
 from .app import create_app

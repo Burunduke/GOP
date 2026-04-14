@@ -132,3 +132,74 @@ def is_valid_number(value: Any) -> bool:
         )
     except (ValueError, TypeError):
         return False
+
+
+def safe_sqrt(value: Union[float, np.ndarray], default: float = np.nan) -> Union[float, np.ndarray]:
+    """
+    Safely compute square root, handling negative values and invalid inputs.
+
+    Parameters
+    ----------
+    value : float or np.ndarray
+        Input value(s) for square root calculation
+    default : float, optional
+        Value to return when square root is invalid (default: np.nan)
+
+    Returns
+    -------
+    float or np.ndarray
+        Square root of input values, or default value for invalid inputs
+    """
+    if np.isscalar(value):
+        if value < 0 or np.isnan(value) or np.isinf(value):
+            return default
+        return np.sqrt(value)
+    
+    # Handle array inputs
+    result = np.full_like(value, default, dtype=np.float64)
+    valid_mask = (value >= 0) & (~np.isnan(value)) & (~np.isinf(value))
+    
+    if np.any(valid_mask):
+        result[valid_mask] = np.sqrt(value[valid_mask])
+    
+    return result
+
+
+def safe_log(value: Union[float, np.ndarray], default: float = np.nan) -> Union[float, np.ndarray]:
+    """
+    Safely compute natural logarithm, handling non-positive values and invalid inputs.
+
+    Parameters
+    ----------
+    value : float or np.ndarray
+        Input value(s) for logarithm calculation
+    default : float, optional
+        Value to return when logarithm is invalid (default: np.nan)
+
+    Returns
+    -------
+    float or np.ndarray
+        Natural logarithm of input values, or default value for invalid inputs
+    """
+    if np.isscalar(value):
+        if value <= 0 or np.isnan(value) or np.isinf(value):
+            return default
+        return np.log(value)
+    
+    # Handle array inputs
+    result = np.full_like(value, default, dtype=np.float64)
+    valid_mask = (value > 0) & (~np.isnan(value)) & (~np.isinf(value))
+    
+    if np.any(valid_mask):
+        result[valid_mask] = np.log(value[valid_mask])
+    
+    return result
+
+
+__all__ = [
+    "safe_divide",
+    "safe_normalize",
+    "is_valid_number",
+    "safe_sqrt",
+    "safe_log",
+]

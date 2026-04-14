@@ -6,6 +6,8 @@ import unittest
 import numpy as np
 import tempfile
 import os
+import shutil
+from typing import Any, Callable
 from unittest.mock import patch, MagicMock
 import pytest
 
@@ -15,7 +17,7 @@ from src.processing.hyperspectral.cache import HyperspectralCache
 class TestHyperspectralCache(unittest.TestCase):
     """Test cases for HyperspectralCache class"""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
         self.cache = HyperspectralCache(cache_enabled=True, cache_dir=self.temp_dir)
@@ -24,25 +26,23 @@ class TestHyperspectralCache(unittest.TestCase):
         self.test_data = np.random.rand(10, 10, 5).astype(np.float32)
         self.test_key = "test_data_key"
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up test fixtures"""
-        import shutil
-
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test cache initialization"""
         self.assertIsInstance(self.cache, HyperspectralCache)
         self.assertTrue(self.cache.cache_enabled)
         self.assertEqual(self.cache.cache_dir, self.temp_dir)
 
-    def test_initialization_disabled(self):
+    def test_initialization_disabled(self) -> None:
         """Test cache initialization with disabled cache"""
         cache = HyperspectralCache(cache_enabled=False)
         self.assertFalse(cache.cache_enabled)
 
-    def test_get_cache_key(self):
+    def test_get_cache_key(self) -> None:
         """Test cache key generation"""
         key = self.cache._get_cache_key(
             self.test_data, "test_function", param1="value1", param2=123
@@ -50,7 +50,7 @@ class TestHyperspectralCache(unittest.TestCase):
         self.assertIsInstance(key, str)
         self.assertGreater(len(key), 0)
 
-    def test_set_and_get_data(self):
+    def test_set_and_get_data(self) -> None:
         """Test setting and getting data from cache"""
         # Set data
         result = self.cache.set(self.test_key, self.test_data)
@@ -61,15 +61,15 @@ class TestHyperspectralCache(unittest.TestCase):
 
         np.testing.assert_array_equal(retrieved_data, self.test_data)
 
-    def test_get_nonexistent_key(self):
+    def test_get_nonexistent_key(self) -> None:
         """Test getting non-existent key"""
         result = self.cache.get("nonexistent_key")
         self.assertIsNone(result)
 
-    def test_get_or_compute(self):
+    def test_get_or_compute(self) -> None:
         """Test get_or_compute functionality"""
 
-        def compute_func(data, multiplier=1):
+        def compute_func(data: np.ndarray, multiplier: int = 1) -> np.ndarray:
             return data * multiplier
 
         # First call should compute and cache
@@ -85,7 +85,7 @@ class TestHyperspectralCache(unittest.TestCase):
         )
         np.testing.assert_array_equal(result2, expected)
 
-    def test_clear_cache(self):
+    def test_clear_cache(self) -> None:
         """Test clearing the cache"""
         # Set some data
         self.cache.set(self.test_key, self.test_data)
@@ -101,7 +101,7 @@ class TestHyperspectralCache(unittest.TestCase):
         result = self.cache.get(self.test_key)
         self.assertIsNone(result)
 
-    def test_cache_statistics(self):
+    def test_cache_statistics(self) -> None:
         """Test cache statistics"""
         # Set some data
         self.cache.set(self.test_key, self.test_data)
@@ -123,7 +123,7 @@ class TestHyperspectralCache(unittest.TestCase):
         self.assertGreaterEqual(stats["hits"], 1)
         self.assertGreaterEqual(stats["misses"], 1)
 
-    def test_cache_disabled_behavior(self):
+    def test_cache_disabled_behavior(self) -> None:
         """Test cache behavior when disabled"""
         cache = HyperspectralCache(cache_enabled=False)
 
@@ -135,7 +135,7 @@ class TestHyperspectralCache(unittest.TestCase):
         result = cache.get(self.test_key)
         self.assertIsNone(result)
 
-    def test_cache_size_info(self):
+    def test_cache_size_info(self) -> None:
         """Test cache size information"""
         # Set some data
         self.cache.set(self.test_key, self.test_data)
@@ -149,7 +149,7 @@ class TestHyperspectralCache(unittest.TestCase):
 
         self.assertGreaterEqual(size_info["file_count"], 1)
 
-    def test_cleanup_old_files(self):
+    def test_cleanup_old_files(self) -> None:
         """Test cleanup of old cache files"""
         # Set some data
         self.cache.set(self.test_key, self.test_data)
@@ -159,7 +159,7 @@ class TestHyperspectralCache(unittest.TestCase):
 
         self.assertGreaterEqual(deleted_count, 1)
 
-    def test_cache_key_uniqueness(self):
+    def test_cache_key_uniqueness(self) -> None:
         """Test that different data generates different cache keys"""
         data1 = np.array([1, 2, 3])
         data2 = np.array([4, 5, 6])
@@ -169,14 +169,14 @@ class TestHyperspectralCache(unittest.TestCase):
 
         self.assertNotEqual(key1, key2)
 
-    def test_cache_key_with_parameters(self):
+    def test_cache_key_with_parameters(self) -> None:
         """Test cache key generation with different parameters"""
         key1 = self.cache._get_cache_key(self.test_data, "test_func", param1="value1")
         key2 = self.cache._get_cache_key(self.test_data, "test_func", param1="value2")
 
         self.assertNotEqual(key1, key2)
 
-    def test_cache_persistence(self):
+    def test_cache_persistence(self) -> None:
         """Test that cache persists between instances"""
         # Set data with first cache instance
         cache1 = HyperspectralCache(cache_enabled=True, cache_dir=self.temp_dir)
@@ -189,7 +189,7 @@ class TestHyperspectralCache(unittest.TestCase):
         retrieved = cache2.get(self.test_key)
         np.testing.assert_array_equal(retrieved, self.test_data)
 
-    def test_memory_cache_priority(self):
+    def test_memory_cache_priority(self) -> None:
         """Test that memory cache is checked first"""
         # Set data
         self.cache.set(self.test_key, self.test_data)
@@ -201,7 +201,7 @@ class TestHyperspectralCache(unittest.TestCase):
         np.testing.assert_array_equal(result1, self.test_data)
         np.testing.assert_array_equal(result2, self.test_data)
 
-    def test_cache_with_large_data(self):
+    def test_cache_with_large_data(self) -> None:
         """Test caching of large data arrays"""
         large_data = np.random.rand(100, 100, 50).astype(np.float32)
 

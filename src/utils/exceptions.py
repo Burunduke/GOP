@@ -265,3 +265,15 @@ class SegmentationError(GOPException):
             details["image_info"] = image_info
 
         super().__init__(f"Segmentation error: {message}", details)
+
+
+__all__ = [
+    "GOPException",
+    "ValidationError",
+    "ProcessingError",
+    "ConfigurationError",
+    "FileError",
+    "GDALError",
+    "IndexCalculationError",
+    "SegmentationError",
+]

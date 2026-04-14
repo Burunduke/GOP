@@ -1,5 +1,8 @@
 """
-Утилиты для визуализации результатов
+Visualization utilities for the GOP project.
+
+This module provides visualization functions for vegetation indices, comparison plots,
+histograms, and various charts for plant condition analysis.
 """
 
 import numpy as np
@@ -23,28 +26,28 @@ def visualize_indices(
     figsize: Tuple[int, int] = (15, 10),
 ) -> Optional[Figure]:
     """
-    Визуализация вегетационных индексов
+    Visualize vegetation indices in a grid layout.
 
     Args:
-        indices_dict: Словарь с индексами {имя: массив}
-        output_path: Путь для сохранения изображения
-        figsize: Размер фигуры
+        indices_dict: Dictionary with indices {name: array}
+        output_path: Path to save the image
+        figsize: Figure size
 
     Returns:
-        Объект фигуры
+        Figure object or None if no indices provided
     """
     n_indices = len(indices_dict)
     if n_indices == 0:
-        return None
+        raise ValueError("indices_dict cannot be empty")
 
-    # Определение сетки
+    # Determine grid layout
     cols = min(3, n_indices)
     rows = (n_indices + cols - 1) // cols
 
     fig, axes = plt.subplots(rows, cols, figsize=figsize)
     if n_indices == 1:
         axes = [axes]
-    elif rows == 1:
+    elif rows == 1 and hasattr(axes, 'reshape'):
         axes = axes.reshape(1, -1)
 
     for i, (index_name, index_data) in enumerate(indices_dict.items()):
@@ -56,18 +59,18 @@ def visualize_indices(
         else:
             ax = axes[row, col]
 
-        # Нормализация данных
+        # Normalize data
         normalized = normalize_image(index_data, method="minmax")
 
-        # Визуализация
+        # Visualization
         im = ax.imshow(normalized, cmap="RdYlGn", vmin=0, vmax=1)
         ax.set_title(f"{index_name}", fontsize=12)
         ax.axis("off")
 
-        # Добавление цветовой шкалы
+        # Add colorbar
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-    # Скрытие лишних осей
+    # Hide unused axes
     for i in range(n_indices, rows * cols):
         row = i // cols
         col = i % cols
@@ -92,34 +95,40 @@ def create_comparison_plot(
     figsize: Tuple[int, int] = (20, 12),
 ) -> plt.Figure:
     """
-    Создание сравнительного графика с исходным изображением, маской и индексами
+    Create comparison plot with original image, segmentation mask, and indices.
 
     Args:
-        original_image: Исходное изображение
-        segmentation_mask: Маска сегментации
-        indices_dict: Словарь с индексами
-        output_path: Путь для сохранения
-        figsize: Размер фигуры
+        original_image: Original image array
+        segmentation_mask: Segmentation mask array
+        indices_dict: Dictionary with indices
+        output_path: Path to save the plot
+        figsize: Figure size
 
     Returns:
-        Объект фигуры
+        Figure object
     """
-    # Выбор до 3 лучших индексов для отображения
+    # Validate inputs
+    if original_image.size == 0:
+        raise ValueError("original_image cannot be empty")
+    if segmentation_mask.size == 0:
+        raise ValueError("segmentation_mask cannot be empty")
+    
+    # Select up to 3 best indices for display
     selected_indices = dict(list(indices_dict.items())[:3])
 
-    n_plots = 2 + len(selected_indices)  # оригинал + маска + индексы
+    n_plots = 2 + len(selected_indices)  # original + mask + indices
     cols = min(4, n_plots)
     rows = (n_plots + cols - 1) // cols
 
     fig, axes = plt.subplots(rows, cols, figsize=figsize)
     if n_plots == 1:
         axes = [axes]
-    elif rows == 1:
+    elif rows == 1 and hasattr(axes, 'reshape'):
         axes = axes.reshape(1, -1)
 
     plot_idx = 0
 
-    # Исходное изображение
+    # Original image
     row = plot_idx // cols
     col = plot_idx % cols
     if rows == 1:
@@ -131,11 +140,11 @@ def create_comparison_plot(
         ax.imshow(original_image)
     else:
         ax.imshow(original_image, cmap="gray")
-    ax.set_title("Исходное изображение", fontsize=12)
+    ax.set_title("Original Image", fontsize=12)
     ax.axis("off")
     plot_idx += 1
 
-    # Маска сегментации
+    # Segmentation mask
     row = plot_idx // cols
     col = plot_idx % cols
     if rows == 1:
@@ -144,11 +153,11 @@ def create_comparison_plot(
         ax = axes[row, col]
 
     ax.imshow(segmentation_mask, cmap="tab20")
-    ax.set_title("Маска сегментации", fontsize=12)
+    ax.set_title("Segmentation Mask", fontsize=12)
     ax.axis("off")
     plot_idx += 1
 
-    # Вегетационные индексы
+    # Vegetation indices
     for index_name, index_data in selected_indices.items():
         row = plot_idx // cols
         col = plot_idx % cols
@@ -164,7 +173,7 @@ def create_comparison_plot(
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         plot_idx += 1
 
-    # Скрытие лишних осей
+    # Hide unused axes
     for i in range(plot_idx, rows * cols):
         row = i // cols
         col = i % cols
@@ -188,29 +197,32 @@ def plot_index_histogram(
     bins: int = 50,
 ) -> plt.Figure:
     """
-    Построение гистограммы значений индекса
+    Plot histogram of index values with statistical information.
 
     Args:
-        index_data: Данные индекса
-        index_name: Название индекса
-        output_path: Путь для сохранения
-        bins: Количество бинов
+        index_data: Index data array
+        index_name: Name of the index
+        output_path: Path to save the plot
+        bins: Number of histogram bins
 
     Returns:
-        Объект фигуры
+        Figure object
     """
+    if index_data.size == 0:
+        raise ValueError("index_data cannot be empty")
+    
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Удаление NaN значений
+    # Remove NaN values
     valid_data = index_data[~np.isnan(index_data)]
 
     ax.hist(valid_data, bins=bins, alpha=0.7, color="skyblue", edgecolor="black")
-    ax.set_title(f"Распределение значений индекса {index_name}", fontsize=14)
-    ax.set_xlabel("Значение индекса", fontsize=12)
-    ax.set_ylabel("Частота", fontsize=12)
+    ax.set_title(f"Distribution of {index_name} Index Values", fontsize=14)
+    ax.set_xlabel("Index Value", fontsize=12)
+    ax.set_ylabel("Frequency", fontsize=12)
     ax.grid(True, alpha=0.3)
 
-    # Добавление статистики
+    # Add statistics
     mean_val = np.mean(valid_data)
     std_val = np.std(valid_data)
     ax.axvline(
@@ -218,7 +230,7 @@ def plot_index_histogram(
         color="red",
         linestyle="--",
         linewidth=2,
-        label=f"Среднее: {mean_val:.3f}",
+        label=f"Mean: {mean_val:.3f}",
     )
     ax.axvline(
         float(mean_val + std_val),
@@ -242,42 +254,50 @@ def create_plant_condition_chart(
     plant_condition_data: Dict[str, Any], output_path: Optional[str] = None
 ) -> plt.Figure:
     """
-    Создание диаграммы состояния растений
+    Create plant condition chart with classification and index values.
 
     Args:
-        plant_condition_data: Данные о состоянии растений
-        output_path: Путь для сохранения
+        plant_condition_data: Plant condition data dictionary
+        output_path: Path to save the chart
 
     Returns:
-        Объект фигуры
+        Figure object
     """
+    # Validate required data
+    if "classification" not in plant_condition_data:
+        raise ValueError("plant_condition_data must contain 'classification' key")
+    
+    classification = plant_condition_data["classification"]
+    if "class" not in classification or "score" not in classification:
+        raise ValueError("classification must contain 'class' and 'score' keys")
+    
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
-    # Классификация состояния
+    # Classification data
     classification = plant_condition_data.get("classification", {})
-    class_name = classification.get("class", "Неизвестно")
+    class_name = classification.get("class", "Unknown")
     confidence = classification.get("score", 0)
 
-    # Круговая диаграмма классификации
-    labels = [class_name, "Другое"]
+    # Pie chart for classification
+    labels = [class_name, "Other"]
     sizes = [confidence, 1 - confidence]
     colors = ["#2ecc71", "#ecf0f1"]
 
     ax1.pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%", startangle=90)
-    ax1.set_title("Классификация состояния растений", fontsize=14)
+    ax1.set_title("Plant Condition Classification", fontsize=14)
 
-    # Столбчатая диаграмма индексов
+    # Bar chart for indices
     indices = plant_condition_data.get("indices", {})
     if indices:
         index_names = list(indices.keys())
         index_values = list(indices.values())
 
         bars = ax2.bar(index_names, index_values, color="skyblue", alpha=0.7)
-        ax2.set_title("Нормализованные значения индексов", fontsize=14)
-        ax2.set_ylabel("Нормализованное значение", fontsize=12)
+        ax2.set_title("Normalized Index Values", fontsize=14)
+        ax2.set_ylabel("Normalized Value", fontsize=12)
         ax2.set_ylim(0, 1)
 
-        # Добавление значений на столбцы
+        # Add values on bars
         for bar, value in zip(bars, index_values):
             height = bar.get_height()
             ax2.text(
@@ -288,19 +308,19 @@ def create_plant_condition_chart(
                 va="bottom",
             )
 
-        # Поворот меток
+        # Rotate labels
         plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
     else:
         ax2.text(
             0.5,
             0.5,
-            "Нет данных об индексах",
+            "No index data available",
             ha="center",
             va="center",
             transform=ax2.transAxes,
             fontsize=12,
         )
-        ax2.set_title("Нормализованные значения индексов", fontsize=14)
+        ax2.set_title("Normalized Index Values", fontsize=14)
 
     plt.tight_layout()
 
@@ -314,32 +334,35 @@ def create_processing_workflow_chart(
     workflow_steps: List[str], output_path: Optional[str] = None
 ) -> plt.Figure:
     """
-    Создание диаграммы рабочего процесса обработки
+    Create processing workflow chart showing analysis steps.
 
     Args:
-        workflow_steps: Список шагов обработки
-        output_path: Путь для сохранения
+        workflow_steps: List of processing steps
+        output_path: Path to save the chart
 
     Returns:
-        Объект фигуры
+        Figure object
     """
+    if not workflow_steps:
+        raise ValueError("workflow_steps cannot be empty")
+    
     fig, ax = plt.subplots(figsize=(12, 8))
 
-    # Создание горизонтальной диаграммы процесса
+    # Create horizontal process chart
     y_pos = np.arange(len(workflow_steps))
 
     bars = ax.barh(y_pos, [1] * len(workflow_steps), color="lightblue", alpha=0.7)
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels(workflow_steps)
-    ax.invert_yaxis()  # Сверху вниз
-    ax.set_xlabel("Прогресс", fontsize=12)
-    ax.set_title("Рабочий процесс обработки", fontsize=14)
+    ax.invert_yaxis()  # Top to bottom
+    ax.set_xlabel("Progress", fontsize=12)
+    ax.set_title("Processing Workflow", fontsize=14)
 
-    # Удаление оси X
+    # Remove X axis
     ax.set_xticks([])
 
-    # Добавление номеров шагов
+    # Add step numbers
     for i, (bar, step) in enumerate(zip(bars, workflow_steps)):
         width = bar.get_width()
         ax.text(
@@ -357,3 +380,12 @@ def create_processing_workflow_chart(
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
 
     return fig
+
+
+__all__ = [
+    "visualize_indices",
+    "create_comparison_plot",
+    "plot_index_histogram",
+    "create_plant_condition_chart",
+    "create_processing_workflow_chart",
+]

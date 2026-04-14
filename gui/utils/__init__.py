@@ -1,5 +1,5 @@
 """
-Утилиты для GUI приложения GOP
+Utilities for GOP GUI application
 """
 
 from .file_utils import validate_file_format, format_file_size, get_file_metadata
@@ -8,7 +8,7 @@ from .visualization_utils import create_colormap, apply_colormap
 
 __all__ = [
     "validate_file_format",
-    "format_file_size", 
+    "format_file_size",
     "get_file_metadata",
     "validate_project_data",
     "validate_processing_config",

@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.core.pipeline import Pipeline
-from src.core.config import config
+from src.core.config import get_config
 from src.utils.logger import setup_logger
 
 

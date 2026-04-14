@@ -1,5 +1,5 @@
 """
-Сервисный слой для GUI приложения GOP
+Service layer for GOP GUI application
 """
 
 from .gop_adapter import GOPAdapter

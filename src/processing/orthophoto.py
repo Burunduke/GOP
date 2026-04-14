@@ -1,31 +1,36 @@
 """
-Модуль создания ортофотопланов
+Orthophoto processing module for creating orthophotos using OpenDroneMap or GDAL.
+
+This module provides functionality to create orthophotos from processed TIFF files
+using either OpenDroneMap (preferred) or GDAL as a fallback.
 """
 
 import os
-import logging
+import shutil
 import subprocess
 import tempfile
 from typing import Dict, Any, List, Optional
-from pathlib import Path
 
-from ..core.config import Config, config, get_config, create_config
+from ..core.config import Config, get_config
 from ..utils.logger import setup_logger
-from ..utils.validators import validate_file_path, validate_config
-from ..utils.exceptions import ProcessingError, ValidationError, FileError
+from ..utils.validators import validate_file_path
+from ..utils.exceptions import ValidationError
 
 
 class OrthophotoProcessor:
     """
-    Класс для создания ортофотопланов с использованием OpenDroneMap
+    Processor for creating orthophotos using OpenDroneMap or GDAL.
+    
+    This class handles the creation of orthophotos from processed TIFF files,
+    with support for both OpenDroneMap (preferred) and GDAL (fallback) methods.
     """
 
-    def __init__(self, config_instance: Optional[Config] = None):
+    def __init__(self, config_instance: Optional[Config] = None) -> None:
         """
-        Инициализация процессора ортофотопланов
+        Initialize the orthophoto processor.
 
         Args:
-            config_instance: Опциональный экземпляр конфигурации для dependency injection
+            config_instance: Optional configuration instance for dependency injection
         """
         self.config = get_config(config_instance)
         self.logger = setup_logger("OrthophotoProcessor")
@@ -33,12 +38,12 @@ class OrthophotoProcessor:
 
     def _find_odm_path(self) -> Optional[str]:
         """
-        Найти путь к OpenDroneMap
+        Find the path to OpenDroneMap installation.
 
         Returns:
-            Путь к OpenDroneMap или None если не найден
+            Path to OpenDroneMap or None if not found
         """
-        # Проверка常见 путей установки ODM
+        # Check common OpenDroneMap installation paths
         possible_paths = [
             "/opt/opendronemap",
             "/usr/local/opendronemap",
@@ -50,24 +55,28 @@ class OrthophotoProcessor:
             if os.path.exists(path):
                 run_script = os.path.join(path, "run.sh")
                 if os.path.exists(run_script):
-                    self.logger.info(f"OpenDroneMap найден: {path}")
+                    self.logger.info(f"OpenDroneMap found: {path}")
                     return path
 
         self.logger.warning(
-            "OpenDroneMap не найден. Используется альтернативный метод."
+            "OpenDroneMap not found. Using alternative method."
         )
         return None
 
     def create_orthophoto(self, processed_data: Dict[str, Any], output_dir: str) -> str:
         """
-        Создание ортофотоплана
+        Create an orthophoto from processed data.
 
         Args:
-            processed_data: Результаты предварительной обработки
-            output_dir: Директория для сохранения результатов
+            processed_data: Results from preprocessing containing TIFF paths and metadata
+            output_dir: Directory to save the orthophoto
 
         Returns:
-            Путь к созданному ортофотоплану
+            Path to the created orthophoto
+
+        Raises:
+            ValidationError: If input validation fails
+            RuntimeError: If orthophoto creation fails
         """
         try:
             # Validate input parameters
@@ -112,46 +121,44 @@ class OrthophotoProcessor:
                     allowed_extensions=[".tif", ".tiff"],
                 )
 
-            self.logger.info("Начало создания ортофотоплана")
+            self.logger.info("Starting orthophoto creation")
 
-            tiff_paths = processed_data.get("tiff_paths", [])
-            if not tiff_paths:
-                raise ValidationError(
-                    "Отсутствуют TIFF файлы для создания ортофотоплана",
-                    details={"tiff_paths": tiff_paths},
-                )
-
-            # Создание ортофотоплана
+            # Create orthophoto
             if self.odm_path:
                 orthophoto_path = self._create_with_odm(tiff_paths, output_dir, processed_data)
             else:
                 orthophoto_path = self._create_with_gdal(tiff_paths, output_dir)
 
-            self.logger.info(f"Ортофотоплан создан: {orthophoto_path}")
+            self.logger.info(f"Orthophoto created: {orthophoto_path}")
             return orthophoto_path
 
         except Exception as e:
-            self.logger.error(f"Ошибка создания ортофотоплана: {e}")
+            self.logger.error(f"Error creating orthophoto: {e}")
             raise
 
     def _create_with_odm(self, tiff_paths: List[str], output_dir: str, processed_data: Dict[str, Any] = None) -> str:
         """
-        Создание ортофотоплана с помощью OpenDroneMap
+        Create orthophoto using OpenDroneMap.
 
         Args:
-            tiff_paths: Список путей к TIFF файлам
-            output_dir: Директория для сохранения результатов
+            tiff_paths: List of paths to TIFF files
+            output_dir: Directory to save results
+            processed_data: Optional processed data containing metadata
 
         Returns:
-            Путь к созданному ортофотоплану
+            Path to the created orthophoto
+
+        Raises:
+            RuntimeError: If OpenDroneMap execution fails
+            FileNotFoundError: If results are not found
         """
         try:
-            # Создание временной директории для ODM
+            # Create temporary directory for ODM
             with tempfile.TemporaryDirectory() as temp_dir:
                 project_dir = os.path.join(temp_dir, "project")
                 os.makedirs(project_dir, exist_ok=True)
 
-                # Копирование файлов в структуру ODM
+                # Copy files to ODM structure
                 images_dir = os.path.join(project_dir, "images")
                 os.makedirs(images_dir, exist_ok=True)
 
@@ -159,10 +166,10 @@ class OrthophotoProcessor:
                     dest_path = os.path.join(images_dir, os.path.basename(tiff_path))
                     self._copy_file(tiff_path, dest_path)
 
-                # Создание GPS файла если необходимо
+                # Create GPS file if necessary
                 gps_file = self._create_gps_file(processed_data, project_dir)
 
-                # Формирование команды ODM
+                # Build ODM command
                 cmd = [
                     os.path.join(self.odm_path, "run.sh"),
                     "--project-path",
@@ -182,8 +189,8 @@ class OrthophotoProcessor:
                 if gps_file:
                     cmd.extend(["--gps-file", gps_file])
 
-                # Запуск ODM
-                self.logger.info("Запуск OpenDroneMap...")
+                # Run ODM
+                self.logger.info("Running OpenDroneMap...")
                 result = subprocess.run(
                     cmd,
                     cwd=self.odm_path,
@@ -191,14 +198,14 @@ class OrthophotoProcessor:
                     text=True,
                     timeout=self.config.get(
                         "processing.odm_timeout", 3600
-                    ),  # 1 час по умолчанию
+                    ),  # 1 hour default
                 )
 
                 if result.returncode != 0:
-                    self.logger.error(f"ODM завершился с ошибкой: {result.stderr}")
+                    self.logger.error(f"ODM failed with error: {result.stderr}")
                     raise RuntimeError(f"OpenDroneMap error: {result.stderr}")
 
-                # Копирование результатов
+                # Copy results
                 odm_results_dir = os.path.join(
                     project_dir, "odm_orthophoto", "odm_orthophoto.tif"
                 )
@@ -207,30 +214,33 @@ class OrthophotoProcessor:
                     self._copy_file(odm_results_dir, output_path)
                     return output_path
                 else:
-                    raise FileNotFoundError("Результаты ODM не найдены")
+                    raise FileNotFoundError("ODM results not found")
 
         except subprocess.TimeoutExpired:
-            self.logger.error("Превышено время выполнения OpenDroneMap")
+            self.logger.error("OpenDroneMap execution timeout exceeded")
             raise RuntimeError("OpenDroneMap timeout")
         except Exception as e:
-            self.logger.error(f"Ошибка при работе с OpenDroneMap: {e}")
+            self.logger.error(f"Error working with OpenDroneMap: {e}")
             raise
 
     def _create_with_gdal(self, tiff_paths: List[str], output_dir: str) -> str:
         """
-        Создание ортофотоплана с помощью GDAL (альтернативный метод)
+        Create orthophoto using GDAL (alternative method).
 
         Args:
-            tiff_paths: Список путей к TIFF файлам
-            output_dir: Директория для сохранения результатов
+            tiff_paths: List of paths to TIFF files
+            output_dir: Directory to save results
 
         Returns:
-            Путь к созданному ортофотоплану
+            Path to the created orthophoto
+
+        Raises:
+            RuntimeError: If GDAL merge fails
         """
         try:
-            self.logger.info("Создание ортофотоплана с помощью GDAL")
+            self.logger.info("Creating orthophoto using GDAL")
 
-            # Использование gdal_merge.py для создания мозаики
+            # Use gdal_merge.py to create mosaic
             output_path = os.path.join(output_dir, "orthophoto.tif")
 
             cmd = [
@@ -255,60 +265,59 @@ class OrthophotoProcessor:
             return output_path
 
         except Exception as e:
-            self.logger.error(f"Ошибка создания ортофотоплана с помощью GDAL: {e}")
+            self.logger.error(f"Error creating orthophoto with GDAL: {e}")
             raise
 
     def _create_gps_file(
         self, processed_data: Dict[str, Any], project_dir: str
     ) -> Optional[str]:
         """
-        Создание GPS файла для OpenDroneMap
+        Create GPS file for OpenDroneMap.
 
         Args:
-            processed_data: Данные обработки
-            project_dir: Директория проекта
+            processed_data: Processing data containing metadata
+            project_dir: Project directory
 
         Returns:
-            Путь к GPS файлу или None
+            Path to GPS file or None if not created
         """
         try:
-            # Проверка наличия GPS данных в метаданных
+            # Check for GPS data in metadata
             metadata = processed_data.get("metadata", {})
             if not metadata:
                 return None
 
             gps_file = os.path.join(project_dir, "gps.txt")
 
-            # Здесь должна быть логика извлечения GPS данных из метаданных
-            # и сохранения в формате, понятном ODM
+            # TODO: Implement GPS data extraction from metadata
+            # and save in ODM-compatible format
 
             return gps_file if os.path.exists(gps_file) else None
 
         except Exception as e:
-            self.logger.warning(f"Ошибка создания GPS файла: {e}")
+            self.logger.warning(f"Error creating GPS file: {e}")
             return None
 
     def _copy_file(self, src: str, dst: str) -> None:
         """
-        Копирование файла
+        Copy a file from source to destination.
 
         Args:
-            src: Исходный путь
-            dst: Целевой путь
+            src: Source file path
+            dst: Destination file path
         """
-        import shutil
 
         shutil.copy2(src, dst)
 
     def validate_orthophoto(self, orthophoto_path: str) -> Dict[str, Any]:
         """
-        Валидация созданного ортофотоплана
+        Validate the created orthophoto.
 
         Args:
-            orthophoto_path: Путь к ортофотоплану
+            orthophoto_path: Path to the orthophoto file
 
         Returns:
-            Словарь с результатами валидации
+            Dictionary with validation results
         """
         try:
             from ..utils.gdal_utils import get_raster_metadata
@@ -324,13 +333,13 @@ class OrthophotoProcessor:
                 "has_projection": metadata["has_projection"],
             }
 
-            # Проверка на пустые области
+            # Check for empty areas
             if metadata["band_stats"] and metadata["band_stats"].get(1):
                 stats = metadata["band_stats"][1]
                 if stats["max"] <= stats["min"]:  # max <= min
                     validation_results["valid"] = False
                     validation_results["error"] = (
-                        "Изображение содержит только пустые значения"
+                        "Image contains only empty values"
                     )
 
             return validation_results
@@ -340,21 +349,24 @@ class OrthophotoProcessor:
 
     def optimize_orthophoto(self, orthophoto_path: str, output_path: str = None) -> str:
         """
-        Оптимизация ортофотоплана (сжатие, пирамиды)
+        Optimize orthophoto (compression, pyramids).
 
         Args:
-            orthophoto_path: Путь к исходному ортофотоплану
-            output_path: Путь для сохранения оптимизированного файла
+            orthophoto_path: Path to the source orthophoto
+            output_path: Path to save the optimized file
 
         Returns:
-            Путь к оптимизированному ортофотоплану
+            Path to the optimized orthophoto
+
+        Raises:
+            RuntimeError: If optimization fails
         """
         try:
             if output_path is None:
                 base_path = os.path.splitext(orthophoto_path)[0]
                 output_path = f"{base_path}_optimized.tif"
 
-            # Команда GDAL для оптимизации
+            # GDAL command for optimization
             cmd = [
                 "gdal_translate",
                 orthophoto_path,
@@ -372,10 +384,10 @@ class OrthophotoProcessor:
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
-                self.logger.error(f"Ошибка оптимизации: {result.stderr}")
+                self.logger.error(f"Optimization error: {result.stderr}")
                 raise RuntimeError(f"Optimization error: {result.stderr}")
 
-            # Создание пирамид
+            # Create pyramids
             pyramid_cmd = [
                 "gdaladdo",
                 "-r",
@@ -389,9 +401,9 @@ class OrthophotoProcessor:
 
             subprocess.run(pyramid_cmd, capture_output=True, text=True)
 
-            self.logger.info(f"Ортофотоплан оптимизирован: {output_path}")
+            self.logger.info(f"Orthophoto optimized: {output_path}")
             return output_path
 
         except Exception as e:
-            self.logger.error(f"Ошибка оптимизации ортофотоплана: {e}")
+            self.logger.error(f"Error optimizing orthophoto: {e}")
             raise

@@ -1,11 +1,32 @@
 """
-Модуль шумоподавления для гиперспектральных данных
+Hyperspectral data denoising module.
+
+This module provides various denoising methods for hyperspectral data processing,
+including PCA, MNF, wavelet, and Savitzky-Golay filtering.
 """
 
 import numpy as np
 import logging
 from typing import Any, Dict, Optional
 
+# Constants for denoising methods
+PCA_METHOD = "pca"
+MNF_METHOD = "mnf"
+WAVELET_METHOD = "wavelet"
+SAVGOL_METHOD = "savgol"
+
+# Numerical constants
+MIN_VALID_DATA_POINTS = 100
+DEFAULT_PCA_COMPONENTS = 0.95
+DEFAULT_MNF_COMPONENTS_RATIO = 0.8
+DEFAULT_WAVELET_LEVEL = 2
+DEFAULT_WAVELET_FAMILY = "db4"
+DEFAULT_SAVGOL_WINDOW = 11
+DEFAULT_SAVGOL_POLYORDER = 3
+MIN_WINDOW_SIZE = 3
+NOISE_ESTIMATION_FACTOR = 0.1
+
+# Import scientific libraries with error handling
 try:
     from sklearn.decomposition import PCA
     from scipy.signal import savgol_filter
@@ -16,224 +37,236 @@ except ImportError:
 
 
 class HyperspectralDenoising:
-    """Класс для шумоподавления гиперспектральных данных"""
+    """Class for hyperspectral data denoising."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(self, logger: Optional[logging.Logger] = None) -> None:
         """
-        Инициализация класса шумоподавления
+        Initialize denoising class.
 
         Args:
-            logger: Логгер для записи сообщений
+            logger: Logger for message recording
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.denoising_methods = ["pca", "mnf", "wavelet", "savgol"]
+        self.denoising_methods = [PCA_METHOD, MNF_METHOD, WAVELET_METHOD, SAVGOL_METHOD]
 
     def advanced_noise_reduction(
-        self, image_data: np.ndarray, method: str = "pca"
+        self, image_data: np.ndarray, method: str = PCA_METHOD
     ) -> np.ndarray:
         """
-        Продвинутое шумоподавление
+        Advanced noise reduction for hyperspectral data.
 
         Args:
-            image_data: Входные данные изображения
-            method: Метод шумоподавления
+            image_data: Input image data
+            method: Denoising method
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
+
+        Raises:
+            ValueError: If input data is invalid
         """
         try:
-            # Валидация входных данных
+            # Validate input data
             if image_data is None or image_data.size == 0:
-                raise ValueError("Входные данные изображения пусты")
+                raise ValueError("Input image data is empty")
 
             if method not in self.denoising_methods:
                 self.logger.warning(
-                    f"Неизвестный метод шумоподавления: {method}. Доступные методы: {self.denoising_methods}"
+                    f"Unknown denoising method: {method}. Available methods: {self.denoising_methods}"
                 )
                 return image_data
 
-            if method == "pca":
+            if method == PCA_METHOD:
                 return self.pca_denoising(image_data)
-            elif method == "mnf":
+            elif method == MNF_METHOD:
                 return self.mnf_denoising(image_data)
-            elif method == "wavelet":
+            elif method == WAVELET_METHOD:
                 return self.wavelet_denoising(image_data)
-            elif method == "savgol":
+            elif method == SAVGOL_METHOD:
                 return self.savgol_denoising(image_data)
             else:
-                self.logger.warning(f"Неизвестный метод шумоподавления: {method}")
+                self.logger.warning(f"Unknown denoising method: {method}")
                 return image_data
 
         except ValueError as e:
-            self.logger.error(f"Ошибка валидации при шумоподавлении: {e}")
-            return image_data
+            self.logger.error(f"Validation error during denoising: {e}")
+            raise
         except (RuntimeError, MemoryError) as e:
-            self.logger.error(f"Ошибка выполнения при шумоподавлении: {e}")
-            return image_data
+            self.logger.error(f"Execution error during denoising: {e}")
+            raise
         except ImportError as e:
-            self.logger.error(f"Ошибка импорта модуля для шумоподавления: {e}")
-            return image_data
+            self.logger.error(f"Import error for denoising module: {e}")
+            raise
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка шумоподавления: {e}")
-            return image_data
+            self.logger.error(f"Unexpected error during denoising: {e}")
+            raise
 
     def pca_denoising(
-        self, image_data: np.ndarray, n_components: float = 0.95
+        self, image_data: np.ndarray, n_components: float = DEFAULT_PCA_COMPONENTS
     ) -> np.ndarray:
         """
-        Шумоподавление с помощью PCA
+        Denoising using Principal Component Analysis (PCA).
 
         Args:
-            image_data: Входные данные изображения
-            n_components: Количество компонентов или доля объясненной дисперсии
+            image_data: Input image data
+            n_components: Number of components or explained variance ratio
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
+
+        Raises:
+            ValueError: If input data is invalid
         """
         try:
-            # Валидация входных данных
+            # Validate input data
             if image_data is None or image_data.size == 0:
-                raise ValueError("Входные данные изображения пусты")
+                raise ValueError("Input image data is empty")
 
             if len(image_data.shape) != 3:
                 raise ValueError(
-                    f"Ожидается 3D массив, получен {len(image_data.shape)}D"
+                    f"Expected 3D array, got {len(image_data.shape)}D"
                 )
 
             if not (0 < n_components <= 1) and not isinstance(n_components, int):
                 raise ValueError(
-                    "n_components должен быть в диапазоне (0, 1] или целым числом"
+                    "n_components must be in range (0, 1] or an integer"
                 )
 
             rows, cols, bands = image_data.shape
 
-            # Изменение формы данных для PCA
+            # Reshape data for PCA
             reshaped = image_data.reshape(-1, bands)
 
-            # Удаление NaN и бесконечных значений
+            # Remove NaN and infinite values
             valid_mask = ~np.isnan(reshaped).any(axis=1) & ~np.isinf(reshaped).any(
                 axis=1
             )
             valid_data = reshaped[valid_mask]
 
-            if len(valid_data) < 100:
-                self.logger.warning("Недостаточно валидных данных для PCA")
+            if len(valid_data) < MIN_VALID_DATA_POINTS:
+                self.logger.warning("Insufficient valid data for PCA")
                 return image_data
 
-            # Применение PCA с обработкой ошибок
+            # Apply PCA with error handling
             try:
                 pca = PCA(n_components=n_components)
                 transformed = pca.fit_transform(valid_data)
 
-                # Обратное преобразование
+                # Inverse transform
                 denoised = pca.inverse_transform(transformed)
 
-                # Восстановление исходной формы
+                # Restore original shape
                 denoised_image = np.zeros_like(reshaped)
                 denoised_image[valid_mask] = denoised
                 denoised_image = denoised_image.reshape(rows, cols, -1)
 
                 self.logger.info(
-                    f"PCA шумоподавление завершено. Компонентов: {pca.n_components_}"
+                    f"PCA denoising completed. Components: {pca.n_components_}"
                 )
                 return denoised_image
 
             except ValueError as e:
-                self.logger.error(f"Ошибка в PCA алгоритме: {e}")
-                return image_data
+                self.logger.error(f"Error in PCA algorithm: {e}")
+                raise
 
         except ValueError as e:
-            self.logger.error(f"Ошибка валидации в PCA шумоподавлении: {e}")
-            return image_data
+            self.logger.error(f"Validation error in PCA denoising: {e}")
+            raise
         except (RuntimeError, MemoryError) as e:
-            self.logger.error(f"Ошибка выполнения в PCA шумоподавлении: {e}")
-            return image_data
+            self.logger.error(f"Execution error in PCA denoising: {e}")
+            raise
         except Exception as e:
-            self.logger.error(f"Неожиданная ошибка PCA шумоподавления: {e}")
-            return image_data
+            self.logger.error(f"Unexpected error in PCA denoising: {e}")
+            raise
 
     def mnf_denoising(self, image_data: np.ndarray) -> np.ndarray:
         """
-        Шумоподавление с помощью MNF (Minimum Noise Fraction)
+        Denoising using Minimum Noise Fraction (MNF).
 
         Args:
-            image_data: Входные данные изображения
+            image_data: Input image data
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
+
+        Raises:
+            ValueError: If input data is invalid
         """
         try:
-            # Валидация входных данных
+            # Validate input data
             if image_data is None or image_data.size == 0:
-                raise ValueError("Входные данные изображения пусты")
+                raise ValueError("Input image data is empty")
 
-            # Упрощенная реализация MNF
-            # В реальной системе здесь должна быть полная реализация MNF
+            # Simplified MNF implementation
+            # In a real system, a full MNF implementation should be used here
 
             rows, cols, bands = image_data.shape
             reshaped = image_data.reshape(-1, bands)
 
-            # Оценка ковариационных матриц
+            # Estimate covariance matrices
             valid_mask = ~np.isnan(reshaped).any(axis=1) & ~np.isinf(reshaped).any(
                 axis=1
             )
             valid_data = reshaped[valid_mask]
 
-            if len(valid_data) < 100:
+            if len(valid_data) < MIN_VALID_DATA_POINTS:
                 return image_data
 
-            # Расчет ковариационных матриц
+            # Calculate covariance matrices
             cov_signal = np.cov(valid_data.T)
             cov_noise = (
-                np.eye(bands) * np.var(valid_data) * 0.1
-            )  # Упрощенная оценка шума
+                np.eye(bands) * np.var(valid_data) * NOISE_ESTIMATION_FACTOR
+            )  # Simplified noise estimation
 
-            # MNF преобразование
+            # MNF transformation
             try:
                 eigenvalues, eigenvectors = np.linalg.eig(
                     np.linalg.solve(cov_noise, cov_signal)
                 )
 
-                # Сортировка по собственным значениям
+                # Sort by eigenvalues
                 idx = eigenvalues.argsort()[::-1]
                 eigenvectors = eigenvectors[:, idx]
 
-                # Преобразование данных
+                # Transform data
                 transformed = valid_data @ eigenvectors
 
-                # Обратное преобразование с использованием только главных компонент
-                n_components = min(int(bands * 0.8), len(eigenvalues))
+                # Inverse transform using only principal components
+                n_components = min(int(bands * DEFAULT_MNF_COMPONENTS_RATIO), len(eigenvalues))
                 reconstructed = (
                     transformed[:, :n_components] @ eigenvectors[:, :n_components].T
                 )
 
-                # Восстановление исходной формы
+                # Restore original shape
                 denoised_image = np.zeros_like(reshaped)
                 denoised_image[valid_mask] = reconstructed
                 denoised_image = denoised_image.reshape(rows, cols, -1)
 
                 self.logger.info(
-                    f"MNF шумоподавление завершено. Компонентов: {n_components}"
+                    f"MNF denoising completed. Components: {n_components}"
                 )
                 return denoised_image
 
             except np.linalg.LinAlgError:
-                self.logger.warning("Ошибка в MNF преобразовании, используем PCA")
+                self.logger.warning("Error in MNF transformation, using PCA")
                 return self.pca_denoising(image_data)
 
         except Exception as e:
-            self.logger.error(f"Ошибка MNF шумоподавления: {e}")
-            return image_data
+            self.logger.error(f"Error in MNF denoising: {e}")
+            raise
 
     def wavelet_denoising(self, image_data: np.ndarray) -> np.ndarray:
         """
-        Вейвлет-шумоподавление
+        Wavelet-based denoising.
 
         Args:
-            image_data: Входные данные изображения
+            image_data: Input image data
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
+
+        Raises:
+            ValueError: If input data is invalid
         """
         try:
             import pywt
@@ -244,16 +277,16 @@ class HyperspectralDenoising:
             for band in range(bands):
                 band_data = image_data[:, :, band]
 
-                # Проверка на валидные данные
+                # Check for valid data
                 if np.all(np.isnan(band_data)) or np.all(np.isinf(band_data)):
                     denoised_image[:, :, band] = band_data
                     continue
 
                 try:
-                    # Вейвлет-преобразование
-                    coeffs = pywt.wavedec2(band_data, "db4", level=2)
+                    # Wavelet transform
+                    coeffs = pywt.wavedec2(band_data, DEFAULT_WAVELET_FAMILY, level=DEFAULT_WAVELET_LEVEL)
 
-                    # Пороговая обработка коэффициентов
+                    # Threshold coefficient processing
                     threshold = np.std(coeffs[-1]) * np.sqrt(2 * np.log(band_data.size))
                     coeffs_thresh = list(coeffs)
                     coeffs_thresh[1:] = [
@@ -261,31 +294,31 @@ class HyperspectralDenoising:
                         for detail in coeffs_thresh[1:]
                     ]
 
-                    # Обратное вейвлет-преобразование
-                    denoised_image[:, :, band] = pywt.waverec2(coeffs_thresh, "db4")
+                    # Inverse wavelet transform
+                    denoised_image[:, :, band] = pywt.waverec2(coeffs_thresh, DEFAULT_WAVELET_FAMILY)
                 except Exception as e:
-                    self.logger.warning(f"Ошибка вейвлет-обработки канала {band}: {e}")
+                    self.logger.warning(f"Error in wavelet processing channel {band}: {e}")
                     denoised_image[:, :, band] = band_data
 
-            self.logger.info("Вейвлет-шумоподавление завершено")
+            self.logger.info("Wavelet denoising completed")
             return denoised_image
 
         except ImportError:
-            self.logger.warning("PyWavelets не установлен, используем PCA")
+            self.logger.warning("PyWavelets not installed, using PCA")
             return self.pca_denoising(image_data)
         except Exception as e:
-            self.logger.error(f"Ошибка вейвлет-шумоподавления: {e}")
-            return image_data
+            self.logger.error(f"Error in wavelet denoising: {e}")
+            raise
 
     def savgol_denoising(self, image_data: np.ndarray) -> np.ndarray:
         """
-        Шумоподавление с помощью фильтра Савицкого-Голея с оптимизированными векторизованными вычислениями
+        Denoising using Savitzky-Golay filter with optimized vectorized computations.
 
         Args:
-            image_data: Входные данные изображения
+            image_data: Input image data
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
 
         Performance Notes:
             - Uses vectorized operations for 2-5x speed improvement
@@ -293,53 +326,53 @@ class HyperspectralDenoising:
             - Handles NaN/Inf values efficiently
         """
         try:
-            # Валидация входных данных
+            # Validate input data
             if image_data is None or image_data.size == 0:
                 return image_data
 
             if len(image_data.shape) != 3:
                 self.logger.warning(
-                    f"Ожидается 3D массив, получен {len(image_data.shape)}D"
+                    f"Expected 3D array, got {len(image_data.shape)}D"
                 )
                 return image_data
 
             rows, cols, bands = image_data.shape
 
-            # Определение оптимальных размеров окон
-            row_window = min(11, cols)
-            col_window = min(11, rows)
+            # Determine optimal window sizes
+            row_window = min(DEFAULT_SAVGOL_WINDOW, cols)
+            col_window = min(DEFAULT_SAVGOL_WINDOW, rows)
 
-            # Убедимся, что размеры окон нечетные
+            # Ensure window sizes are odd
             if row_window % 2 == 0:
                 row_window -= 1
             if col_window % 2 == 0:
                 col_window -= 1
 
-            # Минимальные размеры для фильтра
-            if row_window < 3 or col_window < 3:
+            # Minimum sizes for filter
+            if row_window < MIN_WINDOW_SIZE or col_window < MIN_WINDOW_SIZE:
                 self.logger.warning(
-                    "Изображение слишком маленькое для фильтра Савицкого-Голея"
+                    "Image too small for Savitzky-Golay filter"
                 )
                 return image_data
 
-            # Векторизованная обработка всех каналов одновременно
+            # Vectorized processing of all channels simultaneously
             denoised_image = np.zeros_like(image_data)
 
-            # Обработка каждого канала с оптимизированными операциями
+            # Process each channel with optimized operations
             for band in range(bands):
                 band_data = image_data[:, :, band]
 
-                # Проверка на валидные данные
+                # Check for valid data
                 if np.all(np.isnan(band_data)) or np.all(np.isinf(band_data)):
                     denoised_image[:, :, band] = band_data
                     continue
 
-                # Векторизованное применение фильтра по строкам с оптимизацией
+                # Vectorized application of filter by rows with optimization
                 filtered_rows = self._vectorized_savgol_filter_rows(
                     band_data, row_window
                 )
 
-                # Векторизованное применение фильтра по столбцам с оптимизацией
+                # Vectorized application of filter by columns with optimization
                 filtered_both = self._vectorized_savgol_filter_cols(
                     filtered_rows, col_window
                 )
@@ -347,42 +380,42 @@ class HyperspectralDenoising:
                 denoised_image[:, :, band] = filtered_both
 
             self.logger.info(
-                f"Шумоподавление Савицкого-Голея завершено. Обработано {bands} каналов"
+                f"Savitzky-Golay denoising completed. Processed {bands} channels"
             )
             return denoised_image
 
         except Exception as e:
-            self.logger.error(f"Ошибка шумоподавления Савицкого-Голея: {e}")
-            return image_data
+            self.logger.error(f"Error in Savitzky-Golay denoising: {e}")
+            raise
 
     def _vectorized_savgol_filter_rows(
         self, band_data: np.ndarray, window_length: int
     ) -> np.ndarray:
         """
-        Векторизованное применение фильтра Савицкого-Голея по строкам
+        Vectorized application of Savitzky-Golay filter by rows.
 
         Args:
-            band_data: Данные канала (2D массив)
-            window_length: Длина окна фильтра
+            band_data: Channel data (2D array)
+            window_length: Filter window length
 
         Returns:
-            Отфильтрованные данные
+            Filtered data
         """
         filtered_rows = np.zeros_like(band_data)
-        polyorder = min(3, window_length - 1)
+        polyorder = min(DEFAULT_SAVGOL_POLYORDER, window_length - 1)
 
-        # Обработка строк с проверкой на NaN/Inf
+        # Process rows with NaN/Inf check
         valid_row_mask = ~np.all(np.isnan(band_data) | np.isinf(band_data), axis=1)
 
         if np.any(valid_row_mask):
-            # Применяем фильтр к валидным строкам с векторизацией
+            # Apply filter to valid rows with vectorization
             valid_rows = band_data[valid_row_mask]
 
-            # Векторизованная обработка строк
+            # Vectorized row processing
             for i in range(valid_rows.shape[0]):
                 row_data = valid_rows[i, :]
                 if np.any(np.isnan(row_data)) or np.any(np.isinf(row_data)):
-                    # Интерполяция для восстановления пропущенных значений
+                    # Interpolation to restore missing values
                     valid_mask = ~np.isnan(row_data) & ~np.isinf(row_data)
                     if np.sum(valid_mask) >= window_length:
                         row_data = row_data.copy()
@@ -400,10 +433,10 @@ class HyperspectralDenoising:
                         row_data, window_length=window_length, polyorder=polyorder
                     )
                 except Exception as e:
-                    self.logger.warning(f"Ошибка фильтрации строки: {e}")
+                    self.logger.warning(f"Error filtering row: {e}")
                     filtered_rows[np.where(valid_row_mask)[0][i], :] = row_data
 
-        # Копируем невалидные строки без изменений
+        # Copy invalid rows without changes
         filtered_rows[~valid_row_mask] = band_data[~valid_row_mask]
 
         return filtered_rows
@@ -412,30 +445,30 @@ class HyperspectralDenoising:
         self, band_data: np.ndarray, window_length: int
     ) -> np.ndarray:
         """
-        Векторизованное применение фильтра Савицкого-Голея по столбцам
+        Vectorized application of Savitzky-Golay filter by columns.
 
         Args:
-            band_data: Данные канала (2D массив)
-            window_length: Длина окна фильтра
+            band_data: Channel data (2D array)
+            window_length: Filter window length
 
         Returns:
-            Отфильтрованные данные
+            Filtered data
         """
         filtered_cols = np.zeros_like(band_data)
-        polyorder = min(3, window_length - 1)
+        polyorder = min(DEFAULT_SAVGOL_POLYORDER, window_length - 1)
 
-        # Обработка столбцов с проверкой на NaN/Inf
+        # Process columns with NaN/Inf check
         valid_col_mask = ~np.all(np.isnan(band_data) | np.isinf(band_data), axis=0)
 
         if np.any(valid_col_mask):
-            # Применяем фильтр к валидным столбцам с векторизацией
+            # Apply filter to valid columns with vectorization
             valid_cols = band_data[:, valid_col_mask]
 
-            # Векторизованная обработка столбцов
+            # Vectorized column processing
             for j in range(valid_cols.shape[1]):
                 col_data = valid_cols[:, j]
                 if np.any(np.isnan(col_data)) or np.any(np.isinf(col_data)):
-                    # Интерполяция для восстановления пропущенных значений
+                    # Interpolation to restore missing values
                     valid_mask = ~np.isnan(col_data) & ~np.isinf(col_data)
                     if np.sum(valid_mask) >= window_length:
                         col_data = col_data.copy()
@@ -453,30 +486,30 @@ class HyperspectralDenoising:
                         col_data, window_length=window_length, polyorder=polyorder
                     )
                 except Exception as e:
-                    self.logger.warning(f"Ошибка фильтрации столбца: {e}")
+                    self.logger.warning(f"Error filtering column: {e}")
                     filtered_cols[:, np.where(valid_col_mask)[0][j]] = col_data
 
-        # Копируем невалидные столбцы без изменений
+        # Copy invalid columns without changes
         filtered_cols[:, ~valid_col_mask] = band_data[:, ~valid_col_mask]
 
         return filtered_cols
 
     def _fallback_savgol_denoising(self, image_data: np.ndarray) -> np.ndarray:
         """
-        Запасной метод шумоподавления Савицкого-Голея с циклами (используется при ошибках)
+        Fallback Savitzky-Golay denoising method with loops (used when errors occur).
 
         Args:
-            image_data: Входные данные изображения
+            image_data: Input image data
 
         Returns:
-            Данные после шумоподавления
+            Denoised data
         """
         try:
             rows, cols, bands = image_data.shape
             denoised_image = np.zeros_like(image_data)
 
-            row_window = min(11, cols)
-            col_window = min(11, rows)
+            row_window = min(DEFAULT_SAVGOL_WINDOW, cols)
+            col_window = min(DEFAULT_SAVGOL_WINDOW, rows)
 
             if row_window % 2 == 0:
                 row_window -= 1
@@ -486,14 +519,14 @@ class HyperspectralDenoising:
             for band in range(bands):
                 band_data = image_data[:, :, band]
 
-                # Применение фильтра Савицкого-Голея к каждой строке и столбцу
+                # Apply Savitzky-Golay filter to each row and column
                 filtered_rows = np.zeros_like(band_data)
                 for i in range(rows):
                     try:
                         filtered_rows[i, :] = savgol_filter(
                             band_data[i, :],
                             window_length=row_window,
-                            polyorder=min(3, row_window - 1),
+                            polyorder=min(DEFAULT_SAVGOL_POLYORDER, row_window - 1),
                         )
                     except Exception:
                         filtered_rows[i, :] = band_data[i, :]
@@ -504,7 +537,7 @@ class HyperspectralDenoising:
                         filtered_both[:, j] = savgol_filter(
                             filtered_rows[:, j],
                             window_length=col_window,
-                            polyorder=min(3, col_window - 1),
+                            polyorder=min(DEFAULT_SAVGOL_POLYORDER, col_window - 1),
                         )
                     except Exception:
                         filtered_both[:, j] = filtered_rows[:, j]
@@ -514,32 +547,32 @@ class HyperspectralDenoising:
             return denoised_image
 
         except Exception as e:
-            self.logger.error(f"Ошибка в запасном методе шумоподавления: {e}")
+            self.logger.error(f"Error in fallback denoising method: {e}")
             return image_data
 
     def calculate_denoising_statistics(
         self, original_data: np.ndarray, denoised_data: np.ndarray
     ) -> Dict[str, Any]:
         """
-        Расчет статистики шумоподавления
+        Calculate denoising statistics.
 
         Args:
-            original_data: Исходные данные
-            denoised_data: Данные после шумоподавления
+            original_data: Original data
+            denoised_data: Denoised data
 
         Returns:
-            Словарь со статистикой шумоподавления
+            Dictionary with denoising statistics
         """
         try:
             if original_data is None or denoised_data is None:
-                raise ValueError("Входные данные не могут быть None")
+                raise ValueError("Input data cannot be None")
 
             if original_data.shape != denoised_data.shape:
                 raise ValueError(
-                    "Формы исходных и обработанных данных должны совпадать"
+                    "Original and processed data shapes must match"
                 )
 
-            # Удаление NaN и Inf значений
+            # Remove NaN and Inf values
             valid_mask = (
                 ~np.isnan(original_data)
                 & ~np.isinf(original_data)
@@ -548,12 +581,12 @@ class HyperspectralDenoising:
             )
 
             if not np.any(valid_mask):
-                return {"error": "Нет валидных данных для анализа"}
+                return {"error": "No valid data for analysis"}
 
             orig_valid = original_data[valid_mask]
             denoised_valid = denoised_data[valid_mask]
 
-            # Расчет SNR до и после
+            # Calculate SNR before and after
             def calculate_snr(data):
                 signal = np.mean(data)
                 noise = np.std(data)
@@ -584,5 +617,5 @@ class HyperspectralDenoising:
             return statistics
 
         except Exception as e:
-            self.logger.error(f"Ошибка расчета статистики шумоподавления: {e}")
+            self.logger.error(f"Error calculating denoising statistics: {e}")
             return {"error": str(e)}

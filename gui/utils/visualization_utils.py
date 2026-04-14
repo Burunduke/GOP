@@ -1,5 +1,5 @@
 """
-Утилиты визуализации для GUI приложения GOP
+Visualization utilities for GOP GUI application
 """
 
 import numpy as np
@@ -11,14 +11,14 @@ import matplotlib.colors as mcolors
 
 def create_colormap(name: str, n_colors: int = 256) -> List[Tuple[float, float, float]]:
     """
-    Создание цветовой карты
+    Create color map
     
     Args:
-        name: Название цветовой схемы
-        n_colors: Количество цветов
+        name: Color scheme name
+        n_colors: Number of colors
         
     Returns:
-        Список RGB кортежей
+        List of RGB tuples
     """
     try:
         if name == 'viridis':
@@ -40,50 +40,50 @@ def create_colormap(name: str, n_colors: int = 256) -> List[Tuple[float, float, 
         elif name == 'terrain':
             cmap = plt.cm.terrain
         else:
-            cmap = plt.cm.viridis  # По умолчанию
+            cmap = plt.cm.viridis  # Default
         
-        # Получение цветов и конвертация в RGB
+        # Get colors and convert to RGB
         colors = []
         for i in range(n_colors):
             rgba = cmap(i / (n_colors - 1))
-            rgb = (rgba[0], rgba[1], rgba[2])  # Удаление альфа-канала
+            rgb = (rgba[0], rgba[1], rgba[2])  # Remove alpha channel
             colors.append(rgb)
         
         return colors
         
     except Exception:
-        # Возврат базовой цветовой схемы в случае ошибки
+        # Return basic color scheme in case of error
         return [(i/255, i/255, i/255) for i in range(n_colors)]
 
 
 def apply_colormap(data: np.ndarray, colormap_name: str = 'viridis', 
                    vmin: Optional[float] = None, vmax: Optional[float] = None) -> np.ndarray:
     """
-    Применение цветовой карты к данным
+    Apply color map to data
     
     Args:
-        data: Входные данные
-        colormap_name: Название цветовой схемы
-        vmin: Минимальное значение для нормализации
-        vmax: Максимальное значение для нормализации
+        data: Input data
+        colormap_name: Color scheme name
+        vmin: Minimum value for normalization
+        vmax: Maximum value for normalization
         
     Returns:
-        RGB массив
+        RGB array
     """
     try:
-        # Нормализация данных
+        # Normalize data
         if vmin is None:
             vmin = np.nanmin(data)
         if vmax is None:
             vmax = np.nanmax(data)
         
-        # Обработка случая с одинаковыми значениями
+        # Handle case with identical values
         if vmax == vmin:
             normalized_data = np.zeros_like(data)
         else:
             normalized_data = (data - vmin) / (vmax - vmin)
         
-        # Применение цветовой карты
+        # Apply color map
         if colormap_name == 'viridis':
             cmap = plt.cm.viridis
         elif colormap_name == 'plasma':
@@ -97,12 +97,12 @@ def apply_colormap(data: np.ndarray, colormap_name: str = 'viridis',
         
         rgb_array = cmap(normalized_data)
         
-        # Удаление альфа-канала
+        # Remove alpha channel
         return rgb_array[:, :, :3]
         
     except Exception as e:
-        print(f"Ошибка применения цветовой карты: {e}")
-        # Возврат градации серого в случае ошибки
+        print(f"Error applying color map: {e}")
+        # Return grayscale in case of error
         gray_data = np.zeros((data.shape[0], data.shape[1], 3))
         gray_data[:, :, 0] = gray_data[:, :, 1] = gray_data[:, :, 2] = data
         return gray_data
@@ -113,26 +113,26 @@ def create_heatmap_figure(data: np.ndarray, x_coords: Optional[np.ndarray] = Non
                          colorscale: str = 'viridis',
                          title: str = "Тепловая карта") -> go.Figure:
     """
-    Создание фигуры тепловой карты для Plotly
+    Create heatmap figure for Plotly
     
     Args:
-        data: 2D массив данных
-        x_coords: Координаты по оси X
-        y_coords: Координаты по оси Y
-        colorscale: Цветовая схема
-        title: Заголовок
+        data: 2D data array
+        x_coords: X-axis coordinates
+        y_coords: Y-axis coordinates
+        colorscale: Color scheme
+        title: Title
         
     Returns:
-        Фигура Plotly
+        Plotly figure
     """
     try:
-        # Создание координат если не предоставлены
+        # Create coordinates if not provided
         if x_coords is None:
             x_coords = np.arange(data.shape[1])
         if y_coords is None:
             y_coords = np.arange(data.shape[0])
         
-        # Конвертация цветовой схемы matplotlib в plotly
+        # Convert matplotlib color scheme to plotly
         plotly_colorscales = {
             'viridis': 'Viridis',
             'plasma': 'Plasma',
@@ -152,22 +152,22 @@ def create_heatmap_figure(data: np.ndarray, x_coords: Optional[np.ndarray] = Non
             x=x_coords,
             y=y_coords,
             colorscale=plotly_colorscale,
-            colorbar=dict(title="Значение"),
-            hovertemplate='X: %{x}<br>Y: %{y}<br>Значение: %{z:.3f}<extra></extra>'
+            colorbar=dict(title="Value"),
+            hovertemplate='X: %{x}<br>Y: %{y}<br>Value: %{z:.3f}<extra></extra>'
         ))
         
         fig.update_layout(
             title=title,
-            xaxis_title="Координата X",
-            yaxis_title="Координата Y",
+            xaxis_title="X Coordinate",
+            yaxis_title="Y Coordinate",
             margin=dict(l=50, r=50, t=50, b=50)
         )
         
         return fig
         
     except Exception as e:
-        print(f"Ошибка создания тепловой карты: {e}")
-        # Возврат пустой фигуры
+        print(f"Error creating heatmap: {e}")
+        # Return empty figure
         return go.Figure()
 
 
@@ -176,27 +176,27 @@ def create_histogram_figure(data: np.ndarray, bins: int = 50,
                           x_label: str = "Значение",
                           y_label: str = "Частота") -> go.Figure:
     """
-    Создание фигуры гистограммы для Plotly
+    Create histogram figure for Plotly
     
     Args:
-        data: 1D массив данных
-        bins: Количество бинов
-        title: Заголовок
-        x_label: Подпись оси X
-        y_label: Подпись оси Y
+        data: 1D data array
+        bins: Number of bins
+        title: Title
+        x_label: X-axis label
+        y_label: Y-axis label
         
     Returns:
-        Фигура Plotly
+        Plotly figure
     """
     try:
-        # Удаление NaN значений
+        # Remove NaN values
         clean_data = data[~np.isnan(data)]
         
         fig = go.Figure(data=go.Histogram(
             x=clean_data,
             nbinsx=bins,
             marker_color='rgba(55, 128, 191, 0.7)',
-            hovertemplate='Диапазон: %{x}<br>Количество: %{y}<extra></extra>'
+            hovertemplate='Range: %{x}<br>Count: %{y}<extra></extra>'
         ))
         
         fig.update_layout(
@@ -209,7 +209,7 @@ def create_histogram_figure(data: np.ndarray, bins: int = 50,
         return fig
         
     except Exception as e:
-        print(f"Ошибка создания гистограммы: {e}")
+        print(f"Error creating histogram: {e}")
         return go.Figure()
 
 
@@ -218,20 +218,20 @@ def create_scatter_figure(x_data: np.ndarray, y_data: np.ndarray,
                          x_label: str = "X",
                          y_label: str = "Y") -> go.Figure:
     """
-    Создание фигуры диаграммы рассеяния для Plotly
+    Create scatter plot figure for Plotly
     
     Args:
-        x_data: Данные по оси X
-        y_data: Данные по оси Y
-        title: Заголовок
-        x_label: Подпись оси X
-        y_label: Подпись оси Y
+        x_data: X-axis data
+        y_data: Y-axis data
+        title: Title
+        x_label: X-axis label
+        y_label: Y-axis label
         
     Returns:
-        Фигура Plotly
+        Plotly figure
     """
     try:
-        # Удаление NaN значений
+        # Remove NaN values
         mask = ~(np.isnan(x_data) | np.isnan(y_data))
         clean_x = x_data[mask]
         clean_y = y_data[mask]
@@ -260,7 +260,7 @@ def create_scatter_figure(x_data: np.ndarray, y_data: np.ndarray,
         return fig
         
     except Exception as e:
-        print(f"Ошибка создания диаграммы рассеяния: {e}")
+        print(f"Error creating scatter plot: {e}")
         return go.Figure()
 
 
@@ -268,15 +268,15 @@ def create_spectral_profile_figure(wavelengths: np.ndarray,
                                  reflectance: np.ndarray,
                                  title: str = "Спектральный профиль") -> go.Figure:
     """
-    Создание фигуры спектрального профиля для Plotly
+    Create spectral profile figure for Plotly
     
     Args:
-        wavelengths: Длины волн
-        reflectance: Значения отражения
-        title: Заголовок
+        wavelengths: Wavelengths
+        reflectance: Reflectance values
+        title: Title
         
     Returns:
-        Фигура Plotly
+        Plotly figure
     """
     try:
         fig = go.Figure(data=go.Scatter(
@@ -284,35 +284,35 @@ def create_spectral_profile_figure(wavelengths: np.ndarray,
             y=reflectance,
             mode='lines',
             line=dict(color='blue', width=2),
-            hovertemplate='Длина волны: %{x} нм<br>Отражение: %{y:.3f}<extra></extra>'
+            hovertemplate='Wavelength: %{x} nm<br>Reflectance: %{y:.3f}<extra></extra>'
         ))
         
         fig.update_layout(
             title=title,
-            xaxis_title="Длина волны (нм)",
-            yaxis_title="Отражение",
+            xaxis_title="Wavelength (nm)",
+            yaxis_title="Reflectance",
             margin=dict(l=50, r=50, t=50, b=50)
         )
         
         return fig
         
     except Exception as e:
-        print(f"Ошибка создания спектрального профиля: {e}")
+        print(f"Error creating spectral profile: {e}")
         return go.Figure()
 
 
 def calculate_statistics(data: np.ndarray) -> Dict[str, float]:
     """
-    Расчет базовой статистики для данных
+    Calculate basic statistics for data
     
     Args:
-        data: Входные данные
+        data: Input data
         
     Returns:
-        Словарь со статистикой
+        Dictionary with statistics
     """
     try:
-        # Удаление NaN значений
+        # Remove NaN values
         clean_data = data[~np.isnan(data)]
         
         if len(clean_data) == 0:
@@ -335,7 +335,7 @@ def calculate_statistics(data: np.ndarray) -> Dict[str, float]:
         }
         
     except Exception as e:
-        print(f"Ошибка расчета статистики: {e}")
+        print(f"Error calculating statistics: {e}")
         return {
             'mean': 0.0,
             'std': 0.0,
@@ -349,16 +349,16 @@ def calculate_statistics(data: np.ndarray) -> Dict[str, float]:
 def create_legend_items(colormap_name: str, vmin: float, vmax: float, 
                        n_items: int = 5) -> List[Dict[str, Any]]:
     """
-    Создание элементов легенды для цветовой карты
+    Create legend items for color map
     
     Args:
-        colormap_name: Название цветовой схемы
-        vmin: Минимальное значение
-        vmax: Максимальное значение
-        n_items: Количество элементов легенды
+        colormap_name: Color scheme name
+        vmin: Minimum value
+        vmax: Maximum value
+        n_items: Number of legend items
         
     Returns:
-        Список элементов легенды
+        List of legend items
     """
     try:
         colors = create_colormap(colormap_name, n_items)
@@ -375,23 +375,23 @@ def create_legend_items(colormap_name: str, vmin: float, vmax: float,
         return legend_items
         
     except Exception as e:
-        print(f"Ошибка создания легенды: {e}")
+        print(f"Error creating legend: {e}")
         return []
 
 
 def normalize_data(data: np.ndarray, method: str = 'minmax') -> np.ndarray:
     """
-    Нормализация данных
+    Normalize data
     
     Args:
-        data: Входные данные
-        method: Метод нормализации ('minmax', 'zscore', 'robust')
+        data: Input data
+        method: Normalization method ('minmax', 'zscore', 'robust')
         
     Returns:
-        Нормализованные данные
+        Normalized data
     """
     try:
-        # Удаление NaN значений для расчета статистики
+        # Remove NaN values for statistics calculation
         clean_data = data[~np.isnan(data)]
         
         if len(clean_data) == 0:
@@ -416,25 +416,25 @@ def normalize_data(data: np.ndarray, method: str = 'minmax') -> np.ndarray:
             return (data - median) / mad
         
         else:
-            raise ValueError(f"Неизвестный метод нормализации: {method}")
+            raise ValueError(f"Unknown normalization method: {method}")
             
     except Exception as e:
-        print(f"Ошибка нормализации данных: {e}")
+        print(f"Error normalizing data: {e}")
         return data
 
 
 def create_colorbar_config(colormap_name: str, title: str = "Значение") -> Dict[str, Any]:
     """
-    Создание конфигурации цветовой полосы для Plotly
+    Create color bar configuration for Plotly
     
     Args:
-        colormap_name: Название цветовой схемы
-        title: Заголовок цветовой полосы
+        colormap_name: Color scheme name
+        title: Color bar title
         
     Returns:
-        Конфигурация цветовой полосы
+        Color bar configuration
     """
-    # Конвертация цветовой схемы matplotlib в plotly
+    # Convert matplotlib color scheme to plotly
     plotly_colorscales = {
         'viridis': 'Viridis',
         'plasma': 'Plasma',

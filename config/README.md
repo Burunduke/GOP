@@ -1,85 +1,85 @@
-# Документация по конфигурации GOP
+# GOP Configuration Documentation
 
-## Обзор
+## Overview
 
-Этот документ предоставляет полную документацию по системе конфигурации GOP (Геопространственная обработка ортофотопланов). Приложение использует иерархический подход к конфигурации с файлами YAML и переменными окружения.
+This document provides complete documentation for the GOP (Geospatial Orthophoto Processing) configuration system. The application uses a hierarchical configuration approach with YAML files and environment variables.
 
-## Файлы конфигурации
+## Configuration Files
 
-### Основной файл конфигурации
-- **Файл**: [`config/config.yaml`](config/config.yaml)
-- **Формат**: YAML
-- **Назначение**: Основная конфигурация приложения с параметрами научной обработки
+### Main Configuration File
+- **File**: [`config/config.yaml`](config/config.yaml)
+- **Format**: YAML
+- **Purpose**: Main application configuration with scientific processing parameters
 
-### Конфигурация окружения
-- **Файл**: [`.env.example`](.env.example) (шаблон) → `.env` (фактический)
-- **Формат**: Пары ключ-значение
-- **Назначение**: Настройки и секреты для конкретного окружения
+### Environment Configuration
+- **File**: [`.env.example`](.env.example) (template) → `.env` (actual)
+- **Format**: Key-value pairs
+- **Purpose**: Environment-specific settings and secrets
 
-## Структура конфигурации
+## Configuration Structure
 
-### Конфигурация обработки
+### Processing Configuration
 ```yaml
 processing:
-  max_image_size: 15000           # Максимальный размер изображения в пикселях
-  compression_ratio: 0.125        # Коэффициент сжатия для промежуточных файлов
-  batch_size: 32                  # Размер пакета обработки
-  num_workers: 4                  # Количество параллельных воркеров
-  orthophoto_resolution: 0.05     # Разрешение ортофотоплана в метрах
-  dem_resolution: 0.1             # Разрешение DEM в метрах
-  feature_quality: "high"         # Качество извлечения признаков
-  matcher_neighbors: 8            # Количество соседей для сопоставления признаков
-  odm_timeout: 7200               # Таймаут OpenDroneMap в секундах (2 часа)
+  max_image_size: 15000           # Maximum image size in pixels
+  compression_ratio: 0.125        # Compression ratio for intermediate files
+  batch_size: 32                  # Processing batch size
+  num_workers: 4                  # Number of parallel workers
+  orthophoto_resolution: 0.05     # Orthophoto resolution in meters
+  dem_resolution: 0.1             # DEM resolution in meters
+  feature_quality: "high"         # Feature extraction quality
+  matcher_neighbors: 8            # Number of neighbors for feature matching
+  odm_timeout: 7200               # OpenDroneMap timeout in seconds (2 hours)
 ```
 
-#### Радиометрическая коррекция
+#### Radiometric Correction
 ```yaml
 radiometric_correction:
   method: "empirical_line"        # dark_current, empirical_line, flat_field
-  dark_percentile: 1              # Процентиль для обнаружения темных пикселей
-  bright_percentile: 99           # Процентиль для обнаружения ярких пикселей
+  dark_percentile: 1              # Percentile for dark pixel detection
+  bright_percentile: 99           # Percentile for bright pixel detection
 ```
 
-#### Атмосферная коррекция
+#### Atmospheric Correction
 ```yaml
 atmospheric_correction:
   enabled: true
   method: "simplified"            # simplified, empirical_line, modtran
 ```
 
-#### Снижение шума
+#### Noise Reduction
 ```yaml
 noise_reduction:
   method: "pca"                   # pca, mnf, wavelet, savgol
-  n_components: 0.95              # Коэффициент компонентов PCA
-  wavelet_type: "db4"             # Тип вейвлета для вейвлет-шумоподавления
-  wavelet_levels: 2               # Уровни декомпозиции вейвлета
-  savgol_window: 11               # Размер окна Савицкого-Голея
-  savgol_polyorder: 3             # Порядок полинома Савицкого-Голея
+  n_components: 0.95              # PCA components ratio
+  wavelet_type: "db4"             # Wavelet type for wavelet denoising
+  wavelet_levels: 2               # Wavelet decomposition levels
+  savgol_window: 11               # Savitzky-Golay window size
+  savgol_polyorder: 3             # Savitzky-Golay polynomial order
 ```
 
-### Конфигурация сегментации
+### Segmentation Configuration
 ```yaml
 segmentation:
-  model_path: "models/deeplabv3_resnet101.pth"
+  model_path: "models/segmentation/best_deeplabv3plus_resnet50_voc_os16.pth"
   device: "auto"                  # auto, cpu, cuda
-  confidence_threshold: 0.5       # Минимальная уверенность для сегментации
+  confidence_threshold: 0.5       # Minimum confidence for segmentation
 ```
 
 #### Cascade PSP (CascadePSP)
 ```yaml
 cascade_psp:
   enabled: true
-  l_parameter: 500                # Параметр L для CascadePSP
-  refinement_threshold: 0.7       # Порог уточнения
+  l_parameter: 500                # L parameter for CascadePSP
+  refinement_threshold: 0.7       # Refinement threshold
 ```
 
-### Вегетационные индексы
+### Vegetation Indices
 ```yaml
 indices:
   sensor_types: ["RGB", "Multispectral", "Hyperspectral"]
   
-  # Научная классификация индексов
+  # Scientific index classification
   index_groups:
     greenness: ["GNDVI", "MCARI", "MNLI", "OSAVI", "TVI", "NDVI"]
     stress: ["SIPI2", "mARI", "PRI", "CRI"]
@@ -90,148 +90,148 @@ indices:
   default_indices: ["GNDVI", "MCARI", "MNLI", "OSAVI", "TVI", "SIPI2", "mARI", "NDWI", "MSI"]
 ```
 
-### Научный анализ
+### Scientific Analysis
 ```yaml
 scientific_analysis:
   enabled: true
   
   statistics:
-    confidence_level: 0.95        # Уровень статистической уверенности
-    outlier_detection: true       # Включить обнаружение выбросов
+    confidence_level: 0.95        # Statistical confidence level
+    outlier_detection: true       # Enable outlier detection
     outlier_method: "iqr"         # iqr, zscore, isolation_forest
   
   correlation:
     method: "pearson"             # pearson, spearman, kendall
-    threshold: 0.7                # Порог корреляции
-    significance_test: true       # Статистическое тестирование значимости
+    threshold: 0.7                # Correlation threshold
+    significance_test: true       # Statistical significance testing
   
   spatial:
-    morans_i: true                # Пространственная автокорреляция Морана
-    hotspot_analysis: true        # Анализ горячих точек
-    fragmentation_index: true     # Индекс фрагментации ландшафта
-    spatial_autocorrelation: true # Общая пространственная автокорреляция
+    morans_i: true                # Moran's spatial autocorrelation
+    hotspot_analysis: true        # Hotspot analysis
+    fragmentation_index: true     # Landscape fragmentation index
+    spatial_autocorrelation: true # General spatial autocorrelation
 ```
 
-### Конфигурация вывода
+### Output Configuration
 ```yaml
 output:
-  results_dir: "results"          # Выходная директория для результатов
-  save_intermediate: true         # Сохранять промежуточные файлы обработки
-  output_format: "GeoTIFF"        # Формат выходного файла
+  results_dir: "results"          # Output directory for results
+  save_intermediate: true         # Save intermediate processing files
+  output_format: "GeoTIFF"        # Output file format
   
   scientific_reports:
     enabled: true
     format: "json"                # json, csv, excel
-    include_statistics: true      # Включать статистический анализ
-    include_correlations: true    # Включать матрицы корреляций
-    include_spatial_analysis: true # Включать пространственный анализ
+    include_statistics: true      # Include statistical analysis
+    include_correlations: true    # Include correlation matrices
+    include_spatial_analysis: true # Include spatial analysis
 ```
 
-### Конфигурация производительности
+### Performance Configuration
 ```yaml
 performance:
   memory:
-    max_memory_usage: "8GB"       # Максимальное использование памяти
-    chunk_size: 1024              # Размер порции обработки
-    memory_mapping: true          # Использовать memory mapping для больших файлов
+    max_memory_usage: "8GB"       # Maximum memory usage
+    chunk_size: 1024              # Processing chunk size
+    memory_mapping: true          # Use memory mapping for large files
   
   parallel:
-    enabled: true                 # Включить параллельную обработку
-    max_workers: 4                # Максимум параллельных воркеров
-    chunk_processing: true        # Обрабатывать данные порциями
+    enabled: true                 # Enable parallel processing
+    max_workers: 4                # Maximum parallel workers
+    chunk_processing: true        # Process data in chunks
   
   cache:
-    enabled: true                 # Включить кэширование
-    cache_dir: "cache"            # Директория кэша
-    max_cache_size: "1GB"         # Максимальный размер кэша
-    max_memory_entries: 100       # Максимум записей в памяти
-    ttl: 3600                     # Время жизни в секундах (1 час)
-    cleanup_interval: 86400       # Интервал очистки кэша (24 часа)
-    compression: true             # Включить сжатие кэша
-    stats_enabled: true           # Включить статистику кэша
+    enabled: true                 # Enable caching
+    cache_dir: "cache"            # Cache directory
+    max_cache_size: "1GB"         # Maximum cache size
+    max_memory_entries: 100       # Maximum memory entries
+    ttl: 3600                     # Time to live in seconds (1 hour)
+    cleanup_interval: 86400       # Cache cleanup interval (24 hours)
+    compression: true             # Enable cache compression
+    stats_enabled: true           # Enable cache statistics
 ```
 
-### Конфигурация логирования
+### Logging Configuration
 ```yaml
 logging:
   level: "INFO"                   # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  file: "logs/gop.log"           # Путь к файлу лога
-  max_size: "10MB"               # Максимальный размер файла лога
-  backup_count: 5                 # Количество резервных файлов
+  file: "logs/gop.log"           # Log file path
+  max_size: "10MB"               # Maximum log file size
+  backup_count: 5                 # Number of backup files
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   
   scientific_logging:
     enabled: true
-    log_processing_steps: true    # Логировать детальные шаги обработки
-    log_quality_metrics: true     # Логировать метрики качества
-    log_performance_metrics: true # Логировать метрики производительности
+    log_processing_steps: true    # Log detailed processing steps
+    log_quality_metrics: true     # Log quality metrics
+    log_performance_metrics: true # Log performance metrics
 ```
 
-### Переменные окружения (.env)
+### Environment Variables (.env)
 
 ```bash
-# Режим отладки (True/False)
+# Debug mode (True/False)
 DEBUG=False
 
-# Секретный ключ для управления сессиями
+# Secret key for session management
 SECRET_KEY=your-secure-secret-key-here
 
-# Конфигурация сервера
+# Server configuration
 HOST=0.0.0.0
 PORT=8050
 
-# Конфигурация базы данных
+# Database configuration
 DATABASE_URL=postgresql://username:password@localhost/gop_db
 
-# Конфигурация кэша
+# Cache configuration
 REDIS_URL=redis://localhost:6379/0
 
-# Настройки загрузки файлов
+# File upload settings
 MAX_UPLOAD_SIZE=100MB
 UPLOAD_FOLDER=./uploads
 
-# Настройки обработки
+# Processing settings
 CACHE_ENABLED=True
 CACHE_DIR=./cache
 
-# Уровень логирования
+# Logging level
 LOG_LEVEL=INFO
 
-# Внешние сервисы
+# External services
 ODM_PATH=/opt/opendronemap
 
-# Настройки безопасности
+# Security settings
 CSRF_ENABLED=True
 SESSION_TIMEOUT=3600
 ```
 
-## Порядок загрузки конфигурации
+## Configuration Loading Order
 
-1. **Значения по умолчанию** - Жестко закодированы в [`src/core/config.py`](src/core/config.py)
-2. **YAML конфигурация** - [`config/config.yaml`](config/config.yaml)
-3. **Переменные окружения** - Файл `.env`
-4. **Аргументы командной строки** - Переопределения времени выполнения
+1. **Default Values** - Hardcoded in [`src/core/config.py`](src/core/config.py)
+2. **YAML Configuration** - [`config/config.yaml`](config/config.yaml)
+3. **Environment Variables** - `.env` file
+4. **Command Line Arguments** - Runtime overrides
 
-## Валидация и контроль качества
+## Validation and Quality Control
 
 ```yaml
 validation:
   enabled: true
   
   data_validation:
-    check_missing_values: true    # Проверять на отсутствующие данные
-    check_outliers: true          # Проверять на статистические выбросы
-    check_spectral_consistency: true # Проверять спектральную согласованность
-    min_snr: 10                   # Минимальное отношение сигнал-шум
+    check_missing_values: true    # Check for missing data
+    check_outliers: true          # Check for statistical outliers
+    check_spectral_consistency: true # Check spectral consistency
+    min_snr: 10                   # Minimum signal-to-noise ratio
   
   result_validation:
-    check_georeference: true      # Валидировать геопривязку
-    check_projection: true        # Валидировать систему координат
-    check_data_range: true        # Валидировать диапазоны значений данных
-    check_nodata_values: true     # Проверять на значения no-data
+    check_georeference: true      # Validate georeferencing
+    check_projection: true        # Validate coordinate system
+    check_data_range: true        # Validate data value ranges
+    check_nodata_values: true     # Check for no-data values
 ```
 
-## Интеграция внешних инструментов
+## External Tools Integration
 
 ```yaml
 external_tools:
@@ -242,63 +242,63 @@ external_tools:
   
   gdal:
     config_options:
-      GDAL_CACHEMAX: "512"        # Размер кэша GDAL в MB
-      GDAL_DATA: "/usr/share/gdal" # Директория данных GDAL
-      CPL_DEBUG: "OFF"            # Режим отладки GDAL
+      GDAL_CACHEMAX: "512"        # GDAL cache size in MB
+      GDAL_DATA: "/usr/share/gdal" # GDAL data directory
+      CPL_DEBUG: "OFF"            # GDAL debug mode
 ```
 
-## Экспериментальные функции
+## Experimental Features
 
 ```yaml
 experimental:
-  enabled: false                  # Включить экспериментальные функции
+  enabled: false                  # Enable experimental features
   
   machine_learning:
     enabled: false
-    auto_classification: false    # Автоматическая классификация
-    anomaly_detection: false      # Обнаружение аномалий
+    auto_classification: false    # Automatic classification
+    anomaly_detection: false      # Anomaly detection
   
   cloud_processing:
     enabled: false
     provider: "aws"               # aws, gcp, azure
-    auto_scaling: false           # Возможность автоскейлинга
+    auto_scaling: false           # Auto-scaling capability
 ```
 
-## Лучшие практики
+## Best Practices
 
-### Оптимизация производительности
-1. Настройте `batch_size` и `num_workers` в зависимости от доступной памяти
-2. Используйте `memory_mapping: true` для больших наборов данных
-3. Включите кэширование для повторных операций
-4. Установите соответствующий `chunk_size` для сред с ограниченной памятью
+### Performance Optimization
+1. Configure `batch_size` and `num_workers` based on available memory
+2. Use `memory_mapping: true` for large datasets
+3. Enable caching for repeated operations
+4. Set appropriate `chunk_size` for memory-constrained environments
 
-### Контроль качества
-1. Включите все проверки валидации для продакшен использования
-2. Установите соответствующий `confidence_threshold` для сегментации
-3. Настройте обнаружение выбросов на основе характеристик данных
+### Quality Control
+1. Enable all validation checks for production use
+2. Set appropriate `confidence_threshold` for segmentation
+3. Configure outlier detection based on data characteristics
 
-### Научная точность
-1. Выбирайте соответствующие методы коррекции для вашего типа сенсора
-2. Валидируйте настройки спектральной калибровки
-3. Настройте параметры статистического анализа для ваших исследовательских нужд
+### Scientific Accuracy
+1. Choose appropriate correction methods for your sensor type
+2. Validate spectral calibration settings
+3. Configure statistical analysis parameters for your research needs
 
-## Устранение неполадок
+## Troubleshooting
 
-### Распространенные проблемы
+### Common Issues
 
-1. **Ошибки памяти**: Уменьшите `max_memory_usage` или `batch_size`
-2. **Медленная обработка**: Увеличьте `num_workers` или включите кэширование
-3. **Сбои сегментации**: Настройте `confidence_threshold`
-4. **Ошибки валидации**: Проверьте качество и формат входных данных
+1. **Memory Errors**: Reduce `max_memory_usage` or `batch_size`
+2. **Slow Processing**: Increase `num_workers` or enable caching
+3. **Segmentation Failures**: Adjust `confidence_threshold`
+4. **Validation Errors**: Check input data quality and format
 
-### Валидация конфигурации
+### Configuration Validation
 
-Система конфигурации включает встроенную валидацию. Недействительные настройки будут генерировать предупреждения или ошибки во время запуска.
+The configuration system includes built-in validation. Invalid settings will generate warnings or errors during startup.
 
-## Информация о версии
+## Version Information
 
-- **Версия конфигурации**: 2.0.0
-- **Последнее обновление**: 2026-04-12
-- **Совместимость**: GOP v2.0.0+
+- **Configuration Version**: 2.0.0
+- **Last Updated**: 2026-04-12
+- **Compatibility**: GOP v2.0.0+
 
-Для подробной документации API см. [Справочник API](../docs/api/index.rst).
+For detailed API documentation, see [API Reference](../docs/api/index.rst).

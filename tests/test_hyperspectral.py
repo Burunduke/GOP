@@ -1,5 +1,5 @@
 """
-Тесты для модуля обработки гиперспектральных данных
+Tests for hyperspectral data processing module
 """
 
 import unittest
@@ -7,30 +7,31 @@ import numpy as np
 import tempfile
 import os
 import shutil
+from typing import Any, Dict, Tuple
 from unittest.mock import patch, MagicMock
 from src.processing.hyperspectral import HyperspectralProcessor
 
 
 class TestHyperspectralProcessor(unittest.TestCase):
-    """Тесты процессора гиперспектральных данных"""
+    """Test cases for HyperspectralProcessor class"""
 
-    def setUp(self):
-        """Подготовка тестовых данных"""
+    def setUp(self) -> None:
+        """Set up test fixtures"""
         self.processor = HyperspectralProcessor()
         self.temp_dir = tempfile.mkdtemp()
 
-        # Создание тестового гиперспектрального файла
+        # Create test hyperspectral file
         self.test_bil_path = os.path.join(self.temp_dir, "test.bil")
         self.test_hdr_path = os.path.join(self.temp_dir, "test.hdr")
 
-        # Создание простого тестового изображения
+        # Create simple test image
         self.width, self.height, self.bands = 100, 100, 50
         test_data = np.random.randint(
             0, 1000, (self.height, self.width, self.bands), dtype=np.uint16
         )
         test_data.tofile(self.test_bil_path)
 
-        # Создание заголовка
+        # Create header
         hdr_content = f"""ENVI
 samples = {self.width}
 lines = {self.height}
@@ -45,49 +46,49 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         with open(self.test_hdr_path, "w") as f:
             f.write(hdr_content)
 
-    def tearDown(self):
-        """Очистка после тестов"""
+    def tearDown(self) -> None:
+        """Clean up after tests"""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_processor_initialization(self):
-        """Тест инициализации процессора"""
+    def test_processor_initialization(self) -> None:
+        """Test processor initialization"""
         self.assertIsInstance(self.processor, HyperspectralProcessor)
 
-    @patch("src.processing.hyperspectral.gdal.Open")
-    def test_read_hyperspectral_data(self, mock_gdal_open):
-        """Тест чтения гиперспектральных данных"""
-        # Настройка мока
+    @patch("osgeo.gdal.Open")
+    def test_read_hyperspectral_data(self, mock_gdal_open: MagicMock) -> None:
+        """Test reading hyperspectral data"""
+        # Mock setup
         mock_dataset = MagicMock()
         mock_dataset.RasterXSize = self.width
         mock_dataset.RasterYSize = self.height
         mock_dataset.RasterCount = self.bands
 
-        # Создание моковых данных для каждого канала
+        # Create mock data for each channel
         band_data = np.random.rand(self.height, self.width)
         mock_band = MagicMock()
         mock_band.ReadAsArray.return_value = band_data
         mock_dataset.GetRasterBand.return_value = mock_band
 
-        # Мок для метаданных
+        # Mock for metadata
         mock_dataset.GetMetadata.return_value = {
             "wavelength": "400, 410, 420, 430, 440, 450, 460, 470, 480, 490"
         }
 
         mock_gdal_open.return_value = mock_dataset
 
-        # Вызов метода
+        # Call method
         dataset, image_data, wavelengths = self.processor._read_hyperspectral_data(
             self.test_bil_path
         )
 
-        # Проверки
+        # Assertions
         self.assertEqual(image_data.shape, (self.height, self.width, self.bands))
         self.assertIsNotNone(wavelengths)
         mock_gdal_open.assert_called_once_with(self.test_bil_path)
 
-    def test_extract_wavelengths(self):
-        """Тест извлечения длин волн"""
-        # Создание мока датасета с метаданными
+    def test_extract_wavelengths(self) -> None:
+        """Test extracting wavelengths"""
+        # Create mock dataset with metadata
         mock_dataset = MagicMock()
         mock_dataset.GetMetadata.return_value = {
             "wavelength": "400, 410, 420, 430, 440, 450, 460, 470, 480, 490"
@@ -100,8 +101,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(wavelengths[0], 400)
         self.assertEqual(wavelengths[-1], 490)
 
-    def test_extract_wavelengths_no_metadata(self):
-        """Тест извлечения длин волн при отсутствии метаданных"""
+    def test_extract_wavelengths_no_metadata(self) -> None:
+        """Test extracting wavelengths when metadata is missing"""
         mock_dataset = MagicMock()
         mock_dataset.GetMetadata.return_value = {}
 
@@ -109,12 +110,12 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
         self.assertIsNone(wavelengths)
 
-    def test_analyze_data_quality(self):
-        """Тест анализа качества данных"""
-        # Создание тестовых данных
+    def test_analyze_data_quality(self) -> None:
+        """Test data quality analysis"""
+        # Create test data
         test_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
-        # Добавление некоторых NaN значений
+        # Add some NaN values
         test_data[10:20, 10:20, 0] = np.nan
 
         quality = self.processor._analyze_data_quality(test_data)
@@ -123,16 +124,16 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertIn("data_range", quality)
         self.assertIn("statistics", quality)
 
-        # Проверка статистики
+        # Check statistics
         stats = quality["statistics"]
         self.assertIn("mean", stats)
         self.assertIn("std", stats)
         self.assertIn("min", stats)
         self.assertIn("max", stats)
 
-    def test_calculate_snr(self):
-        """Тест расчета отношения сигнал/шум"""
-        # Создание тестовых данных с хорошим SNR
+    def test_calculate_snr(self) -> None:
+        """Test signal-to-noise ratio calculation"""
+        # Create test data with good SNR
         signal = np.ones((100, 100)) * 100
         noise = np.random.normal(0, 5, (100, 100))
         data = signal + noise
@@ -142,16 +143,16 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertIsInstance(snr, float)
         self.assertGreater(snr, 0)
 
-    def test_calculate_snr_empty_data(self):
-        """Тест расчета SNR для пустых данных"""
+    def test_calculate_snr_empty_data(self) -> None:
+        """Test SNR calculation for empty data"""
         empty_data = np.array([])
 
         with self.assertRaises(ValueError):
             self.processor._calculate_snr(empty_data)
 
-    def test_calculate_quality_score(self):
-        """Тест расчета оценки качества"""
-        data_quality = {
+    def test_calculate_quality_score(self) -> None:
+        """Test quality score calculation"""
+        data_quality: Dict[str, Any] = {
             "missing_values": {"nan_percentage": 5.0, "inf_percentage": 0.0},
             "overall_quality": {"average_snr": 20.0},
         }
@@ -162,9 +163,9 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertGreaterEqual(score, 0)
         self.assertLessEqual(score, 1)
 
-    def test_radiometric_correction(self):
-        """Тест радиометрической коррекции"""
-        # Создание тестовых данных
+    def test_radiometric_correction(self) -> None:
+        """Test radiometric correction"""
+        # Create test data
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
         wavelengths = np.linspace(400, 900, self.bands)
 
@@ -175,8 +176,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(corrected_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(corrected_data)))
 
-    def test_dark_current_correction(self):
-        """Тест коррекции темнового тока"""
+    def test_dark_current_correction(self) -> None:
+        """Test dark current correction"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         corrected_data = self.processor._dark_current_correction(image_data)
@@ -184,8 +185,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(corrected_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(corrected_data)))
 
-    def test_empirical_line_correction(self):
-        """Тест эмпирической коррекции"""
+    def test_empirical_line_correction(self) -> None:
+        """Test empirical line correction"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         corrected_data = self.processor._empirical_line_correction(image_data)
@@ -193,8 +194,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(corrected_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(corrected_data)))
 
-    def test_flat_field_correction(self):
-        """Тест коррекции плоского поля"""
+    def test_flat_field_correction(self) -> None:
+        """Test flat field correction"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         corrected_data = self.processor._flat_field_correction(image_data)
@@ -202,8 +203,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(corrected_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(corrected_data)))
 
-    def test_atmospheric_correction(self):
-        """Тест атмосферной коррекции"""
+    def test_atmospheric_correction(self) -> None:
+        """Test atmospheric correction"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
         wavelengths = np.linspace(400, 900, self.bands)
 
@@ -212,11 +213,11 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(corrected_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(corrected_data)))
 
-    def test_advanced_noise_reduction(self):
-        """Тест продвинутого шумоподавления"""
+    def test_advanced_noise_reduction(self) -> None:
+        """Test advanced noise reduction"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
-        # Добавление шума
+        # Add noise
         noise = np.random.normal(0, 0.05, image_data.shape)
         noisy_data = image_data + noise
 
@@ -227,8 +228,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(denoised_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(denoised_data)))
 
-    def test_pca_denoising(self):
-        """Тест PCA шумоподавления"""
+    def test_pca_denoising(self) -> None:
+        """Test PCA denoising"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         denoised_data = self.processor._pca_denoising(image_data, n_components=0.95)
@@ -236,8 +237,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(denoised_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(denoised_data)))
 
-    def test_mnf_denoising(self):
-        """Тест MNF шумоподавления"""
+    def test_mnf_denoising(self) -> None:
+        """Test MNF denoising"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         denoised_data = self.processor._mnf_denoising(image_data)
@@ -245,8 +246,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(denoised_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(denoised_data)))
 
-    def test_wavelet_denoising(self):
-        """Тест вейвлет-шумоподавления"""
+    def test_wavelet_denoising(self) -> None:
+        """Test wavelet denoising"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         denoised_data = self.processor._wavelet_denoising(image_data)
@@ -254,8 +255,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(denoised_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(denoised_data)))
 
-    def test_savgol_denoising(self):
-        """Тест Savgol шумоподавления"""
+    def test_savgol_denoising(self) -> None:
+        """Test Savgol denoising"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         denoised_data = self.processor._savgol_denoising(image_data)
@@ -263,8 +264,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(denoised_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(denoised_data)))
 
-    def test_spectral_calibration(self):
-        """Тест спектральной калибровки"""
+    def test_spectral_calibration(self) -> None:
+        """Test spectral calibration"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
         wavelengths = np.linspace(400, 900, self.bands)
 
@@ -274,11 +275,11 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
         self.assertEqual(calibrated_data.shape[0], self.height)
         self.assertEqual(calibrated_data.shape[1], self.width)
-        self.assertEqual(calibrated_data.shape[2], 25)  # Новое количество каналов
+        self.assertEqual(calibrated_data.shape[2], 25)  # New number of channels
         self.assertFalse(np.all(np.isnan(calibrated_data)))
 
-    def test_spectral_resampling(self):
-        """Тест спектрального передискретизации"""
+    def test_spectral_resampling(self) -> None:
+        """Test spectral resampling"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
         wavelengths = np.linspace(400, 900, self.bands)
 
@@ -288,11 +289,11 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
         self.assertEqual(resampled_data.shape[0], self.height)
         self.assertEqual(resampled_data.shape[1], self.width)
-        self.assertEqual(resampled_data.shape[2], 25)  # Новое количество каналов
+        self.assertEqual(resampled_data.shape[2], 25)  # New number of channels
         self.assertFalse(np.all(np.isnan(resampled_data)))
 
-    def test_spectral_smoothing(self):
-        """Тест спектрального сглаживания"""
+    def test_spectral_smoothing(self) -> None:
+        """Test spectral smoothing"""
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
 
         smoothed_data = self.processor._spectral_smoothing(image_data)
@@ -300,16 +301,16 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(smoothed_data.shape, image_data.shape)
         self.assertFalse(np.all(np.isnan(smoothed_data)))
 
-    @patch("src.processing.hyperspectral.gdal.GetDriverByName")
-    def test_convert_to_tiff(self, mock_gdal_driver):
-        """Тест конвертации в TIFF"""
-        # Настройка мока
+    @patch("osgeo.gdal.GetDriverByName")
+    def test_convert_to_tiff(self, mock_gdal_driver: MagicMock) -> None:
+        """Test conversion to TIFF"""
+        # Mock setup
         mock_driver = MagicMock()
         mock_dataset = MagicMock()
         mock_driver.Create.return_value = mock_dataset
         mock_gdal_driver.return_value = mock_driver
 
-        # Создание тестовых данных
+        # Create test data
         image_data = np.random.rand(self.height, self.width, self.bands) * 0.8 + 0.1
         wavelengths = np.linspace(400, 900, self.bands)
         metadata = {"sensor_type": "Hyperspectral"}
@@ -323,16 +324,16 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         self.assertEqual(result_path, output_path)
         mock_driver.Create.assert_called_once()
 
-    def test_get_band_info(self):
-        """Тест получения информации о каналах"""
-        with patch("src.processing.hyperspectral.gdal.Open") as mock_gdal_open:
-            # Настройка мока
+    def test_get_band_info(self) -> None:
+        """Test getting band information"""
+        with patch("osgeo.gdal.Open") as mock_gdal_open:
+            # Mock setup
             mock_dataset = MagicMock()
             mock_dataset.RasterXSize = self.width
             mock_dataset.RasterYSize = self.height
             mock_dataset.RasterCount = self.bands
 
-            # Создание моковых данных для каждого канала
+            # Create mock data for each channel
             band_data = np.random.rand(self.height, self.width)
             mock_band = MagicMock()
             mock_band.ReadAsArray.return_value = band_data
@@ -343,25 +344,25 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
             mock_gdal_open.return_value = mock_dataset
 
-            # Вызов метода
+            # Call method
             band_info = self.processor.get_band_info(self.test_bil_path)
 
-            # Проверки
+            # Assertions
             self.assertIn("total_bands", band_info)
             self.assertIn("bands", band_info)
             self.assertEqual(band_info["total_bands"], self.bands)
             self.assertEqual(len(band_info["bands"]), self.bands)
 
-    def test_create_rgb_composite(self):
-        """Тест создания RGB композита"""
-        with patch("src.processing.hyperspectral.gdal.Open") as mock_gdal_open:
-            # Настройка мока
+    def test_create_rgb_composite(self) -> None:
+        """Test creating RGB composite"""
+        with patch("osgeo.gdal.Open") as mock_gdal_open:
+            # Mock setup
             mock_dataset = MagicMock()
             mock_dataset.RasterXSize = self.width
             mock_dataset.RasterYSize = self.height
             mock_dataset.RasterCount = self.bands
 
-            # Создание моковых данных для каждого канала
+            # Create mock data for each channel
             band_data = np.random.rand(self.height, self.width)
             mock_band = MagicMock()
             mock_band.ReadAsArray.return_value = band_data
@@ -369,8 +370,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
             mock_gdal_open.return_value = mock_dataset
 
-            # Вызов метода
-            rgb_indices = (10, 20, 30)  # R, G, B каналы
+            # Call method
+            rgb_indices = (10, 20, 30)  # R, G, B channels
             output_path = os.path.join(self.temp_dir, "rgb_composite.tif")
 
             with patch.object(self.processor, "_convert_to_tiff") as mock_convert:
@@ -382,13 +383,13 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
                 self.assertEqual(result_path, output_path)
 
-    def test_process_invalid_input_path(self):
-        """Тест обработки неверного пути к входному файлу"""
+    def test_process_invalid_input_path(self) -> None:
+        """Test processing invalid input path"""
         with self.assertRaises(FileNotFoundError):
             self.processor.process("/nonexistent/path/file.bil", self.temp_dir)
 
-    def test_process_invalid_output_dir(self):
-        """Тест обработки неверной выходной директории"""
+    def test_process_invalid_output_dir(self) -> None:
+        """Test processing invalid output directory"""
         with self.assertRaises(Exception):
             self.processor.process(
                 self.test_bil_path, "/invalid/path/that/cannot/be/created"

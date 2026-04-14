@@ -1,5 +1,8 @@
 """
-Пакет для обработки гиперспектральных данных
+Hyperspectral data processing package for the GOP project.
+
+This package provides modules for hyperspectral data validation, caching,
+corrections, denoising, and processing.
 """
 
 from .validators import HyperspectralValidator

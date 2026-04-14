@@ -4,7 +4,7 @@ Performance benchmarks for processing operations
 
 import time
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import sys
 import os
 

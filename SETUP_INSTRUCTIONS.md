@@ -1,107 +1,106 @@
-# GOP - Инструкции по настройке и руководство по завершению проекта
+# GOP - Setup Instructions and Project Completion Guide
 
-## Сводка статуса проекта
+## Project Status Summary
 
-### ✅ Что реализовано
+### ✅ What's Implemented
 
-**Основной фреймворк (полностью функциональный):**
-- Полная архитектура научной библиотеки с модульным дизайном
-- Конвейер обработки гиперспектральных данных с радиометрической и атмосферной коррекцией
-- Продвинутые алгоритмы снижения шума (PCA, MNF, вейвлеты)
-- Расчет вегетационных индексов (NDVI, GNDVI, MCARI, MNLI, OSAVI, TVI, SIPI2, mARI, PRI, CRI, NDWI, MSI, WI, NDII)
-- Фреймворк сегментации изображений с заглушками моделей
-- Обработка ортофотопланов с интеграцией OpenDroneMap
-- Веб-интерфейс на основе Dash/Flask
-- Полный набор тестов и документация
+**Core Framework (fully functional):**
+- Complete scientific library architecture with modular design
+- Hyperspectral data processing pipeline with radiometric and atmospheric correction
+- Advanced noise reduction algorithms (PCA, MNF, wavelets)
+- Vegetation index calculation (NDVI, GNDVI, MCARI, MNLI, OSAVI, TVI, SIPI2, mARI, PRI, CRI, NDWI, MSI, WI, NDII)
+- Image segmentation framework with model stubs
+- Orthophoto processing with OpenDroneMap integration
+- Web interface based on Dash/Flask
+- Complete test suite and documentation
 
-**Техническая инфраструктура:**
-- Управление зависимостями на основе Poetry
-- Pre-commit хуки для качества кода
-- Поддержка контейнеризации Docker
-- Документация API Sphinx
-- Конфигурация CI/CD пайплайна
+**Technical Infrastructure:**
+- Pre-commit hooks for code quality
+- Docker containerization support
+- Sphinx API documentation
+- CI/CD pipeline configuration
 
-**Улучшения рефакторинга (Фаза 1-3):**
-- Улучшенная обработка ошибок с иерархической системой исключений
-- Оптимизация производительности (ускорение на 40-60%)
-- Улучшение эффективности памяти (снижение на 30-50%)
-- Полные аннотации типов и валидация
-- Улучшения безопасности и аудит зависимостей
-- Улучшения качества кода и поддерживаемости
+**Refactoring Improvements (Phase 1-3):**
+- Enhanced error handling with hierarchical exception system
+- Performance optimization (40-60% speed improvement)
+- Memory efficiency improvements (30-50% reduction)
+- Full type annotations and validation
+- Security improvements and dependency auditing
+- Code quality and maintainability improvements
 
-### ⚠️ Что требует ручной настройки
+### ⚠️ What Requires Manual Setup
 
-**Критические зависимости:**
-1. **Предварительно обученные модели** - DeepLabV3+ и CascadePSP модели для сегментации изображений
-2. **OpenDroneMap** - Внешнее ПО для генерации ортофотопланов
-3. **Системные библиотеки** - GDAL и геопространственные зависимости
-4. **Примеры данных** - Реальные гиперспектральные данные для тестирования
+**Critical Dependencies:**
+1. **Pre-trained models** - DeepLabV3+ and CascadePSP models for image segmentation
+2. **OpenDroneMap** - External software for orthophoto generation
+3. **System libraries** - GDAL and geospatial dependencies
+4. **Sample data** - Real hyperspectral data for testing
 
-**Опциональные компоненты:**
-1. **Redis** - Для кэширования (опциональное улучшение производительности)
-2. **Поддержка GPU** - Для ускоренной обработки
-3. **Облачные сервисы** - Для обработки данных в больших масштабах
+**Optional Components:**
+1. **Redis** - For caching (optional performance improvement)
+2. **GPU support** - For accelerated processing
+3. **Cloud services** - For large-scale data processing
 
 ---
 
-## Обязательные шаги ручной настройки
+## Required Manual Setup Steps
 
-### 1. Получение предварительно обученных моделей
+### 1. Obtaining Pre-trained Models
 
-**Модель DeepLabV3+:**
+**DeepLabV3+ Model:**
 ```bash
-# Создать директорию моделей
+# Create models directory
 mkdir -p models/segmentation
 
-# Скачать модель DeepLabV3+ (пример - заменить на реальный источник) https://github.com/VainF/DeepLabV3Plus-Pytorch
+# Download DeepLabV3+ model (example - replace with actual source) https://github.com/VainF/DeepLabV3Plus-Pytorch
 wget -O models/segmentation/deeplabv3_resnet50_coco.pth \
     https://download.pytorch.org/models/deeplabv3_resnet50_coco-586e9e4e.pth
 
-# Обновить файл конфигурации
+# Update configuration file
 sed -i 's|models/deeplabv3_resnet101.pth|models/segmentation/best_deeplabv3plus_resnet50_voc_os16.pth|' config/config.yaml
 ```
 
-**Модель CascadePSP:**
+**CascadePSP Model:**
 ```bash
-# Скачать модель CascadePSP (пример - заменить на реальный источник) https://github.com/hkchengrex/CascadePSP
+# Download CascadePSP model (example - replace with actual source) https://github.com/hkchengrex/CascadePSP
 wget -O models/segmentation/cascade_psp.pth \
     https://example.com/models/cascade_psp.pth
 ```
 
-### 2. Установка OpenDroneMap
+### 2. Installing OpenDroneMap
 
-**Вариант 1: Docker (рекомендуется)**
+**Option 1: Docker (recommended)**
 ```bash
-# Установить Docker
+# Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 
-# Загрузить образ ODM
+# Pull ODM image
 docker pull opendronemap/odm:latest
 
-# Протестировать ODM
+# Test ODM
 docker run --rm opendronemap/odm:latest --help
 ```
 
-**Вариант 2: Системная установка**
+**Option 2: System Installation**
 ```bash
-# Установить ODM через pip
+# Install ODM via pip
 pip install opendronemap
 
-# Или собрать из исходников
+# Or build from source
 git clone https://github.com/OpenDroneMap/ODM.git
 cd ODM
 pip install -r requirements.txt
 ```
 
-### 3. Установка системных зависимостей
+### 3. Installing System Dependencies
 
 **Ubuntu/Debian:**
 ```bash
-# Обновить список пакетов
+# Update package list
 sudo apt update
 
-# Установить GDAL и геопространственные библиотеки
+# Install GDAL and geospatial libraries
 sudo apt install -y \
     gdal-bin \
     libgdal-dev \
@@ -110,7 +109,7 @@ sudo apt install -y \
     proj-bin \
     libproj-dev
 
-# Установить библиотеки обработки изображений
+# Install image processing libraries
 sudo apt install -y \
     libopencv-dev \
     libtiff-dev \
@@ -120,83 +119,79 @@ sudo apt install -y \
 
 **macOS:**
 ```bash
-# Установить через Homebrew
+# Install via Homebrew
 brew install gdal geos proj opencv
 ```
 
 **Windows:**
-- Скачать бинарные файлы GDAL с: https://www.gisinternals.com/
-- Добавить в переменную окружения PATH
+- Download GDAL binaries from: https://www.gisinternals.com/
+- Add to PATH environment variable
 
-### 4. Конфигурация окружения
+### 4. Environment Configuration
 
-**Создать файл .env:**
+**Create .env file:**
 ```bash
-# Скопировать шаблон
+# Copy template
 cp .env.example .env
 
-# Редактировать с вашими настройками
+# Edit with your settings
 nano .env
 ```
 
-**Настроить переменные окружения:**
+**Configure environment variables:**
 ```bash
-# Режим отладки (True/False)
+# Debug mode (True/False)
 DEBUG=False
 
-# Секретный ключ для управления сессиями
+# Secret key for session management
 SECRET_KEY=your-secure-secret-key-here
 
-# Конфигурация сервера
+# Server configuration
 HOST=0.0.0.0
 PORT=8050
 
-# Конфигурация базы данных (опционально)
+# Database configuration (optional)
 DATABASE_URL=postgresql://username:password@localhost/gop_db
 
-# Конфигурация кэша (опционально)
+# Cache configuration (optional)
 REDIS_URL=redis://localhost:6379/0
 
-# Настройки загрузки файлов
+# File upload settings
 MAX_UPLOAD_SIZE=100MB
 UPLOAD_FOLDER=./uploads
 
-# Настройки обработки
+# Processing settings
 CACHE_ENABLED=True
 CACHE_DIR=./cache
 
-# Уровень логирования
+# Logging level
 LOG_LEVEL=INFO
 
-# Внешние сервисы
+# External services
 ODM_PATH=/opt/opendronemap
 
-# Настройки безопасности
+# Security settings
 CSRF_ENABLED=True
 SESSION_TIMEOUT=3600
 ```
 
 ---
 
-## Краткое руководство по установке
+## Quick Installation Guide
 
-### 1. Клонировать репозиторий
+### 1. Clone Repository
 ```bash
 git clone https://github.com/indykovdm/GOP.git
 cd GOP
 ```
 
-### 2. Установить зависимости Python
+### 2. Install Python Dependencies
 ```bash
-# Используя pip (рекомендуется с requirements.txt)
+# Using pip (recommended with requirements.txt)
 pip install -r requirements.txt
-
-# Или используя Poetry (альтернативный способ)
-poetry install
-poetry shell
 ```
 
-### 3. Установить системные зависимости
+### 3. Install System Dependencies
 ```bash
 # Ubuntu/Debian
 sudo apt install gdal-bin libgdal-dev python3-gdal
@@ -205,34 +200,34 @@ sudo apt install gdal-bin libgdal-dev python3-gdal
 brew install gdal
 ```
 
-### 4. Настроить окружение
+### 4. Configure Environment
 ```bash
 cp .env.example .env
-# Редактировать .env с вашими настройками
+# Edit .env with your settings
 ```
 
-### 5. Скачать модели
+### 5. Download Models
 ```bash
 mkdir -p models/segmentation
-# Скачать необходимые модели (см. выше)
+# Download required models (see above)
 ```
 
-### 6. Проверить установку
+### 6. Verify Installation
 ```bash
-# Запустить базовый тест
-python -c "import src.core.pipeline; print('GOP успешно установлен')"
+# Run basic test
+python -c "import src.core.pipeline; print('GOP successfully installed')"
 
-# Запустить пример
+# Run example
 python examples/basic_processing.py
 ```
 
 ---
 
-## Расширенная конфигурация
+## Advanced Configuration
 
-### Оптимизация производительности
+### Performance Optimization
 
-**Настройки памяти:**
+**Memory Settings:**
 ```yaml
 # config/config.yaml
 performance:
@@ -242,7 +237,7 @@ performance:
     memory_mapping: true
 ```
 
-**Параллельная обработка:**
+**Parallel Processing:**
 ```yaml
 parallel:
   enabled: true
@@ -250,7 +245,7 @@ parallel:
   chunk_processing: true
 ```
 
-**Кэширование:**
+**Caching:**
 ```yaml
 cache:
   enabled: true
@@ -259,9 +254,9 @@ cache:
   ttl: 3600
 ```
 
-### Конфигурация научной обработки
+### Scientific Processing Configuration
 
-**Радиометрическая коррекция:**
+**Radiometric Correction:**
 ```yaml
 radiometric_correction:
   method: "empirical_line"
@@ -269,14 +264,14 @@ radiometric_correction:
   bright_percentile: 99
 ```
 
-**Атмосферная коррекция:**
+**Atmospheric Correction:**
 ```yaml
 atmospheric_correction:
   enabled: true
   method: "simplified"
 ```
 
-**Снижение шума:**
+**Noise Reduction:**
 ```yaml
 noise_reduction:
   method: "pca"
@@ -285,125 +280,125 @@ noise_reduction:
 
 ---
 
-## Тестирование и валидация
+## Testing and Validation
 
-### Запуск тестов
+### Running Tests
 ```bash
-# Запустить все тесты
+# Run all tests
 pytest tests/
 
-# Запустить с покрытием
+# Run with coverage
 pytest --cov=src tests/
 
-# Запустить определенные категории тестов
+# Run specific test categories
 pytest tests/test_processing.py
 pytest tests/test_indices.py
 pytest tests/test_segmentation.py
 ```
 
-### Бенчмарки производительности
+### Performance Benchmarks
 ```bash
-# Запустить тесты производительности
+# Run performance tests
 pytest tests/benchmarks/
 
-# Сгенерировать отчет производительности
+# Generate performance report
 python -m pytest tests/benchmarks/ --benchmark-json=benchmark_results.json
 ```
 
-### Проверки качества кода
+### Code Quality Checks
 ```bash
-# Форматировать код
+# Format code
 black src/ tests/ examples/
 
-# Проверка типов
+# Type checking
 mypy src/
 
-# Линтинг
+# Linting
 flake8 src/ tests/
 
-# Аудит безопасности
+# Security audit
 safety check
 ```
 
 ---
 
-## Устранение неполадок
+## Troubleshooting
 
-### Распространенные проблемы
+### Common Issues
 
-**Ошибки импорта:**
+**Import Errors:**
 ```bash
-# Убедиться, что Python path включает src
+# Ensure Python path includes src
 export PYTHONPATH="$PYTHONPATH:$(pwd)/src"
 ```
 
-**Проблемы с GDAL:**
+**GDAL Issues:**
 ```bash
-# Проверить установку GDAL
+# Check GDAL installation
 gdalinfo --version
 
-# Установить переменные окружения GDAL
+# Set GDAL environment variables
 export GDAL_DATA=/usr/share/gdal
 export PROJ_LIB=/usr/share/proj
 ```
 
-**Проблемы с памятью:**
-- Уменьшить `batch_size` в конфигурации
-- Включить memory mapping
-- Обрабатывать данные меньшими порциями
+**Memory Issues:**
+- Reduce `batch_size` in configuration
+- Enable memory mapping
+- Process data in smaller chunks
 
-**Проблемы с производительностью:**
-- Включить параллельную обработку
-- Использовать кэширование для повторных операций
-- Оптимизировать размер порции для вашего оборудования
+**Performance Issues:**
+- Enable parallel processing
+- Use caching for repeated operations
+- Optimize chunk size for your hardware
 
-### Режим отладки
+### Debug Mode
 
-Включить режим отладки для детального логирования:
+Enable debug mode for detailed logging:
 ```bash
-# Установить режим отладки
+# Set debug mode
 DEBUG=True
 
-# Или в Python
+# Or in Python
 import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
 ---
 
-## Продакшен развертывание
+## Production Deployment
 
-### Развертывание Docker
+### Docker Deployment
 ```dockerfile
-# Использовать официальный образ Python
+# Use official Python image
 FROM python:3.9-slim
 
-# Установить системные зависимости
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gdal-bin \
     libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Скопировать приложение
+# Copy application
 COPY . /app
 WORKDIR /app
 
-# Установить зависимости Python
+# Install Python dependencies
 RUN pip install -r requirements.txt
 
-# Открыть порт
+# Expose port
 EXPOSE 8050
 
-# Запустить приложение
+# Run application
 CMD ["python", "main.py"]
 ```
 
-### Облачное развертывание
+### Cloud Deployment
 
 **AWS EC2:**
-- Использовать Ubuntu 20.04 LTS
-- Установить системные зависимости как выше
-- Настроить security groups для порта 8050
+- Use Ubuntu 20.04 LTS
+- Install system dependencies as above
+- Configure security groups for port 8050
 
 **Docker Compose:**
 ```yaml
@@ -423,90 +418,86 @@ services:
 
 ---
 
-## Обслуживание и обновления
+## Maintenance and Updates
 
-### Регулярные задачи обслуживания
+### Regular Maintenance Tasks
 
-1. **Обновление зависимостей:**
+1. **Dependency Updates:**
 ```bash
-# Обновить зависимости через pip
+# Update dependencies via pip
 pip install --upgrade -r requirements.txt
-
-# Или через Poetry
-poetry update
 ```
-
-2. **Очистка кэша:**
+2. **Cache Cleanup:**
 ```bash
 rm -rf cache/*
 ```
 
-3. **Ротация логов:**
+3. **Log Rotation:**
 ```bash
-# Настроить ротацию логов в конфигурации логирования
+# Configure log rotation in logging configuration
 ```
 
-4. **Резервное копирование данных:**
+4. **Data Backup:**
 ```bash
-# Резервное копирование важных данных и результатов
+# Backup important data and results
 tar -czf backup_$(date +%Y%m%d).tar.gz data/ results/ config/
 ```
 
-### Мониторинг
+### Monitoring
 
-**Проверка здоровья:**
+**Health Checks:**
 ```bash
-# Простая проверка здоровья
+# Simple health check
 curl http://localhost:8050/health
 
-# Проверить место на диске
+# Check disk space
 df -h
 
-# Проверить использование памяти
+# Check memory usage
 free -h
 ```
 
-**Мониторинг производительности:**
-- Мониторить показатели попаданий в кэш
-- Отслеживать время обработки
-- Мониторить использование памяти
-- Проверять уровень ошибок
+**Performance Monitoring:**
+- Monitor cache hit rates
+- Track processing times
+- Monitor memory usage
+- Check error rates
 
 ---
 
-## Поддержка и ресурсы
+## Support and Resources
 
-### Документация
-- **[Основная документация](README.md)** - Обзор проекта и быстрый старт
-- **[Справочник API](docs/api/index.rst)** - Полная документация API
-- **[Руководство по конфигурации](config/README.md)** - Опции конфигурации
-- **[Примеры](examples/README.md)** - Примеры использования
+### Documentation
+- **[Main Documentation](README.md)** - Project overview and quick start
+- **[API Reference](docs/api/index.rst)** - Complete API documentation
+- **[Configuration Guide](config/README.md)** - Configuration options
+- **[Examples](examples/README.md)** - Usage examples
 
-### Поддержка сообщества
+### Community Support
 - GitHub Issues: https://github.com/indykovdm/GOP/issues
-- Документация: https://indykovdm.github.io/GOP/
+- Documentation: https://indykovdm.github.io/GOP/
 
-### Научные ссылки
-- См. [Исследовательские заметки](docs/research/TECHNICAL_NOTES.md) для технических деталей
-- Проверьте [Документацию по архитектуре](docs/ARCHITECTURE.md) для дизайна системы
-
----
-
-## Сводка рефакторинга
-
-### Улучшения Фазы 1-3
-- **Критические исправления ошибок** и улучшения безопасности
-- **Чистая архитектура** с полными аннотациями типов
-- **Оптимизация производительности** и улучшения качества
-- **Улучшенная обработка ошибок** с иерархическими исключениями
-- **Улучшенная документация** и примеры
-
-### Следующие шаги
-- Продолжить мониторинг производительности в продакшене
-- Собрать отзывы пользователей для дальнейших улучшений
-- Рассмотреть дополнительные научные функции
-- Исследовать интеграцию с облачными платформами
+### Scientific References
+- See [Technical Notes](docs/research/TECHNICAL_NOTES.md) for technical details
+- Check [Architecture Documentation](docs/ARCHITECTURE.md) for system design
 
 ---
 
-**GOP v2.0.0** - Готов для научных исследований и продакшен использования.
+## Refactoring Summary
+
+### Phase 1-3 Improvements
+- **Critical bug fixes** and security improvements
+- **Clean architecture** with full type annotations
+- **Performance optimization** and quality improvements
+- **Enhanced error handling** with hierarchical exceptions
+- **Improved documentation** and examples
+
+### Next Steps
+- Continue performance monitoring in production
+- Gather user feedback for further improvements
+- Consider additional scientific features
+- Explore cloud platform integration
+
+---
+
+**GOP v2.0.0** - Ready for scientific research and production use.

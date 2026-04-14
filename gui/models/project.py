@@ -1,25 +1,25 @@
-"""Модели данных для управления проектами GOP."""
+"""Data models for GOP project management."""
 
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict, List, Any
 import json
 
 
 class ProjectStatus(str, Enum):
-    """Статус проекта."""
-    NEW = "new"                  # Новый проект, файлы не загружены
-    READY = "ready"              # Файлы загружены, готов к обработке
-    PROCESSING = "processing"    # Идёт обработка
-    COMPLETED = "completed"      # Обработка завершена
-    ERROR = "error"              # Ошибка обработки
-    CANCELLED = "cancelled"      # Обработка отменена
+    """Project status enumeration."""
+    NEW = "new"                  # New project, no files uploaded
+    READY = "ready"              # Files uploaded, ready for processing
+    PROCESSING = "processing"    # Processing in progress
+    COMPLETED = "completed"      # Processing completed
+    ERROR = "error"              # Processing error
+    CANCELLED = "cancelled"      # Processing cancelled
 
 
 class PipelineStage(str, Enum):
-    """Этапы пайплайна обработки."""
+    """Pipeline processing stages enumeration."""
     PREPROCESSING = "preprocessing"
     ORTHOPHOTO = "orthophoto"
     SEGMENTATION = "segmentation"
@@ -30,7 +30,7 @@ class PipelineStage(str, Enum):
 
 @dataclass
 class ProjectFile:
-    """Файл, связанный с проектом."""
+    """File associated with a project."""
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     filename: str = ""
     original_name: str = ""
@@ -40,136 +40,232 @@ class ProjectFile:
     upload_date: str = field(default_factory=lambda: datetime.now().isoformat())
     checksum: str = ""
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation.
+        
+        Returns:
+            Dictionary representation of the file
+        """
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ProjectFile":
+    def from_dict(cls, data: Dict[str, Any]) -> "ProjectFile":
+        """Create from dictionary representation.
+        
+        Args:
+            data: Dictionary containing file data
+            
+        Returns:
+            ProjectFile instance
+        """
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class ProcessingConfig:
-    """Конфигурация обработки проекта."""
-    stages: list[str] = field(default_factory=lambda: [s.value for s in PipelineStage])
-    preprocessing: dict = field(default_factory=lambda: {
+    """Project processing configuration."""
+    stages: List[str] = field(default_factory=lambda: [s.value for s in PipelineStage])
+    preprocessing: Dict[str, Any] = field(default_factory=lambda: {
         "radiometric_correction": True,
         "atmospheric_correction": True,
         "denoising_method": "pca",
         "denoising_components": 10
     })
-    orthophoto: dict = field(default_factory=lambda: {
+    orthophoto: Dict[str, Any] = field(default_factory=lambda: {
         "resolution": 0.1,
         "crs": "EPSG:4326"
     })
-    segmentation: dict = field(default_factory=lambda: {
+    segmentation: Dict[str, Any] = field(default_factory=lambda: {
         "model": "deeplabv3",
         "refinement": True,
         "min_area": 100
     })
-    indices: dict = field(default_factory=lambda: {
+    indices: Dict[str, Any] = field(default_factory=lambda: {
         "selected_indices": ["NDVI", "GNDVI", "MCARI", "RENDVI"],
         "custom_indices": []
     })
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation.
+        
+        Returns:
+            Dictionary representation of the configuration
+        """
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ProcessingConfig":
+    def from_dict(cls, data: Dict[str, Any]) -> "ProcessingConfig":
+        """Create from dictionary representation.
+        
+        Args:
+            data: Dictionary containing configuration data
+            
+        Returns:
+            ProcessingConfig instance
+        """
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class ProcessingResult:
-    """Результат этапа обработки."""
+    """Processing stage result."""
     stage: str = ""
     status: str = "pending"  # pending, running, completed, error, skipped
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     duration_seconds: Optional[float] = None
-    output_files: list[str] = field(default_factory=list)
-    metrics: dict = field(default_factory=dict)
+    output_files: List[str] = field(default_factory=list)
+    metrics: Dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation.
+        
+        Returns:
+            Dictionary representation of the result
+        """
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ProcessingResult":
+    def from_dict(cls, data: Dict[str, Any]) -> "ProcessingResult":
+        """Create from dictionary representation.
+        
+        Args:
+            data: Dictionary containing result data
+            
+        Returns:
+            ProcessingResult instance
+        """
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class ProcessingHistory:
-    """Запись истории обработки."""
+    """Processing history record."""
     run_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     start_time: str = field(default_factory=lambda: datetime.now().isoformat())
     end_time: Optional[str] = None
     status: str = "running"  # running, completed, error, cancelled
-    config: dict = field(default_factory=dict)
-    results: list[dict] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+    results: List[Dict[str, Any]] = field(default_factory=list)
     total_duration_seconds: Optional[float] = None
     error_message: Optional[str] = None
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation.
+        
+        Returns:
+            Dictionary representation of the history
+        """
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "ProcessingHistory":
+    def from_dict(cls, data: Dict[str, Any]) -> "ProcessingHistory":
+        """Create from dictionary representation.
+        
+        Args:
+            data: Dictionary containing history data
+            
+        Returns:
+            ProcessingHistory instance
+        """
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class Project:
-    """Основная модель проекта."""
+    """Main project model."""
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     description: str = ""
     status: str = ProjectStatus.NEW.value
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    files: list[dict] = field(default_factory=list)
-    processing_config: dict = field(default_factory=lambda: ProcessingConfig().to_dict())
+    files: List[Dict[str, Any]] = field(default_factory=list)
+    processing_config: Dict[str, Any] = field(default_factory=lambda: ProcessingConfig().to_dict())
     current_stage: Optional[str] = None
     progress: float = 0.0  # 0.0 to 100.0
-    processing_history: list[dict] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
+    processing_history: List[Dict[str, Any]] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
     
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation.
+        
+        Returns:
+            Dictionary representation of the project
+        """
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "Project":
+    def from_dict(cls, data: Dict[str, Any]) -> "Project":
+        """Create from dictionary representation.
+        
+        Args:
+            data: Dictionary containing project data
+            
+        Returns:
+            Project instance
+        """
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
     
     def to_json(self) -> str:
+        """Convert to JSON string.
+        
+        Returns:
+            JSON string representation
+        """
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
     
     @classmethod
     def from_json(cls, json_str: str) -> "Project":
+        """Create from JSON string.
+        
+        Args:
+            json_str: JSON string containing project data
+            
+        Returns:
+            Project instance
+        """
         return cls.from_dict(json.loads(json_str))
     
     def get_file_count(self) -> int:
+        """Get number of files in project.
+        
+        Returns:
+            Number of files
+        """
         return len(self.files)
     
     def get_total_file_size(self) -> int:
+        """Get total size of all files in project.
+        
+        Returns:
+            Total file size in bytes
+        """
         return sum(f.get("file_size", 0) for f in self.files)
     
     def get_status_display(self) -> str:
-        """Возвращает отображаемое название статуса на русском."""
+        """Get display name for status.
+        
+        Returns:
+            Display name for the status
+        """
         status_names = {
-            ProjectStatus.NEW.value: "Новый",
-            ProjectStatus.READY.value: "Готов к обработке",
-            ProjectStatus.PROCESSING.value: "Обработка",
-            ProjectStatus.COMPLETED.value: "Завершён",
-            ProjectStatus.ERROR.value: "Ошибка",
-            ProjectStatus.CANCELLED.value: "Отменён",
+            ProjectStatus.NEW.value: "New",
+            ProjectStatus.READY.value: "Ready for processing",
+            ProjectStatus.PROCESSING.value: "Processing",
+            ProjectStatus.COMPLETED.value: "Completed",
+            ProjectStatus.ERROR.value: "Error",
+            ProjectStatus.CANCELLED.value: "Cancelled",
         }
         return status_names.get(self.status, self.status)
     
     def get_status_color(self) -> str:
-        """Возвращает цвет для статуса."""
+        """Get color for status display.
+        
+        Returns:
+            Color name for the status
+        """
         status_colors = {
             ProjectStatus.NEW.value: "secondary",
             ProjectStatus.READY.value: "info",

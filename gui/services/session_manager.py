@@ -1,40 +1,43 @@
 """
-Менеджер сессий для GUI приложения GOP
+Session manager for GOP GUI application
 """
 
 import uuid
 import json
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 
 class SessionManager:
-    """Менеджер для управления сессиями пользователей"""
+    """Manager for user session management"""
     
-    def __init__(self, storage_path: str = 'data/sessions'):
+    def __init__(self, storage_path: str = 'data/sessions') -> None:
         """
-        Инициализация менеджера сессий
+        Initialize session manager
         
         Args:
-            storage_path: Путь для хранения сессий
+            storage_path: Path for session storage
         """
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        self.sessions = {}  # In-memory кэш сессий
-        self.session_timeout = 24  # часы
+        self.sessions: Dict[str, Dict[str, Any]] = {}  # In-memory session cache
+        self.session_timeout = 24  # hours
     
     def create_session(self, user_id: Optional[str] = None, expires_hours: int = 24) -> str:
         """
-        Создание новой сессии
+        Create a new session
         
         Args:
-            user_id: ID пользователя
-            expires_hours: Время жизни сессии в часах
+            user_id: User ID
+            expires_hours: Session lifetime in hours
             
         Returns:
-            ID созданной сессии
+            Created session ID
         """
         session_id = str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(hours=expires_hours)
@@ -56,42 +59,42 @@ class SessionManager:
             'processing_history': []
         }
         
-        # Сохранение в память
+        # Save to memory
         self.sessions[session_id] = session_data
         
-        # Сохранение на диск
+        # Save to disk
         self._save_session_to_disk(session_id, session_data)
         
         return session_id
     
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получение данных сессии
+        Get session data
         
         Args:
-            session_id: ID сессии
+            session_id: Session ID
             
         Returns:
-            Данные сессии или None если не найдена/просрочена
+            Session data or None if not found/expired
         """
-        # Проверка в памяти
+        # Check in memory
         if session_id in self.sessions:
             session_data = self.sessions[session_id]
         else:
-            # Попытка загрузить с диска
+            # Try to load from disk
             session_data = self._load_session_from_disk(session_id)
             if session_data:
                 self.sessions[session_id] = session_data
             else:
                 return None
         
-        # Проверка срока действия
+        # Check expiration
         expires_at = datetime.fromisoformat(session_data['expires_at'])
         if datetime.utcnow() > expires_at:
             self.delete_session(session_id)
             return None
         
-        # Обновление времени последней активности
+        # Update last activity time
         session_data['last_activity'] = datetime.utcnow().isoformat()
         self._save_session_to_disk(session_id, session_data)
         
@@ -99,46 +102,46 @@ class SessionManager:
     
     def update_session(self, session_id: str, session_data: Dict[str, Any]) -> bool:
         """
-        Обновление данных сессии
+        Update session data
         
         Args:
-            session_id: ID сессии
-            session_data: Новые данные сессии
+            session_id: Session ID
+            session_data: New session data
             
         Returns:
-            True если успешно, False если сессия не найдена
+            True if successful, False if session not found
         """
         if session_id not in self.sessions:
-            # Попытка загрузить с диска
+            # Try to load from disk
             existing_data = self._load_session_from_disk(session_id)
             if not existing_data:
                 return False
             self.sessions[session_id] = existing_data
         
-        # Обновление данных
+        # Update data
         session_data['last_activity'] = datetime.utcnow().isoformat()
         self.sessions[session_id] = session_data
         
-        # Сохранение на диск
+        # Save to disk
         self._save_session_to_disk(session_id, session_data)
         
         return True
     
     def delete_session(self, session_id: str) -> bool:
         """
-        Удаление сессии
+        Delete session
         
         Args:
-            session_id: ID сессии
+            session_id: Session ID
             
         Returns:
-            True если успешно, False если сессия не найдена
+            True if successful, False if session not found
         """
-        # Удаление из памяти
+        # Delete from memory
         if session_id in self.sessions:
             del self.sessions[session_id]
         
-        # Удаление с диска
+        # Delete from disk
         session_file = self.storage_path / f"{session_id}.json"
         if session_file.exists():
             session_file.unlink()
@@ -148,14 +151,14 @@ class SessionManager:
     
     def add_project_to_session(self, session_id: str, project_data: Dict[str, Any]) -> bool:
         """
-        Добавление проекта в сессию
+        Add project to session
         
         Args:
-            session_id: ID сессии
-            project_data: Данные проекта
+            session_id: Session ID
+            project_data: Project data
             
         Returns:
-            True если успешно
+            True if successful
         """
         session = self.get_session(session_id)
         if not session:
@@ -168,13 +171,13 @@ class SessionManager:
     
     def get_current_project(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получение текущего проекта сессии
+        Get current project for session
         
         Args:
-            session_id: ID сессии
+            session_id: Session ID
             
         Returns:
-            Данные текущего проекта или None
+            Current project data or None
         """
         session = self.get_session(session_id)
         if not session or not session['current_project']:
@@ -189,14 +192,14 @@ class SessionManager:
     
     def set_current_project(self, session_id: str, project_id: str) -> bool:
         """
-        Установка текущего проекта
+        Set current project for session
         
         Args:
-            session_id: ID сессии
-            project_id: ID проекта
+            session_id: Session ID
+            project_id: Project ID
             
         Returns:
-            True если успешно
+            True if successful
         """
         session = self.get_session(session_id)
         if not session:
@@ -212,14 +215,14 @@ class SessionManager:
     
     def add_uploaded_file(self, session_id: str, file_data: Dict[str, Any]) -> bool:
         """
-        Добавление информации о загруженном файле
+        Add uploaded file information to session
         
         Args:
-            session_id: ID сессии
-            file_data: Данные файла
+            session_id: Session ID
+            file_data: File data
             
         Returns:
-            True если успешно
+            True if successful
         """
         session = self.get_session(session_id)
         if not session:
@@ -232,14 +235,14 @@ class SessionManager:
     
     def add_processing_record(self, session_id: str, processing_data: Dict[str, Any]) -> bool:
         """
-        Добавление записи об обработке
+        Add processing record to session
         
         Args:
-            session_id: ID сессии
-            processing_data: Данные обработки
+            session_id: Session ID
+            processing_data: Processing data
             
         Returns:
-            True если успешно
+            True if successful
         """
         session = self.get_session(session_id)
         if not session:
@@ -252,10 +255,10 @@ class SessionManager:
     
     def cleanup_expired_sessions(self) -> int:
         """
-        Очистка просроченных сессий
+        Clean up expired sessions
         
         Returns:
-            Количество удаленных сессий
+            Number of deleted sessions
         """
         deleted_count = 0
         current_time = datetime.utcnow()
@@ -289,16 +292,16 @@ class SessionManager:
         return deleted_count
     
     def _save_session_to_disk(self, session_id: str, session_data: Dict[str, Any]) -> None:
-        """Сохранение сессии на диск"""
+        """Save session to disk"""
         session_file = self.storage_path / f"{session_id}.json"
         try:
             with open(session_file, 'w', encoding='utf-8') as f:
                 json.dump(session_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"Ошибка сохранения сессии {session_id}: {e}")
+            logger.error(f"Error saving session {session_id}: {e}")
     
     def _load_session_from_disk(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Загрузка сессии с диска"""
+        """Load session from disk"""
         session_file = self.storage_path / f"{session_id}.json"
         if not session_file.exists():
             return None
@@ -307,8 +310,8 @@ class SessionManager:
             with open(session_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"Ошибка загрузки сессии {session_id}: {e}")
-            # Удаление поврежденного файла
+            logger.error(f"Error loading session {session_id}: {e}")
+            # Delete corrupted file
             try:
                 session_file.unlink()
             except:
@@ -317,10 +320,10 @@ class SessionManager:
     
     def get_session_stats(self) -> Dict[str, Any]:
         """
-        Получение статистики сессий
+        Get session statistics
         
         Returns:
-            Статистика сессий
+            Session statistics
         """
         total_sessions = len(self.sessions)
         active_sessions = 0

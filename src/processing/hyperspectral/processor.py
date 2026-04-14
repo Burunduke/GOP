@@ -1,10 +1,13 @@
 """
-Модуль основного процессора гиперспектральных данных
+Main hyperspectral data processor module.
+
+This module provides the main processor class for hyperspectral data processing
+pipeline including data loading, corrections, denoising, and analysis.
 """
 
 import os
 import numpy as np
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from numpy.typing import NDArray
 
 try:
@@ -32,22 +35,23 @@ ProcessingResult = Dict[str, Any]
 
 class HyperspectralProcessor:
     """
-    Класс для обработки гиперспектральных данных
-    Научно-ориентированная реализация с современными методами обработки
+    Class for hyperspectral data processing.
+    
+    Scientific-oriented implementation with modern processing methods.
     """
 
     def __init__(self, cache_enabled: bool = True, cache_dir: Optional[str] = None):
         """
-        Инициализация процессора гиперспектральных данных
+        Initialize hyperspectral data processor.
 
         Args:
-            cache_enabled: Включить кэширование
-            cache_dir: Директория для кэша (если None, используется временная директория)
+            cache_enabled: Enable caching
+            cache_dir: Cache directory (if None, uses temporary directory)
         """
         self.logger = setup_logger(__name__)
         self.config = get_config()
 
-        # Инициализация компонентов
+        # Initialize components
         self.validator = HyperspectralValidator()
         self.cache = HyperspectralCache(
             cache_enabled=cache_enabled, cache_dir=cache_dir
@@ -55,22 +59,22 @@ class HyperspectralProcessor:
         self.corrections = HyperspectralCorrections()
         self.denoising = HyperspectralDenoising()
 
-        self.logger.info("HyperspectralProcessor инициализирован")
+        self.logger.info("HyperspectralProcessor initialized")
 
     def load_data(self, file_path: str, **kwargs) -> HyperspectralData:
         """
-        Загрузка гиперспектральных данных из файла
+        Load hyperspectral data from file.
 
         Args:
-            file_path: Путь к файлу
-            **kwargs: Дополнительные параметры загрузки
+            file_path: Path to file
+            **kwargs: Additional loading parameters
 
         Returns:
-            Гиперспектральные данные в формате numpy array
+            Hyperspectral data in numpy array format
 
         Raises:
-            FileError: Если файл не найден или недоступен
-            ValidationError: Если данные не прошли валидацию
+            FileError: If file not found or inaccessible
+            ValidationError: If data validation fails
         """
         if not GDAL_AVAILABLE:
             raise ImportError(
@@ -78,78 +82,78 @@ class HyperspectralProcessor:
             )
 
         try:
-            # Проверка существования файла
+            # Check file existence
             if not os.path.exists(file_path):
-                raise FileError(f"Файл не найден: {file_path}")
+                raise FileError(f"File not found: {file_path}")
 
-            # Загрузка данных с помощью GDAL
+            # Load data using GDAL
             dataset = gdal.Open(file_path, gdal.GA_ReadOnly)
             if dataset is None:
-                raise FileError(f"Не удалось открыть файл: {file_path}")
+                raise FileError(f"Failed to open file: {file_path}")
 
-            # Получение информации о данных
+            # Get data information
             bands = dataset.RasterCount
             width = dataset.RasterXSize
             height = dataset.RasterYSize
 
             self.logger.info(
-                f"Загружаем данные: {bands} каналов, {width}x{height} пикселей"
+                f"Loading data: {bands} channels, {width}x{height} pixels"
             )
 
-            # Чтение данных
+            # Read data
             data = np.zeros((height, width, bands), dtype=np.float32)
             for band_idx in range(bands):
                 band = dataset.GetRasterBand(band_idx + 1)
                 data[:, :, band_idx] = band.ReadAsArray()
 
-            dataset = None  # Закрытие dataset
+            dataset = None  # Close dataset
 
-            # Валидация данных
+            # Validate data
             self.validator.validate_data(data)
 
-            self.logger.info("Данные успешно загружены и валидированы")
+            self.logger.info("Data successfully loaded and validated")
             return data
 
         except Exception as e:
-            self.logger.error(f"Ошибка загрузки данных: {e}")
-            raise FileError(f"Ошибка загрузки данных: {e}")
+            self.logger.error(f"Error loading data: {e}")
+            raise FileError(f"Error loading data: {e}")
 
     def process_pipeline(
         self, data: HyperspectralData, pipeline_config: Dict[str, Any]
     ) -> ProcessingResult:
         """
-        Выполнение полного пайплайна обработки
+        Execute full processing pipeline.
 
         Args:
-            data: Входные гиперспектральные данные
-            pipeline_config: Конфигурация пайплайна
+            data: Input hyperspectral data
+            pipeline_config: Pipeline configuration
 
         Returns:
-            Результаты обработки
+            Processing results
         """
         try:
-            self.logger.info("Запуск пайплайна обработки")
+            self.logger.info("Starting processing pipeline")
 
-            # Валидация входных данных
+            # Validate input data
             self.validator.validate_data(data)
 
-            # Применение коррекций
+            # Apply corrections
             if pipeline_config.get("apply_corrections", True):
                 data = self.corrections.apply_atmospheric_correction(data)
                 data = self.corrections.apply_radiometric_correction(data)
 
-            # Применение шумоподавления
+            # Apply denoising
             if pipeline_config.get("apply_denoising", True):
-                data = self.denoising.apply_savgol_filter(data)
-                data = self.denoising.apply_pca_denoising(data)
+                denoising_method = pipeline_config.get("denoising_method", "savgol")
+                data = self.denoising.advanced_noise_reduction(data, denoising_method)
 
-            # Расчет индексов
+            # Calculate indices
             indices_result = {}
             if pipeline_config.get("calculate_indices", True):
                 indices_config = pipeline_config.get("indices", {})
                 indices_result = self.calculate_indices(data, indices_config)
 
-            # Сегментация
+            # Apply segmentation
             segmentation_result = {}
             if pipeline_config.get("apply_segmentation", False):
                 segmentation_config = pipeline_config.get("segmentation", {})
@@ -165,75 +169,314 @@ class HyperspectralProcessor:
                 },
             }
 
-            self.logger.info("Пайплайн обработки завершен успешно")
+            self.logger.info("Processing pipeline completed successfully")
             return result
 
         except Exception as e:
-            self.logger.error(f"Ошибка в пайплайне обработки: {e}")
-            raise ProcessingError(f"Ошибка в пайплайне обработки: {e}")
+            self.logger.error(f"Error in processing pipeline: {e}")
+            raise ProcessingError(f"Error in processing pipeline: {e}")
 
     def calculate_indices(
         self, data: HyperspectralData, indices_config: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Расчет вегетационных индексов
+        Calculate vegetation indices.
 
         Args:
-            data: Гиперспектральные данные
-            indices_config: Конфигурация индексов
+            data: Hyperspectral data
+            indices_config: Indices configuration
 
         Returns:
-            Словарь с рассчитанными индексами
+            Dictionary with calculated indices
         """
-        # TODO: Реализовать расчет индексов
+        # TODO: Implement indices calculation
         return {}
 
     def apply_segmentation(
         self, data: HyperspectralData, segmentation_config: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Применение сегментации к данным
+        Apply segmentation to data.
 
         Args:
-            data: Гиперспектральные данные
-            segmentation_config: Конфигурация сегментации
+            data: Hyperspectral data
+            segmentation_config: Segmentation configuration
 
         Returns:
-            Результаты сегментации
+            Segmentation results
         """
-        # TODO: Реализовать сегментацию
+        # TODO: Implement segmentation
         return {}
 
     def save_results(self, results: ProcessingResult, output_dir: str) -> str:
         """
-        Сохранение результатов обработки
+        Save processing results.
 
         Args:
-            results: Результаты обработки
-            output_dir: Директория для сохранения
+            results: Processing results
+            output_dir: Output directory
 
         Returns:
-            Путь к сохраненным результатам
+            Path to saved results
         """
         try:
             os.makedirs(output_dir, exist_ok=True)
 
-            # Сохранение обработанных данных
+            # Save processed data
             if "processed_data" in results:
-                # TODO: Реализовать сохранение данных
-                pass
+                # TODO: Implement data saving
                 pass
 
-            # Сохранение индексов
+            # Save indices
             if "indices" in results:
                 indices_dir = os.path.join(output_dir, "indices")
                 os.makedirs(indices_dir, exist_ok=True)
-                # TODO: Реализовать сохранение индексов
+                # TODO: Implement indices saving
                 pass
 
-            self.logger.info(f"Результаты сохранены в: {output_dir}")
+            self.logger.info(f"Results saved to: {output_dir}")
             return output_dir
 
         except Exception as e:
-            self.logger.error(f"Ошибка сохранения результатов: {e}")
-            raise FileError(f"Ошибка сохранения результатов: {e}")
+            self.logger.error(f"Error saving results: {e}")
+            raise FileError(f"Error saving results: {e}")
+
+    def process(self, input_path: str, output_dir: str) -> str:
+        """
+        Process hyperspectral data.
+
+        Args:
+            input_path: Path to input file
+            output_dir: Output directory
+
+        Returns:
+            Path to processed results
+        """
+        # TODO: Implement processing
+        return output_dir
+
+    def _advanced_noise_reduction(self, data: HyperspectralData, method: str = "savgol") -> HyperspectralData:
+        """
+        Apply advanced noise reduction.
+
+        Args:
+            data: Input data
+            method: Denoising method
+
+        Returns:
+            Denoised data
+        """
+        # TODO: Implement advanced noise reduction
+        return data
+
+    def _analyze_data_quality(self, data: HyperspectralData) -> Dict[str, Any]:
+        """
+        Analyze data quality.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Quality metrics
+        """
+        # TODO: Implement data quality analysis
+        return {}
+
+    def _atmospheric_correction(self, data: HyperspectralData, wavelengths: Optional[NDArray] = None) -> HyperspectralData:
+        """
+        Apply atmospheric correction.
+
+        Args:
+            data: Input data
+            wavelengths: Wavelength information
+
+        Returns:
+            Corrected data
+        """
+        # TODO: Implement atmospheric correction
+        return data
+
+    def _calculate_quality_score(self, data_quality: Dict[str, Any]) -> float:
+        """
+        Calculate overall quality score.
+
+        Args:
+            data_quality: Quality metrics
+
+        Returns:
+            Quality score
+        """
+        # TODO: Implement quality score calculation
+        return 1.0
+
+    def _calculate_snr(self, data: HyperspectralData) -> float:
+        """
+        Calculate signal-to-noise ratio.
+
+        Args:
+            data: Input data
+
+        Returns:
+            SNR value
+        """
+        # TODO: Implement SNR calculation
+        return 1.0
+
+    def _dark_current_correction(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply dark current correction.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Corrected data
+        """
+        # TODO: Implement dark current correction
+        return data
+
+    def _empirical_line_correction(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply empirical line correction.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Corrected data
+        """
+        # TODO: Implement empirical line correction
+        return data
+
+    def _extract_wavelengths(self, dataset: Any) -> Optional[NDArray]:
+        """
+        Extract wavelength information.
+
+        Args:
+            dataset: GDAL dataset
+
+        Returns:
+            Wavelength array or None
+        """
+        # TODO: Implement wavelength extraction
+        return None
+
+    def _flat_field_correction(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply flat field correction.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Corrected data
+        """
+        # TODO: Implement flat field correction
+        return data
+
+    def _mnf_denoising(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply MNF denoising.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Denoised data
+        """
+        # TODO: Implement MNF denoising
+        return data
+
+    def _pca_denoising(self, data: HyperspectralData, n_components: float = 0.95) -> HyperspectralData:
+        """
+        Apply PCA denoising.
+
+        Args:
+            data: Input data
+            n_components: Number of components or variance ratio
+
+        Returns:
+            Denoised data
+        """
+        # TODO: Implement PCA denoising
+        return data
+
+    def _radiometric_correction(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply radiometric correction.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Corrected data
+        """
+        # TODO: Implement radiometric correction
+        return data
+
+    def _savgol_denoising(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply Savitzky-Golay denoising.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Denoised data
+        """
+        # TODO: Implement Savitzky-Golay denoising
+        return data
+
+    def _spectral_calibration(self, data: HyperspectralData, reference_data: Optional[HyperspectralData] = None) -> HyperspectralData:
+        """
+        Apply spectral calibration.
+
+        Args:
+            data: Input data
+            reference_data: Reference data for calibration
+
+        Returns:
+            Calibrated data
+        """
+        # TODO: Implement spectral calibration
+        return data
+
+    def _spectral_resampling(self, data: HyperspectralData, target_wavelengths: NDArray) -> HyperspectralData:
+        """
+        Resample data to target wavelengths.
+
+        Args:
+            data: Input data
+            target_wavelengths: Target wavelengths
+
+        Returns:
+            Resampled data
+        """
+        # TODO: Implement spectral resampling
+        return data
+
+    def _spectral_smoothing(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply spectral smoothing.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Smoothed data
+        """
+        # TODO: Implement spectral smoothing
+        return data
+
+    def _wavelet_denoising(self, data: HyperspectralData) -> HyperspectralData:
+        """
+        Apply wavelet denoising.
+
+        Args:
+            data: Input data
+
+        Returns:
+            Denoised data
+        """
+        # TODO: Implement wavelet denoising
+        return data

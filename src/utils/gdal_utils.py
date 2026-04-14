@@ -58,6 +58,8 @@ class GDALDatasetManager:
         RuntimeError
             If the dataset cannot be opened
         """
+        if not GDAL_AVAILABLE:
+            raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
         self.dataset = gdal.Open(self.file_path, self.access_mode)
         if self.dataset is None:
             raise RuntimeError(f"Failed to open GDAL dataset: {self.file_path}")
@@ -177,7 +179,7 @@ def get_gdal_metadata_safe(file_path: str) -> dict:
         for i in range(1, dataset.RasterCount + 1):
             band = dataset.GetRasterBand(i)
             band_info = {
-                "data_type": gdal.GetDataTypeName(band.DataType),
+                "data_type": gdal.GetDataTypeName(band.DataType) if GDAL_AVAILABLE else "Unknown",
                 "no_data_value": band.GetNoDataValue(),
                 "scale": band.GetScale(),
                 "offset": band.GetOffset(),
@@ -294,6 +296,8 @@ def write_raster(
             if projection is None:
                 projection = source_dataset.GetProjection()
 
+    if not GDAL_AVAILABLE:
+        raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
     driver = gdal.GetDriverByName("GTiff")
     if driver is None:
         raise RuntimeError("GTiff driver not available")
@@ -354,7 +358,7 @@ def get_raster_metadata(file_path: str) -> Dict[str, Any]:
         for i in range(1, dataset.RasterCount + 1):
             band = dataset.GetRasterBand(i)
             band_metadata[f"band_{i}"] = {
-                "data_type": gdal.GetDataTypeName(band.DataType),
+                "data_type": gdal.GetDataTypeName(band.DataType) if GDAL_AVAILABLE else "Unknown",
                 "no_data_value": band.GetNoDataValue(),
                 "minimum": band.GetMinimum(),
                 "maximum": band.GetMaximum(),
@@ -398,3 +402,16 @@ def create_raster_copy(
         write_raster(
             data, output_path, metadata["geotransform"], metadata["projection"]
         )
+
+
+__all__ = [
+    "GDALDatasetManager",
+    "open_gdal_dataset",
+    "read_gdal_band_safe",
+    "get_gdal_metadata_safe",
+    "read_raster_band",
+    "read_raster_bands",
+    "write_raster",
+    "get_raster_metadata",
+    "create_raster_copy",
+]

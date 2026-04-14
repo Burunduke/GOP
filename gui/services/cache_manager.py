@@ -1,10 +1,11 @@
 """
-Менеджер кэширования для GUI приложения GOP
+Cache manager for GOP GUI application
 """
 
 import json
 import pickle
 import hashlib
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Optional, Dict
 from pathlib import Path
@@ -15,53 +16,55 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
+logger = logging.getLogger(__name__)
+
 
 class CacheManager:
-    """Менеджер для кэширования данных"""
+    """Manager for data caching"""
     
-    def __init__(self, redis_url: str = 'redis://localhost:6379/0', 
-                 cache_dir: str = 'data/cache'):
+    def __init__(self, redis_url: str = 'redis://localhost:6379/0',
+                 cache_dir: str = 'data/cache') -> None:
         """
-        Инициализация менеджера кэша
+        Initialize cache manager
         
         Args:
-            redis_url: URL для подключения к Redis
-            cache_dir: Директория для файлового кэша
+            redis_url: URL for Redis connection
+            cache_dir: Directory for file cache
         """
         self.redis_url = redis_url
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
-        # Локальный кэш в памяти
-        self.local_cache = {}
-        self.default_ttl = 3600  # 1 час по умолчанию
+        # Local in-memory cache
+        self.local_cache: Dict[str, Dict[str, Any]] = {}
+        self.default_ttl = 3600  # 1 hour default
         
-        # Инициализация Redis если доступен
+        # Initialize Redis if available
         self.redis_client = None
         if REDIS_AVAILABLE:
             try:
                 self.redis_client = redis.from_url(redis_url)
-                # Проверка соединения
+                # Test connection
                 self.redis_client.ping()
                 self.cache_mode = "redis"
             except Exception as e:
-                print(f"Не удалось подключиться к Redis: {e}")
+                logger.warning(f"Failed to connect to Redis: {e}")
                 self.cache_mode = "file"
         else:
             self.cache_mode = "file"
     
     def get(self, key: str, use_local_cache: bool = True) -> Optional[Any]:
         """
-        Получение данных из кэша
+        Get data from cache
         
         Args:
-            key: Ключ кэша
-            use_local_cache: Использовать локальный кэш
+            key: Cache key
+            use_local_cache: Use local cache
             
         Returns:
-            Кэшированные данные или None
+            Cached data or None
         """
-        # Попытка получить из локального кэша
+        # Try to get from local cache
         if use_local_cache and key in self.local_cache:
             cached_item = self.local_cache[key]
             if self._is_valid(cached_item):
@@ -69,14 +72,14 @@ class CacheManager:
             else:
                 del self.local_cache[key]
         
-        # Попытка получить из Redis
+        # Try to get from Redis
         if self.cache_mode == "redis" and self.redis_client:
             try:
                 cached_data = self.redis_client.get(key)
                 if cached_data:
                     cached_item = pickle.loads(cached_data)
                     if self._is_valid(cached_item):
-                        # Сохранение в локальный кэш
+                        # Save to local cache
                         if use_local_cache:
                             self.local_cache[key] = cached_item
                         return cached_item['data']
@@ -85,7 +88,7 @@ class CacheManager:
             except (pickle.PickleError, redis.RedisError):
                 pass
         
-        # Попытка получить из файлового кэша
+        # Try to get from file cache
         if self.cache_mode == "file":
             return self._get_from_file_cache(key)
         
@@ -93,15 +96,15 @@ class CacheManager:
     
     def set(self, key: str, data: Any, ttl: Optional[int] = None) -> bool:
         """
-        Сохранение данных в кэш
+        Save data to cache
         
         Args:
-            key: Ключ кэша
-            data: Данные для кэширования
-            ttl: Время жизни в секундах
+            key: Cache key
+            data: Data to cache
+            ttl: Time to live in seconds
             
         Returns:
-            True если успешно
+            True if successful
         """
         if ttl is None:
             ttl = self.default_ttl
@@ -114,10 +117,10 @@ class CacheManager:
         
         success = True
         
-        # Сохранение в локальный кэш
+        # Save to local cache
         self.local_cache[key] = cache_item
         
-        # Сохранение в Redis
+        # Save to Redis
         if self.cache_mode == "redis" and self.redis_client:
             try:
                 serialized_data = pickle.dumps(cache_item)
@@ -125,7 +128,7 @@ class CacheManager:
             except (pickle.PickleError, redis.RedisError):
                 success = False
         
-        # Сохранение в файловый кэш
+        # Save to file cache
         if self.cache_mode == "file":
             success = self._set_to_file_cache(key, cache_item, ttl)
         
@@ -133,28 +136,28 @@ class CacheManager:
     
     def delete(self, key: str) -> bool:
         """
-        Удаление данных из кэша
+        Delete data from cache
         
         Args:
-            key: Ключ кэша
+            key: Cache key
             
         Returns:
-            True если успешно
+            True if successful
         """
-        # Удаление из локального кэша
+        # Delete from local cache
         if key in self.local_cache:
             del self.local_cache[key]
         
         success = True
         
-        # Удаление из Redis
+        # Delete from Redis
         if self.cache_mode == "redis" and self.redis_client:
             try:
                 self.redis_client.delete(key)
             except redis.RedisError:
                 success = False
         
-        # Удаление из файлового кэша
+        # Delete from file cache
         if self.cache_mode == "file":
             cache_file = self._get_cache_file_path(key)
             if cache_file.exists():
@@ -167,24 +170,24 @@ class CacheManager:
     
     def clear(self) -> bool:
         """
-        Очистка всего кэша
+        Clear entire cache
         
         Returns:
-            True если успешно
+            True if successful
         """
-        # Очистка локального кэша
+        # Clear local cache
         self.local_cache.clear()
         
         success = True
         
-        # Очистка Redis
+        # Clear Redis
         if self.cache_mode == "redis" and self.redis_client:
             try:
                 self.redis_client.flushdb()
             except redis.RedisError:
                 success = False
         
-        # Очистка файлового кэша
+        # Clear file cache
         if self.cache_mode == "file":
             try:
                 for cache_file in self.cache_dir.glob("*.cache"):
@@ -196,10 +199,10 @@ class CacheManager:
     
     def get_cache_info(self) -> Dict[str, Any]:
         """
-        Получение информации о кэше
+        Get cache information
         
         Returns:
-            Информация о состоянии кэша
+            Cache status information
         """
         info = {
             'cache_mode': self.cache_mode,
@@ -212,7 +215,7 @@ class CacheManager:
                 info['redis_info'] = self.redis_client.info()
                 info['redis_db_size'] = self.redis_client.dbsize()
             except redis.RedisError:
-                info['redis_info'] = 'Ошибка подключения'
+                info['redis_info'] = 'Connection error'
         
         if self.cache_mode == "file":
             cache_files = list(self.cache_dir.glob("*.cache"))
@@ -225,25 +228,25 @@ class CacheManager:
     
     def cache_with_ttl(self, ttl: int = None):
         """
-        Декоратор для кэширования результатов функций
+        Decorator for caching function results
         
         Args:
-            ttl: Время жизни кэша в секундах
+            ttl: Cache time to live in seconds
             
         Returns:
-            Декоратор
+            Decorator
         """
         def decorator(func):
             def wrapper(*args, **kwargs):
-                # Создание ключа кэша на основе имени функции и аргументов
+                # Create cache key based on function name and arguments
                 key = self._create_cache_key(func.__name__, args, kwargs)
                 
-                # Попытка получить из кэша
+                # Try to get from cache
                 cached_result = self.get(key)
                 if cached_result is not None:
                     return cached_result
                 
-                # Выполнение функции и кэширование результата
+                # Execute function and cache result
                 result = func(*args, **kwargs)
                 self.set(key, result, ttl)
                 
@@ -252,7 +255,7 @@ class CacheManager:
         return decorator
     
     def _is_valid(self, cache_item: Dict[str, Any]) -> bool:
-        """Проверка валидности кэшированных данных"""
+        """Check if cached data is valid"""
         try:
             created_at = datetime.fromisoformat(cache_item['created_at'])
             expires_at = created_at + timedelta(seconds=cache_item['ttl'])
@@ -261,13 +264,13 @@ class CacheManager:
             return False
     
     def _get_cache_file_path(self, key: str) -> Path:
-        """Получение пути к файлу кэша"""
-        # Использование хэша для безопасного имени файла
+        """Get cache file path"""
+        # Use hash for safe filename
         key_hash = hashlib.md5(key.encode()).hexdigest()
         return self.cache_dir / f"{key_hash}.cache"
     
     def _get_from_file_cache(self, key: str) -> Optional[Any]:
-        """Получение данных из файлового кэша"""
+        """Get data from file cache"""
         cache_file = self._get_cache_file_path(key)
         if not cache_file.exists():
             return None
@@ -282,7 +285,7 @@ class CacheManager:
                 cache_file.unlink()
                 return None
         except (pickle.PickleError, FileNotFoundError, ValueError):
-            # Удаление поврежденного файла
+            # Delete corrupted file
             try:
                 cache_file.unlink()
             except:
@@ -290,7 +293,7 @@ class CacheManager:
             return None
     
     def _set_to_file_cache(self, key: str, cache_item: Dict[str, Any], ttl: int) -> bool:
-        """Сохранение данных в файловый кэш"""
+        """Save data to file cache"""
         cache_file = self._get_cache_file_path(key)
         try:
             with open(cache_file, 'wb') as f:
@@ -300,8 +303,8 @@ class CacheManager:
             return False
     
     def _create_cache_key(self, func_name: str, args: tuple, kwargs: dict) -> str:
-        """Создание ключа кэша на основе функции и аргументов"""
-        # Сериализация аргументов для создания уникального ключа
+        """Create cache key based on function and arguments"""
+        # Serialize arguments to create unique key
         try:
             args_str = json.dumps(args, sort_keys=True, default=str)
             kwargs_str = json.dumps(kwargs, sort_keys=True, default=str)

@@ -1,5 +1,5 @@
 """
-Утилиты для работы с файлами в GUI приложении GOP
+File utilities for GOP GUI application
 """
 
 import os
@@ -11,14 +11,14 @@ from datetime import datetime
 
 def validate_file_format(file_path: str, supported_formats: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Валидация формата файла
+    Validate file format
     
     Args:
-        file_path: Путь к файлу
-        supported_formats: Список поддерживаемых форматов
+        file_path: Path to the file
+        supported_formats: List of supported formats
         
     Returns:
-        Результат валидации
+        Validation result dictionary
     """
     if supported_formats is None:
         supported_formats = ['.bil', '.hdr', '.tif', '.tiff', '.dat', '.png', '.jpg', '.jpeg']
@@ -30,12 +30,12 @@ def validate_file_format(file_path: str, supported_formats: Optional[List[str]] 
     }
     
     try:
-        # Проверка существования файла
+        # Check if file exists
         if not os.path.exists(file_path):
-            result['error'] = 'Файл не существует'
+            result['error'] = 'File does not exist'
             return result
         
-        # Получение информации о файле
+        # Get file information
         file_path_obj = Path(file_path)
         file_size = file_path_obj.stat().st_size
         file_ext = file_path_obj.suffix.lower()
@@ -49,40 +49,40 @@ def validate_file_format(file_path: str, supported_formats: Optional[List[str]] 
             'modified_time': datetime.fromtimestamp(file_path_obj.stat().st_mtime).isoformat()
         }
         
-        # Проверка формата
+        # Check format
         if file_ext not in supported_formats:
-            result['error'] = f'Неподдерживаемый формат: {file_ext}. Поддерживаемые: {", ".join(supported_formats)}'
+            result['error'] = f'Unsupported format: {file_ext}. Supported: {", ".join(supported_formats)}'
             return result
         
-        # Проверка размера (максимум 10GB)
+        # Check size (maximum 10GB)
         max_size = 10 * 1024 * 1024 * 1024
         if file_size > max_size:
-            result['error'] = f'Файл слишком большой: {format_file_size(file_size)}. Максимум: {format_file_size(max_size)}'
+            result['error'] = f'File too large: {format_file_size(file_size)}. Maximum: {format_file_size(max_size)}'
             return result
         
-        # Дополнительная проверка для специфических форматов
+        # Additional validation for specific formats
         if file_ext in ['.bil', '.hdr']:
             if not _validate_hyperspectral_file(file_path):
-                result['error'] = 'Файл не является валидным гиперспектральным данным'
+                result['error'] = 'File is not valid hyperspectral data'
                 return result
         
         result['valid'] = True
         
     except Exception as e:
-        result['error'] = f'Ошибка при валидации файла: {str(e)}'
+        result['error'] = f'Error validating file: {str(e)}'
     
     return result
 
 
 def format_file_size(size_bytes: int) -> str:
     """
-    Форматирование размера файла в человекочитаемый формат
+    Format file size to human-readable format
     
     Args:
-        size_bytes: Размер в байтах
+        size_bytes: Size in bytes
         
     Returns:
-        Отформатированный размер
+        Formatted size string
     """
     if size_bytes == 0:
         return "0 B"
@@ -98,13 +98,13 @@ def format_file_size(size_bytes: int) -> str:
 
 def get_file_metadata(file_path: str) -> Dict[str, Any]:
     """
-    Получение метаданных файла
+    Get file metadata
     
     Args:
-        file_path: Путь к файлу
+        file_path: Path to the file
         
     Returns:
-        Метаданные файла
+        File metadata dictionary
     """
     try:
         file_path_obj = Path(file_path)
@@ -124,7 +124,7 @@ def get_file_metadata(file_path: str) -> Dict[str, Any]:
             'is_writable': os.access(file_path, os.W_OK),
         }
         
-        # Добавление специфичной информации для разных форматов
+        # Add format-specific information
         if file_path_obj.suffix.lower() in ['.bil', '.hdr']:
             metadata.update(_get_hyperspectral_metadata(file_path))
         elif file_path_obj.suffix.lower() in ['.tif', '.tiff']:
@@ -134,33 +134,33 @@ def get_file_metadata(file_path: str) -> Dict[str, Any]:
         
     except Exception as e:
         return {
-            'error': f'Ошибка получения метаданных: {str(e)}',
+            'error': f'Error getting metadata: {str(e)}',
             'path': file_path
         }
 
 
 def _validate_hyperspectral_file(file_path: str) -> bool:
     """
-    Валидация гиперспектрального файла
+    Validate hyperspectral file
     
     Args:
-        file_path: Путь к файлу
+        file_path: Path to the file
         
     Returns:
-        True если файл валидный
+        True if file is valid
     """
     try:
-        # Базовая проверка - для полноценной валидации нужен GDAL/spectral
+        # Basic validation - full validation requires GDAL/spectral
         file_path_obj = Path(file_path)
         
-        # Проверка наличия HDR файла для BIL
+        # Check for HDR file for BIL
         if file_path_obj.suffix.lower() == '.bil':
             hdr_file = file_path_obj.with_suffix('.hdr')
             if not hdr_file.exists():
                 return False
         
-        # Проверка минимального размера
-        if file_path_obj.stat().st_size < 1024:  # Минимум 1KB
+        # Check minimum size
+        if file_path_obj.stat().st_size < 1024:  # Minimum 1KB
             return False
         
         return True
@@ -171,13 +171,13 @@ def _validate_hyperspectral_file(file_path: str) -> bool:
 
 def _get_hyperspectral_metadata(file_path: str) -> Dict[str, Any]:
     """
-    Получение метаданных гиперспектрального файла
+    Get hyperspectral file metadata
     
     Args:
-        file_path: Путь к файлу
+        file_path: Path to the file
         
     Returns:
-        Метаданные гиперспектрального файла
+        Hyperspectral file metadata
     """
     metadata = {
         'file_type': 'hyperspectral',
@@ -189,19 +189,19 @@ def _get_hyperspectral_metadata(file_path: str) -> Dict[str, Any]:
     try:
         file_path_obj = Path(file_path)
         
-        # Попытка прочитать HDR файл
+        # Try to read HDR file
         if file_path_obj.suffix.lower() == '.hdr':
             hdr_content = file_path_obj.read_text()
-            # Простая парсилка HDR файла
+            # Simple HDR file parser
             if 'samples' in hdr_content.lower():
-                # Извлечение базовой информации из HDR
+                # Extract basic information from HDR
                 metadata['samples'] = _extract_hdr_value(hdr_content, 'samples')
                 metadata['lines'] = _extract_hdr_value(hdr_content, 'lines')
                 metadata['bands'] = _extract_hdr_value(hdr_content, 'bands')
                 metadata['bands_count'] = metadata.get('bands', 0)
         
         elif file_path_obj.suffix.lower() == '.bil':
-            # Поиск соответствующего HDR файла
+            # Search for corresponding HDR file
             hdr_file = file_path_obj.with_suffix('.hdr')
             if hdr_file.exists():
                 return _get_hyperspectral_metadata(str(hdr_file))
@@ -214,13 +214,13 @@ def _get_hyperspectral_metadata(file_path: str) -> Dict[str, Any]:
 
 def _get_geotiff_metadata(file_path: str) -> Dict[str, Any]:
     """
-    Получение метаданных GeoTIFF файла
+    Get GeoTIFF file metadata
     
     Args:
-        file_path: Путь к файлу
+        file_path: Path to the file
         
     Returns:
-        Метаданные GeoTIFF файла
+        GeoTIFF file metadata
     """
     metadata = {
         'file_type': 'geotiff',
@@ -230,11 +230,11 @@ def _get_geotiff_metadata(file_path: str) -> Dict[str, Any]:
     }
     
     try:
-        # Для полноценного извлечения метаданных нужен GDAL/rasterio
-        # Здесь базовая реализация
+        # Full metadata extraction requires GDAL/rasterio
+        # Basic implementation here
         file_path_obj = Path(file_path)
         
-        # Проверка размера для определения примерного разрешения
+        # Check size to estimate resolution
         size_mb = file_path_obj.stat().st_size / (1024 * 1024)
         if size_mb > 100:
             metadata['estimated_resolution'] = 'high'
@@ -251,14 +251,14 @@ def _get_geotiff_metadata(file_path: str) -> Dict[str, Any]:
 
 def _extract_hdr_value(hdr_content: str, key: str) -> Optional[int]:
     """
-    Извлечение числового значения из HDR файла
+    Extract numeric value from HDR file
     
     Args:
-        hdr_content: Содержимое HDR файла
-        key: Ключ для поиска
+        hdr_content: HDR file content
+        key: Key to search for
         
     Returns:
-        Числовое значение или None
+        Numeric value or None
     """
     try:
         lines = hdr_content.split('\n')
@@ -273,20 +273,20 @@ def _extract_hdr_value(hdr_content: str, key: str) -> Optional[int]:
 
 def create_safe_filename(filename: str) -> str:
     """
-    Создание безопасного имени файла
+    Create safe filename
     
     Args:
-        filename: Исходное имя файла
+        filename: Original filename
         
     Returns:
-        Безопасное имя файла
+        Safe filename
     """
     import re
     
-    # Удаление недопустимых символов
+    # Remove invalid characters
     safe_name = re.sub(r'[<>:"/\\|?*]', '_', filename)
     
-    # Ограничение длины
+    # Limit length
     if len(safe_name) > 255:
         name, ext = os.path.splitext(safe_name)
         safe_name = name[:255-len(ext)] + ext
@@ -296,13 +296,13 @@ def create_safe_filename(filename: str) -> str:
 
 def ensure_directory_exists(directory: str) -> bool:
     """
-    Убедиться что директория существует
+    Ensure directory exists
     
     Args:
-        directory: Путь к директории
+        directory: Path to directory
         
     Returns:
-        True если директория существует или создана
+        True if directory exists or was created
     """
     try:
         Path(directory).mkdir(parents=True, exist_ok=True)
@@ -313,13 +313,13 @@ def ensure_directory_exists(directory: str) -> bool:
 
 def get_directory_size(directory: str) -> int:
     """
-    Получение размера директории в байтах
+    Get directory size in bytes
     
     Args:
-        directory: Путь к директории
+        directory: Path to directory
         
     Returns:
-        Размер в байтах
+        Size in bytes
     """
     total_size = 0
     try:
@@ -335,14 +335,14 @@ def get_directory_size(directory: str) -> int:
 
 def cleanup_old_files(directory: str, max_age_days: int = 30) -> int:
     """
-    Очистка старых файлов в директории
+    Clean up old files in directory
     
     Args:
-        directory: Путь к директории
-        max_age_days: Максимальный возраст файлов в днях
+        directory: Path to directory
+        max_age_days: Maximum file age in days
         
     Returns:
-        Количество удаленных файлов
+        Number of deleted files
     """
     deleted_count = 0
     cutoff_time = datetime.now().timestamp() - (max_age_days * 24 * 3600)

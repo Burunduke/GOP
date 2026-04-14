@@ -1,5 +1,5 @@
-# Pre-commit hooks для GOP проекта
-# Установить с: pre-commit install
+# Pre-commit hooks for GOP project
+# Install with: pre-commit install
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

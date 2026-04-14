@@ -1,9 +1,10 @@
 """
-Конфигурационный модуль для управления настройками проекта
+Configuration module for managing project settings with proper dependency injection support
 """
 
 import os
 import yaml
+import threading
 from typing import Dict, Any, Optional, Union, List, TypeVar
 from pathlib import Path
 
@@ -15,32 +16,35 @@ T = TypeVar("T")
 
 class Config:
     """
-    Класс для управления конфигурацией проекта
+    Thread-safe configuration management class with dependency injection support
     """
+
+    _instance: Optional["Config"] = None
+    _lock = threading.Lock()
 
     def __init__(self, config_path: Optional[str] = None):
         """
-        Инициализация конфигурации
+        Initialize configuration
 
         Args:
-            config_path: Путь к файлу конфигурации
+            config_path: Path to configuration file
         """
         self.config_path = config_path or self._get_default_config_path()
         self._config = self._load_config()
+        self._lock = threading.Lock()
 
     def _get_default_config_path(self) -> str:
-        """Получить путь к файлу конфигурации по умолчанию"""
-        # Ищем config.yaml в корневой директории проекта
+        """Get default configuration file path"""
         project_root = Path(__file__).parent.parent.parent
         config_file = project_root / "config" / "config.yaml"
         return str(config_file)
 
     def _load_config(self) -> Dict[str, Any]:
         """
-        Загрузить конфигурацию из файла
+        Load configuration from file
 
         Returns:
-            Словарь с настройками
+            Dictionary with settings
         """
         if not os.path.exists(self.config_path):
             return self._get_default_config()
@@ -49,15 +53,18 @@ class Config:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
-            print(f"Ошибка загрузки конфигурации: {e}")
+            # Use logging instead of print
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error loading configuration: {e}")
             return self._get_default_config()
 
     def _get_default_config(self) -> Dict[str, Any]:
         """
-        Получить конфигурацию по умолчанию
+        Get default configuration
 
         Returns:
-            Словарь с настройками по умолчанию
+            Dictionary with default settings
         """
         return {
             "processing": {
@@ -95,14 +102,14 @@ class Config:
 
     def get(self, key: str, default: T = None) -> Union[ConfigValue, T]:
         """
-        Получить значение параметра конфигурации
+        Get configuration parameter value
 
         Args:
-            key: Ключ параметра (поддерживает вложенные ключи через точку)
-            default: Значение по умолчанию
+            key: Parameter key (supports nested keys with dots)
+            default: Default value
 
         Returns:
-            Значение параметра
+            Parameter value
         """
         keys = key.split(".")
         value = self._config
@@ -116,32 +123,33 @@ class Config:
 
     def set(self, key: str, value: ConfigValue) -> None:
         """
-        Установить значение параметра конфигурации
+        Set configuration parameter value
 
         Args:
-            key: Ключ параметра (поддерживает вложенные ключи через точку)
-            value: Значение параметра
+            key: Parameter key (supports nested keys with dots)
+            value: Parameter value
         """
-        keys = key.split(".")
-        config = self._config
+        with self._lock:
+            keys = key.split(".")
+            config = self._config
 
-        for k in keys[:-1]:
-            if k not in config:
-                config[k] = {}
-            config = config[k]
+            for k in keys[:-1]:
+                if k not in config:
+                    config[k] = {}
+                config = config[k]
 
-        config[keys[-1]] = value
+            config[keys[-1]] = value
 
     def save(self, path: Optional[str] = None) -> None:
         """
-        Сохранить конфигурацию в файл
+        Save configuration to file
 
         Args:
-            path: Путь для сохранения (если None, используется текущий путь)
+            path: Path for saving (if None, uses current path)
         """
         save_path = path or self.config_path
 
-        # Создаем директорию, если она не существует
+        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
         try:
@@ -154,24 +162,28 @@ class Config:
                     indent=2,
                 )
         except Exception as e:
-            print(f"Ошибка сохранения конфигурации: {e}")
+            # Use logging instead of print
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error saving configuration: {e}")
 
     def update(self, config_dict: ConfigDict) -> None:
         """
-        Обновить конфигурацию из словаря
+        Update configuration from dictionary
 
         Args:
-            config_dict: Словарь с новыми настройками
+            config_dict: Dictionary with new settings
         """
-        self._deep_update(self._config, config_dict)
+        with self._lock:
+            self._deep_update(self._config, config_dict)
 
     def _deep_update(self, base_dict: ConfigDict, update_dict: ConfigDict) -> None:
         """
-        Рекурсивное обновление словаря
+        Recursive dictionary update
 
         Args:
-            base_dict: Базовый словарь
-            update_dict: Словарь с обновлениями
+            base_dict: Base dictionary
+            update_dict: Update dictionary
         """
         for key, value in update_dict.items():
             if (
@@ -185,46 +197,61 @@ class Config:
 
     @property
     def config(self) -> ConfigDict:
-        """Получить полный словарь конфигурации"""
-        return self._config.copy()
+        """Get full configuration dictionary"""
+        with self._lock:
+            return self._config.copy()
+
+    @classmethod
+    def get_instance(cls, config_path: Optional[str] = None) -> "Config":
+        """
+        Get singleton instance of Config (thread-safe)
+
+        Args:
+            config_path: Optional path to configuration file
+
+        Returns:
+            Singleton Config instance
+        """
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls(config_path)
+        return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset singleton instance (for testing)"""
+        with cls._lock:
+            cls._instance = None
 
 
 def create_config(config_path: Optional[str] = None) -> Config:
     """
-    Фабричная функция для создания экземпляра конфигурации
+    Factory function for creating configuration instance
 
     Args:
-        config_path: Путь к файлу конфигурации
+        config_path: Path to configuration file
 
     Returns:
-        Новый экземпляр Config
+        New Config instance
     """
     return Config(config_path)
 
 
 def get_config(config_instance: Optional[Config] = None) -> Config:
     """
-    Получить экземпляр конфигурации с поддержкой dependency injection
+    Get configuration instance with dependency injection support
 
     Args:
-        config_instance: Опциональный экземпляр конфигурации для инъекции
+        config_instance: Optional configuration instance for injection
 
     Returns:
-        Экземпляр конфигурации (глобальный или переданный)
+        Configuration instance (injected or singleton)
     """
     if config_instance is not None:
         return config_instance
-    return _global_config
+    return Config.get_instance()
 
 
-def reset_config() -> None:
-    """
-    Сбросить глобальную конфигурацию (для тестирования)
-    """
-    global _global_config
-    _global_config = Config()
-
-
-# Глобальный экземпляр конфигурации (для обратной совместимости)
-_global_config = Config()
-config = _global_config
+# Remove global state - use dependency injection instead
+# Applications should use get_config() or Config.get_instance()

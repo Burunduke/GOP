@@ -1,12 +1,14 @@
 """
-Основной класс сегментации изображений
+Main image segmentation class.
+
+This module provides advanced image segmentation capabilities for high-resolution
+remote sensing imagery using deep learning models and refinement techniques.
 """
 
 import os
 import logging
 import numpy as np
 from typing import Dict, Any, Optional, Tuple, Union
-from pathlib import Path
 from numpy.typing import NDArray
 
 # Type aliases for better type safety
@@ -22,21 +24,32 @@ except ImportError:
     GDAL_AVAILABLE = False
     # Don't raise error here to allow tests to run
 
-from ..core.config import config
+from ..core.config import get_config
 from ..utils.logger import setup_logger
 from ..utils.gdal_utils import open_gdal_dataset
 
 
+# Constants for segmentation parameters
+DEFAULT_COMPRESSION_RATIO = 0.125
+DEFAULT_NDVI_THRESHOLD = 0.2
+DEFAULT_MASK_QUALITY_THRESHOLD = 0.5
+MORPH_KERNEL_SIZE = 3
+GAUSSIAN_KERNEL_SIZE = 5
+
 class ImageSegmenter:
     """
-    Основной класс для сегментации изображений сверхвысокого разрешения
+    Main class for high-resolution image segmentation.
+    
+    This class provides advanced segmentation capabilities using deep learning
+    models (DeepLabV3+ and CascadePSP) with refinement techniques for
+    ultra-high-resolution remote sensing imagery.
     """
 
     def __init__(self):
-        """Инициализация сегментатора"""
+        """Initialize the image segmenter."""
         self.logger = setup_logger("ImageSegmenter")
 
-        # Инициализация моделей (заглушки для совместимости)
+        # Model initialization (stubs for compatibility)
         self.deeplab_segmenter = None
         self.cascade_segmenter = None
 
@@ -48,94 +61,102 @@ class ImageSegmenter:
         compression_ratio: Optional[float] = None,
     ) -> str:
         """
-        Сегментация изображения с использованием каскадного подхода
+        Segment image using cascade approach.
 
         Args:
-            image_path: Путь к изображению
-            output_dir: Директория для сохранения результатов
-            use_refinement: Использовать уточнение границ
-            compression_ratio: Коэффициент сжатия для предварительной сегментации
+            image_path: Path to the image
+            output_dir: Directory for saving results
+            use_refinement: Use boundary refinement
+            compression_ratio: Compression ratio for preliminary segmentation
 
         Returns:
-            Путь к финальной маске сегментации
+            Path to the final segmentation mask
+
+        Raises:
+            FileNotFoundError: If input image is not found
+            Exception: If segmentation fails
         """
         try:
-            self.logger.info(f"Начало сегментации изображения: {image_path}")
+            self.logger.info(f"Starting image segmentation: {image_path}")
 
-            # Проверка входного файла
+            # Validate input file
             if not os.path.exists(image_path):
-                raise FileNotFoundError(f"Изображение не найдено: {image_path}")
+                raise FileNotFoundError(f"Image not found: {image_path}")
 
-            # Настройка параметров
+            # Configure parameters
             if compression_ratio is None:
-                compression_ratio = config.get("processing.compression_ratio", 0.125)
+                config_instance = get_config()
+                compression_ratio = config_instance.get("processing.compression_ratio", DEFAULT_COMPRESSION_RATIO)
 
-            # Создание выходной директории
+            # Create output directory
             os.makedirs(output_dir, exist_ok=True)
 
-            # Этап 1: Предварительная сегментация с помощью DeepLabV3+
-            self.logger.info("Этап 1: Предварительная сегментация DeepLabV3+")
+            # Stage 1: Preliminary segmentation with DeepLabV3+
+            self.logger.info("Stage 1: Preliminary segmentation with DeepLabV3+")
             coarse_mask_path = self._preliminary_segmentation(
                 image_path, output_dir, compression_ratio
             )
 
             if not use_refinement:
-                self.logger.info("Уточнение границ отключено")
+                self.logger.info("Boundary refinement disabled")
                 return coarse_mask_path
 
-            # Этап 2: Уточнение границ с помощью CascadePSP
-            self.logger.info("Этап 2: Уточнение границ CascadePSP")
+            # Stage 2: Boundary refinement with CascadePSP
+            self.logger.info("Stage 2: Boundary refinement with CascadePSP")
             refined_mask_path = self._refine_segmentation(
                 image_path, coarse_mask_path, output_dir
             )
 
-            # Этап 3: Выбор лучшей маски
-            self.logger.info("Этап 3: Выбор оптимальной маски")
+            # Stage 3: Select best mask
+            self.logger.info("Stage 3: Selecting optimal mask")
             final_mask_path = self._select_best_mask(
                 image_path, coarse_mask_path, refined_mask_path, output_dir
             )
 
-            self.logger.info(f"Сегментация завершена: {final_mask_path}")
+            self.logger.info(f"Segmentation completed: {final_mask_path}")
             return final_mask_path
 
         except Exception as e:
-            self.logger.error(f"Ошибка сегментации: {e}")
+            self.logger.error(f"Segmentation error: {e}")
             raise
 
     def _preliminary_segmentation(
         self, image_path: str, output_dir: str, compression_ratio: float
     ) -> str:
         """
-        Предварительная сегментация с помощью DeepLabV3+
+        Preliminary segmentation using DeepLabV3+.
 
         Args:
-            image_path: Путь к изображению
-            output_dir: Директория для сохранения
-            compression_ratio: Коэффициент сжатия
+            image_path: Path to the image
+            output_dir: Directory for saving
+            compression_ratio: Compression ratio
 
         Returns:
-            Путь к маске предварительной сегментации
+            Path to preliminary segmentation mask
+
+        Raises:
+            Exception: If preliminary segmentation fails
         """
         try:
-            # Чтение и сжатие изображения
+            # Read and compress image
             image_data, original_shape = self._read_and_compress_image(
                 image_path, compression_ratio
             )
 
-            # Упрощенная сегментация (заглушка)
+            # Simplified segmentation (stub implementation)
             mask_data = self._simple_segmentation(image_data)
 
-            # Масштабирование маски к исходному размеру
+            # Resize mask to original size
             mask_resized = self._resize_mask(mask_data, original_shape)
 
-            # Сохранение маски
+            # Save mask
             output_path = os.path.join(output_dir, "coarse_segmentation.tif")
             self._save_mask(mask_resized, output_path, image_path)
 
             return output_path
 
         except Exception as e:
-            self.logger.error(f"Ошибка предварительной сегментации: {e}")
+            self.logger.error(f"Preliminary segmentation error: {e}")
             raise
 
     def _refine_segmentation(
@@ -233,6 +254,8 @@ class ImageSegmenter:
             from ..utils.gdal_utils import read_raster_bands, get_raster_metadata
 
             # Чтение данных с использованием централизованной утилиты
+            if not GDAL_AVAILABLE:
+                raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
             image_data = read_raster_bands(image_path)
 
             # Получение метаданных для исходного размера
@@ -281,6 +304,8 @@ class ImageSegmenter:
         from ..utils.gdal_utils import read_raster_bands
 
         # Чтение данных с использованием централизованной утилиты
+        if not GDAL_AVAILABLE:
+            raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
         return read_raster_bands(image_path)
 
     def _read_mask(self, mask_path: str) -> np.ndarray:
@@ -296,6 +321,8 @@ class ImageSegmenter:
         from ..utils.gdal_utils import read_raster_band
 
         # Чтение первого канала с использованием централизованной утилиты
+        if not GDAL_AVAILABLE:
+            raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
         mask_data = read_raster_band(mask_path, band_number=1)
         return mask_data.astype(np.uint8)
 
@@ -351,6 +378,8 @@ class ImageSegmenter:
             from ..utils.gdal_utils import write_raster
 
             # Сохранение с использованием централизованной утилиты
+            if not GDAL_AVAILABLE:
+                raise ImportError("GDAL library is required but not available. Install with: pip install gdal")
             write_raster(mask_data, output_path, source_path=reference_path)
 
         except Exception as e:
@@ -359,22 +388,22 @@ class ImageSegmenter:
 
     def _evaluate_mask_quality(self, mask_path: str) -> float:
         """
-        Оценка качества маски
+        Evaluate mask quality using simple metrics.
 
         Args:
-            mask_path: Путь к маске
+            mask_path: Path to the mask file
 
         Returns:
-            Оценка качества (0-1)
+            Quality score (0-1)
         """
         try:
             mask_data = self._read_mask(mask_path)
 
-            # Простые метрики качества
-            # 1. Отношение площади сегментированной области к общей площади
+            # Simple quality metrics
+            # 1. Ratio of segmented area to total area
             area_ratio = np.sum(mask_data > 0) / mask_data.size
 
-            # 2. Компактность (отношение площади к периметру в квадрате)
+            # 2. Compactness (area to perimeter squared ratio)
             from skimage.measure import regionprops
 
             regions = regionprops(mask_data)
@@ -384,14 +413,14 @@ class ImageSegmenter:
             else:
                 compactness = 0
 
-            # Комбинированная оценка
+            # Combined quality score
             quality = 0.7 * area_ratio + 0.3 * compactness
 
             return np.clip(quality, 0, 1)
 
         except Exception as e:
-            self.logger.warning(f"Ошибка оценки качества маски: {e}")
-            return 0.5  # Средняя оценка по умолчанию
+            self.logger.warning(f"Mask quality evaluation error: {e}")
+            return DEFAULT_MASK_QUALITY_THRESHOLD  # Default quality score
 
     def _copy_file(self, src: str, dst: str) -> None:
         """
@@ -409,46 +438,49 @@ class ImageSegmenter:
         self, image_paths: list, output_dir: str = "results", **kwargs
     ) -> list:
         """
-        Пакетная сегментация изображений
+        Batch segmentation of multiple images.
 
         Args:
-            image_paths: Список путей к изображениям
-            output_dir: Директория для сохранения результатов
-            **kwargs: Дополнительные параметры
+            image_paths: List of image paths
+            output_dir: Directory for saving results
+            **kwargs: Additional parameters
 
         Returns:
-            Список путей к результатам
+            List of result paths
         """
         results = []
 
         for i, image_path in enumerate(image_paths):
             try:
                 self.logger.info(
-                    f"Обработка изображения {i+1}/{len(image_paths)}: {image_path}"
+                    f"Processing image {i+1}/{len(image_paths)}: {image_path}"
                 )
 
-                # Создание индивидуальной директории для каждого изображения
+                # Create individual directory for each image
                 image_name = os.path.splitext(os.path.basename(image_path))[0]
                 image_output_dir = os.path.join(output_dir, image_name)
 
-                # Сегментация
+                # Segmentation
                 mask_path = self.segment(image_path, image_output_dir, **kwargs)
                 results.append(mask_path)
 
             except Exception as e:
-                self.logger.error(f"Ошибка обработки изображения {image_path}: {e}")
+                self.logger.error(f"Error processing image {image_path}: {e}")
                 results.append(None)
 
         return results
 
     def _simple_segmentation(self, image_data: np.ndarray) -> np.ndarray:
         """
-        Упрощенная сегментация на основе порогового значения
+        Simplified segmentation based on threshold values.
+        
+        Uses NDVI-like approach for vegetation segmentation or green channel
+        thresholding for RGB images.
         """
         try:
-            # Использование NDVI-подобного подхода для сегментации растительности
+            # Use NDVI-like approach for vegetation segmentation
             if image_data.shape[2] >= 3:
-                # Предполагаем, что каналы: Red, Green, NIR
+                # Assume channels: Red, Green, NIR
                 red = image_data[:, :, 0]
                 nir = (
                     image_data[:, :, 2]
@@ -456,53 +488,55 @@ class ImageSegmenter:
                     else image_data[:, :, 1]
                 )
 
-                # Расчет NDVI-подобного индекса
+                # Calculate NDVI-like index
                 ndvi_like = (nir - red) / (nir + red + 1e-8)
 
-                # Пороговая сегментация
-                mask = (ndvi_like > 0.2).astype(np.uint8)
+                # Threshold segmentation
+                mask = (ndvi_like > DEFAULT_NDVI_THRESHOLD).astype(np.uint8)
                 return mask
             else:
-                # Для RGB изображений используем зеленый канал
+                # For RGB images use green channel
                 green = image_data[:, :, 1]
                 mask = (green > np.mean(green)).astype(np.uint8)
                 return mask
 
         except Exception as e:
-            self.logger.warning(f"Ошибка упрощенной сегментации: {e}")
-            # Возвращаем маску по умолчанию
+            self.logger.warning(f"Simplified segmentation error: {e}")
+            # Return default mask
             return np.ones(image_data.shape[:2], dtype=np.uint8)
 
     def _simple_refinement(
         self, image_data: np.ndarray, mask_data: np.ndarray
     ) -> np.ndarray:
         """
-        Упрощенное уточнение границ сегментации
+        Simplified boundary refinement for segmentation.
+        
+        Uses morphological operations and Gaussian blur to refine mask boundaries.
         """
         try:
             import cv2
 
-            # Морфологические операции для уточнения границ
-            kernel = np.ones((3, 3), np.uint8)
+            # Morphological operations for boundary refinement
+            kernel = np.ones((MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE), np.uint8)
 
-            # Закрытие для заполнения мелких отверстий
+            # Closing to fill small holes
             closed = cv2.morphologyEx(mask_data, cv2.MORPH_CLOSE, kernel)
 
-            # Открытие для удаления мелких объектов
+            # Opening to remove small objects
             opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel)
 
-            # Гауссово размытие для сглаживания границ
-            smoothed = cv2.GaussianBlur(opened.astype(np.float32), (5, 5), 0)
+            # Gaussian blur for boundary smoothing
+            smoothed = cv2.GaussianBlur(opened.astype(np.float32), (GAUSSIAN_KERNEL_SIZE, GAUSSIAN_KERNEL_SIZE), 0)
 
-            # Бинаризация обратно
+            # Binarization back to binary mask
             refined = (smoothed > 0.5).astype(np.uint8)
 
             return refined
 
         except ImportError:
-            # Если OpenCV недоступен, возвращаем исходную маску
-            self.logger.warning("OpenCV не доступен, уточнение не выполнено")
+            # If OpenCV is not available, return original mask
+            self.logger.warning("OpenCV not available, refinement not performed")
             return mask_data
         except Exception as e:
-            self.logger.warning(f"Ошибка упрощенного уточнения: {e}")
+            self.logger.warning(f"Simplified refinement error: {e}")
             return mask_data

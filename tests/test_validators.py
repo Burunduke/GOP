@@ -21,28 +21,28 @@ def test_validate_array():
     validators.validate_array(valid_array)
 
     # Test shape validation
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(valid_array, expected_shape=(3, 3))
 
     # Test dtype validation
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(valid_array, expected_dtype=np.float32)
 
     # Test NaN validation
     nan_array = np.array([1, np.nan, 3])
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(nan_array)
 
     # Test inf validation
     inf_array = np.array([1, np.inf, 3])
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(inf_array)
 
     # Test value range validation
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(valid_array, min_value=5)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_array(valid_array, max_value=0)
 
 
@@ -53,18 +53,18 @@ def test_validate_wavelengths():
     validators.validate_wavelengths(valid_wavelengths)
 
     # Test out of range
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_wavelengths([300, 400, 500])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_wavelengths([400, 500, 3000])
 
     # Test unsorted
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_wavelengths([500, 400, 600])
 
     # Test NaN values
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_wavelengths([400, np.nan, 600])
 
 
@@ -79,7 +79,7 @@ def test_validate_file_path():
         validators.validate_file_path("/nonexistent/file.txt")
 
     # Test file extension
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.FileError):
         validators.validate_file_path(current_file, allowed_extensions=[".tif", ".hdr"])
 
 
@@ -90,11 +90,11 @@ def test_validate_band_names():
     validators.validate_band_names(valid_bands)
 
     # Test required bands
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_band_names(valid_bands, required_bands=["SWIR"])
 
     # Test allowed bands
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_band_names(valid_bands, allowed_bands=["Red", "Green"])
 
 
@@ -105,7 +105,7 @@ def test_validate_config():
     validators.validate_config(config, ["key1", "key2"])
 
     # Test missing keys
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ConfigurationError):
         validators.validate_config(config, ["key1", "key2", "key3"])
 
 
@@ -116,10 +116,10 @@ def test_validate_positive_number():
     validators.validate_positive_number(3.14)
 
     # Test non-positive numbers
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_positive_number(0)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(validators.ValidationError):
         validators.validate_positive_number(-5)
 
     # Test non-number

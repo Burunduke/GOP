@@ -1,10 +1,10 @@
-"""Исполнитель пайплайна - связывает проекты с обработкой GOP."""
+"""Pipeline executor - connects projects with GOP processing."""
 
 import logging
 import threading
 import time
 from datetime import datetime
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 
 from gui.models.project import PipelineStage, ProjectStatus, ProcessingResult
 from gui.services.project_manager import ProjectManager
@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class PipelineExecutor:
-    """Исполнитель пайплайна обработки для проектов."""
+    """Pipeline executor for project processing."""
     
     # Mapping of stages to their weights for progress calculation
-    STAGE_WEIGHTS = {
+    STAGE_WEIGHTS: Dict[str, int] = {
         PipelineStage.PREPROCESSING.value: 25,
         PipelineStage.ORTHOPHOTO.value: 20,
         PipelineStage.SEGMENTATION.value: 20,
@@ -25,49 +25,49 @@ class PipelineExecutor:
         PipelineStage.ANALYSIS.value: 10,
     }
     
-    STAGE_NAMES_RU = {
-        PipelineStage.PREPROCESSING.value: "Предобработка",
-        PipelineStage.ORTHOPHOTO.value: "Создание ортофото",
-        PipelineStage.SEGMENTATION.value: "Сегментация",
-        PipelineStage.INDICES.value: "Вегетационные индексы",
-        PipelineStage.ASSESSMENT.value: "Оценка состояния",
-        PipelineStage.ANALYSIS.value: "Научный анализ",
+    STAGE_NAMES: Dict[str, str] = {
+        PipelineStage.PREPROCESSING.value: "Preprocessing",
+        PipelineStage.ORTHOPHOTO.value: "Orthophoto creation",
+        PipelineStage.SEGMENTATION.value: "Segmentation",
+        PipelineStage.INDICES.value: "Vegetation indices",
+        PipelineStage.ASSESSMENT.value: "Health assessment",
+        PipelineStage.ANALYSIS.value: "Scientific analysis",
     }
     
-    def __init__(self, project_manager: ProjectManager, gop_adapter=None):
+    def __init__(self, project_manager: ProjectManager, gop_adapter=None) -> None:
         """
         Args:
-            project_manager: Менеджер проектов
-            gop_adapter: Адаптер GOP (опционально, для реальной обработки)
+            project_manager: Project manager
+            gop_adapter: GOP adapter (optional, for real processing)
         """
         self.project_manager = project_manager
         self.gop_adapter = gop_adapter
-        self._running_tasks: dict[str, threading.Thread] = {}
-        self._cancel_flags: dict[str, threading.Event] = {}
-        self._progress_callbacks: dict[str, Callable] = {}
+        self._running_tasks: Dict[str, threading.Thread] = {}
+        self._cancel_flags: Dict[str, threading.Event] = {}
+        self._progress_callbacks: Dict[str, Callable] = {}
     
     def execute_project(
-        self, 
+        self,
         project_id: str,
         on_progress: Optional[Callable] = None
     ) -> bool:
         """
-        Запуск обработки проекта в фоновом потоке.
+        Start project processing in background thread.
         
         Args:
-            project_id: ID проекта
-            on_progress: Callback для обновления прогресса
+            project_id: Project ID
+            on_progress: Callback for progress updates
             
         Returns:
-            True если обработка запущена
+            True if processing started
         """
         project = self.project_manager.get_project(project_id)
         if project is None:
-            logger.error(f"Проект не найден: {project_id}")
+            logger.error(f"Project not found: {project_id}")
             return False
         
         if project_id in self._running_tasks:
-            logger.warning(f"Проект {project_id} уже обрабатывается")
+            logger.warning(f"Project {project_id} is already being processed")
             return False
         
         # Start processing in ProjectManager
@@ -92,11 +92,11 @@ class PipelineExecutor:
         self._running_tasks[project_id] = thread
         thread.start()
         
-        logger.info(f"Запущена обработка проекта {project_id}")
+        logger.info(f"Started processing project {project_id}")
         return True
     
     def cancel_project(self, project_id: str) -> bool:
-        """Отмена обработки проекта."""
+        """Cancel project processing."""
         if project_id not in self._cancel_flags:
             return False
         
@@ -105,20 +105,20 @@ class PipelineExecutor:
         
         # Clean up
         self._cleanup_task(project_id)
-        logger.info(f"Обработка проекта {project_id} отменена")
+        logger.info(f"Processing project {project_id} cancelled")
         return True
     
     def is_running(self, project_id: str) -> bool:
-        """Проверка, выполняется ли обработка проекта."""
+        """Check if project processing is running."""
         return project_id in self._running_tasks and self._running_tasks[project_id].is_alive()
     
     def get_running_projects(self) -> list[str]:
-        """Получение списка ID проектов в обработке."""
+        """Get list of project IDs being processed."""
         return [pid for pid, t in self._running_tasks.items() if t.is_alive()]
     
-    def _run_pipeline(self, project_id: str, run_id: str, cancel_event: threading.Event):
+    def _run_pipeline(self, project_id: str, run_id: str, cancel_event: threading.Event) -> None:
         """
-        Основной метод выполнения пайплайна (выполняется в фоновом потоке).
+        Main pipeline execution method (runs in background thread).
         """
         try:
             project = self.project_manager.get_project(project_id)
@@ -135,11 +135,11 @@ class PipelineExecutor:
             
             for stage in stages:
                 if cancel_event.is_set():
-                    logger.info(f"Обработка проекта {project_id} отменена на этапе {stage}")
+                    logger.info(f"Processing project {project_id} cancelled at stage {stage}")
                     return
                 
                 stage_weight = self.STAGE_WEIGHTS.get(stage, 10)
-                stage_name = self.STAGE_NAMES_RU.get(stage, stage)
+                stage_name = self.STAGE_NAMES.get(stage, stage)
                 
                 # Update progress - stage starting
                 stage_result = ProcessingResult(
@@ -175,7 +175,7 @@ class PipelineExecutor:
                         pass
                     
                 except Exception as e:
-                    logger.error(f"Ошибка на этапе {stage} проекта {project_id}: {e}")
+                    logger.error(f"Error at stage {stage} project {project_id}: {e}")
                     stage_result.status = "error"
                     stage_result.end_time = datetime.now().isoformat()
                     stage_result.error_message = str(e)

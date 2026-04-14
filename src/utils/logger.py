@@ -1,5 +1,7 @@
 """
-Модуль логирования для проекта GOP
+Logging module for the GOP project.
+
+This module provides logging utilities with configurable handlers and formatters.
 """
 
 import logging
@@ -12,6 +14,9 @@ from typing import Optional, Union, Dict, Any
 LogLevel = Union[int, str]
 LogConfig = Dict[str, Any]
 
+# Extract formatter to constant as recommended in refactoring plan
+DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
 
 def setup_logger(
     name: str,
@@ -20,38 +25,36 @@ def setup_logger(
     console: bool = True,
 ) -> logging.Logger:
     """
-    Настройка логгера
+    Configure logger with specified settings.
 
     Args:
-        name: Имя логгера
-        level: Уровень логирования
-        log_file: Путь к файлу логов
-        console: Вывод в консоль
+        name: Logger name
+        level: Logging level
+        log_file: Path to log file
+        console: Enable console output
 
     Returns:
-        Настроенный логгер
+        Configured logger instance
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Очистка существующих обработчиков
+    # Clear existing handlers
     logger.handlers.clear()
 
-    # Форматирование
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    # Create formatter
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
 
-    # Обработчик для консоли
+    # Console handler
     if console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
-    # Обработчик для файла
+    # File handler
     if log_file:
-        # Создание директории для логов
+        # Create log directory
         log_dir = os.path.dirname(log_file)
         if log_dir:
             Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -66,26 +69,26 @@ def setup_logger(
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Получение существующего логгера
+    Get existing logger by name.
 
     Args:
-        name: Имя логгера
+        name: Logger name
 
     Returns:
-        Логгер
+        Logger instance
     """
     return logging.getLogger(name)
 
 
 def create_default_log_file(base_dir: str = "logs") -> str:
     """
-    Создание имени файла лога по умолчанию
+    Create default log file name with timestamp.
 
     Args:
-        base_dir: Базовая директория для логов
+        base_dir: Base directory for logs
 
     Returns:
-        Путь к файлу лога
+        Path to log file
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(base_dir, f"gop_{timestamp}.log")
@@ -94,37 +97,35 @@ def create_default_log_file(base_dir: str = "logs") -> str:
 
 def configure_logging_from_config(config: LogConfig) -> None:
     """
-    Настройка логирования на основе конфигурации
+    Configure logging based on configuration dictionary.
 
     Args:
-        config: Конфигурация логирования
+        config: Logging configuration dictionary
     """
     level = config.get("level", "INFO")
     log_file = config.get("file")
     console = config.get("console", True)
 
-    # Настройка корневого логгера
+    # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
-    # Очистка существующих обработчиков
+    # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Форматирование
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+    # Create formatter
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
 
-    # Обработчик для консоли
+    # Console handler
     if console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
 
-    # Обработчик для файла
+    # File handler
     if log_file:
-        # Создание директории для логов
+        # Create log directory
         log_dir = os.path.dirname(log_file)
         if log_dir:
             Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -133,3 +134,11 @@ def configure_logging_from_config(config: LogConfig) -> None:
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
+
+
+__all__ = [
+    "setup_logger",
+    "get_logger",
+    "create_default_log_file",
+    "configure_logging_from_config",
+]

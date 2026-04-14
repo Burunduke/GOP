@@ -1,18 +1,30 @@
 """
-Компонент детальной страницы проекта для GUI приложения GOP
+Project detail page component for GOP GUI application
+
+This module provides the detailed project view with tabs for overview, files,
+processing, and results.
 """
 
+from typing import Any, Dict, Optional
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 from datetime import datetime
 
 
-def create_project_detail(project=None):
-    """Создание детальной страницы проекта"""
+def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
+    """
+    Create project detail page.
+    
+    Args:
+        project: Project data dictionary
+        
+    Returns:
+        Project detail layout component
+    """
     if project is None:
         project = {
             "id": "",
-            "name": "Проект не выбран",
+            "name": "No project selected",
             "description": "",
             "status": "new",
             "created_at": "",
@@ -25,19 +37,19 @@ def create_project_detail(project=None):
             "tags": []
         }
     
-    # Форматирование даты в русском формате
-    def format_date(date_str):
+    # Format date in international format
+    def format_date(date_str: str) -> str:
         try:
             dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%d.%m.%Y %H:%M")
+            return dt.strftime("%Y-%m-%d %H:%M")
         except:
             return date_str
     
-    # Форматирование размера файла
-    def format_file_size(size_bytes):
+    # Format file size
+    def format_file_size(size_bytes: int) -> str:
         if size_bytes == 0:
-            return "0 Б"
-        size_names = ["Б", "КБ", "МБ", "ГБ", "ТБ"]
+            return "0 B"
+        size_names = ["B", "KB", "MB", "GB", "TB"]
         i = 0
         while size_bytes >= 1024 and i < len(size_names) - 1:
             size_bytes /= 1024.0
@@ -48,26 +60,26 @@ def create_project_detail(project=None):
     project_header = html.Div([
         dbc.Row([
             dbc.Col([
-                html.H2(project.get("name", "Без названия"), className="mb-2"),
-                html.P(project.get("description", "") or "Описание отсутствует", 
+                html.H2(project.get("name", "Untitled"), className="mb-2"),
+                html.P(project.get("description", "") or "No description",
                        className="text-muted mb-3"),
                 dbc.Row([
                     dbc.Col([
                         dbc.Badge(
-                            project.get("status_display", "Новый"), 
+                            project.get("status_display", "New"),
                             color=project.get("status_color", "secondary"),
                             className="me-2"
                         ),
-                        html.Small(f"Создан: {format_date(project.get('created_at', ''))}", 
+                        html.Small(f"Created: {format_date(project.get('created_at', ''))}",
                                   className="text-muted me-3"),
-                        html.Small(f"Обновлён: {format_date(project.get('updated_at', ''))}", 
+                        html.Small(f"Updated: {format_date(project.get('updated_at', ''))}",
                                   className="text-muted"),
                     ], width=8),
                     dbc.Col([
                         html.Div([
-                            html.Span(f"Файлов: {len(project.get('files', []))}", 
+                            html.Span(f"Files: {len(project.get('files', []))}",
                                      className="text-muted me-3"),
-                            html.Span(f"Размер: {format_file_size(project.get('total_file_size', 0))}", 
+                            html.Span(f"Size: {format_file_size(project.get('total_file_size', 0))}",
                                      className="text-muted"),
                         ], className="text-end"),
                     ], width=4),
@@ -76,41 +88,41 @@ def create_project_detail(project=None):
         ]),
     ], className="mb-4")
     
-    # Вкладки проекта
+    # Project tabs
     tabs = dbc.Tabs([
-        # Вкладка "Обзор"
+        # Overview tab
         dbc.Tab([
             html.Div([
                 dbc.Row([
                     dbc.Col([
                         dbc.Card([
-                            dbc.CardHeader("Информация о проекте"),
+                            dbc.CardHeader("Project Information"),
                             dbc.CardBody([
                                 html.Div([
-                                    html.Strong("ID проекта:"),
+                                    html.Strong("Project ID:"),
                                     html.P(project.get("id", "-"), className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Статус:"),
+                                    html.Strong("Status:"),
                                     html.P(project.get("status_display", "-"), className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Дата создания:"),
-                                    html.P(format_date(project.get("created_at", "-")), 
+                                    html.Strong("Created:"),
+                                    html.P(format_date(project.get("created_at", "-")),
                                            className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Последнее обновление:"),
-                                    html.P(format_date(project.get("updated_at", "-")), 
+                                    html.Strong("Last Updated:"),
+                                    html.P(format_date(project.get("updated_at", "-")),
                                            className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Количество файлов:"),
+                                    html.Strong("File Count:"),
                                     html.P(str(len(project.get("files", []))), className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Общий размер:"),
-                                    html.P(format_file_size(project.get("total_file_size", 0)), 
+                                    html.Strong("Total Size:"),
+                                    html.P(format_file_size(project.get("total_file_size", 0)),
                                            className="text-muted"),
                                 ]),
                             ])
@@ -118,20 +130,20 @@ def create_project_detail(project=None):
                     ], width=6),
                     dbc.Col([
                         dbc.Card([
-                            dbc.CardHeader("Статистика обработки"),
+                            dbc.CardHeader("Processing Statistics"),
                             dbc.CardBody([
                                 html.Div([
-                                    html.Strong("Запусков обработки:"),
-                                    html.P(str(len(project.get("processing_history", []))), 
+                                    html.Strong("Processing Runs:"),
+                                    html.P(str(len(project.get("processing_history", []))),
                                            className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Текущий этап:"),
-                                    html.P(project.get("current_stage", "Не запущено"), 
+                                    html.Strong("Current Stage:"),
+                                    html.P(project.get("current_stage", "Not started"),
                                            className="text-muted"),
                                 ], className="mb-3"),
                                 html.Div([
-                                    html.Strong("Прогресс:"),
+                                    html.Strong("Progress:"),
                                     dbc.Progress(
                                         value=project.get("progress", 0),
                                         max=100,
@@ -144,16 +156,16 @@ def create_project_detail(project=None):
                     ], width=6),
                 ]),
             ])
-        ], label="Обзор", tab_id="overview-tab"),
+        ], label="Overview", tab_id="overview-tab"),
         
-        # Вкладка "Файлы"
+        # Files tab
         dbc.Tab([
             html.Div([
                 dbc.Card([
                     dbc.CardHeader([
-                        html.H5("Файлы проекта", className="mb-0"),
+                        html.H5("Project Files", className="mb-0"),
                         dbc.Button(
-                            [html.I(className="fas fa-plus me-2"), "Добавить файлы"],
+                            [html.I(className="fas fa-plus me-2"), "Add Files"],
                             id="add-files-btn",
                             color="primary",
                             size="sm"
@@ -165,17 +177,17 @@ def create_project_detail(project=None):
                                 dbc.ListGroupItem([
                                     html.Div([
                                         html.Div([
-                                            html.H6(file.get("filename", "Без названия"), 
+                                            html.H6(file.get("filename", "Untitled"),
                                                    className="mb-1"),
-                                            html.P(f"Тип: {file.get('file_type', 'unknown')} | "
-                                                   f"Размер: {format_file_size(file.get('file_size', 0))} | "
-                                                   f"Загружен: {format_date(file.get('upload_date', ''))}", 
+                                            html.P(f"Type: {file.get('file_type', 'unknown')} | "
+                                                   f"Size: {format_file_size(file.get('file_size', 0))} | "
+                                                   f"Uploaded: {format_date(file.get('upload_date', ''))}",
                                                    className="mb-1 text-muted small"),
                                         ], className="flex-grow-1"),
                                         html.Div([
                                             dbc.Button(
                                                 html.I(className="fas fa-trash"),
-                                                id={"type": "project-file-delete", 
+                                                id={"type": "project-file-delete",
                                                      "index": file.get("id", "")},
                                                 color="outline-danger",
                                                 size="sm",
@@ -183,7 +195,7 @@ def create_project_detail(project=None):
                                             ),
                                             dbc.Button(
                                                 html.I(className="fas fa-download"),
-                                                id={"type": "project-file-download", 
+                                                id={"type": "project-file-download",
                                                      "index": file.get("id", "")},
                                                 color="outline-primary",
                                                 size="sm"
@@ -195,13 +207,13 @@ def create_project_detail(project=None):
                             ]
                         ], flush=True),
                         
-                        # Область загрузки файлов
+                        # File upload area
                         dcc.Upload(
                             id='project-file-upload',
                             children=html.Div([
                                 html.I(className="fas fa-cloud-upload-alt fa-2x mb-2"),
-                                html.P("Перетащите файлы сюда или нажмите для выбора"),
-                                html.P("Поддерживаемые форматы: BIL/HDR, TIFF, DAT", 
+                                html.P("Drag and drop files here or click to select"),
+                                html.P("Supported formats: BIL/HDR, TIFF, DAT",
                                        className="text-muted small")
                             ]),
                             multiple=True,
@@ -210,27 +222,27 @@ def create_project_detail(project=None):
                     ])
                 ]),
             ])
-        ], label="Файлы", tab_id="files-tab"),
+        ], label="Files", tab_id="files-tab"),
         
-        # Вкладка "Обработка"
+        # Processing tab
         dbc.Tab([
             html.Div([
                 dbc.Card([
-                    dbc.CardHeader("Конфигурация обработки"),
+                    dbc.CardHeader("Processing Configuration"),
                     dbc.CardBody([
                         dbc.Form([
                             dbc.Row([
                                 dbc.Col([
-                                    html.H6("Этапы обработки", className="mb-3"),
+                                    html.H6("Processing Stages", className="mb-3"),
                                     dbc.Checklist(
                                         id="stage-checkboxes",
                                         options=[
-                                            {"label": "Предобработка", "value": "preprocessing"},
-                                            {"label": "Ортофото", "value": "orthophoto"},
-                                            {"label": "Сегментация", "value": "segmentation"},
-                                            {"label": "Расчёт индексов", "value": "indices"},
-                                            {"label": "Оценка", "value": "assessment"},
-                                            {"label": "Анализ", "value": "analysis"},
+                                            {"label": "Preprocessing", "value": "preprocessing"},
+                                            {"label": "Orthophoto", "value": "orthophoto"},
+                                            {"label": "Segmentation", "value": "segmentation"},
+                                            {"label": "Index Calculation", "value": "indices"},
+                                            {"label": "Assessment", "value": "assessment"},
+                                            {"label": "Analysis", "value": "analysis"},
                                         ],
                                         value=project.get("processing_config", {}).get("stages", []),
                                         inline=False,
@@ -238,9 +250,9 @@ def create_project_detail(project=None):
                                     ),
                                 ], width=6),
                                 dbc.Col([
-                                    html.H6("Настройки", className="mb-3"),
+                                    html.H6("Settings", className="mb-3"),
                                     html.Div([
-                                        dbc.Label("Вегетационные индексы", 
+                                        dbc.Label("Vegetation Indices",
                                                   html_for="indices-select"),
                                         dcc.Dropdown(
                                             id="indices-select",
@@ -261,10 +273,10 @@ def create_project_detail(project=None):
                                         dbc.Checklist(
                                             id="processing-options",
                                             options=[
-                                                {"label": "Применить коррекцию атмосферы", 
+                                                {"label": "Apply atmospheric correction",
                                                  "value": "atmospheric_correction"},
-                                                {"label": "Удалить шум", "value": "denoising"},
-                                                {"label": "Сегментация растений", 
+                                                {"label": "Remove noise", "value": "denoising"},
+                                                {"label": "Plant segmentation",
                                                  "value": "segmentation"},
                                             ],
                                             value=["atmospheric_correction", "denoising"],
@@ -274,10 +286,10 @@ def create_project_detail(project=None):
                             ]),
                         ]),
                         
-                        # Прогресс обработки
+                        # Processing progress
                         html.Div(id="processing-progress-section", children=[
                             html.Hr(className="my-4"),
-                            html.H6("Прогресс обработки", className="mb-3"),
+                            html.H6("Processing Progress", className="mb-3"),
                             dbc.Progress(
                                 id="project-processing-progress",
                                 value=project.get("progress", 0),
@@ -287,13 +299,13 @@ def create_project_detail(project=None):
                             ),
                             html.Div([
                                 dbc.Button(
-                                    [html.I(className="fas fa-play me-2"), "Запустить обработку"],
+                                    [html.I(className="fas fa-play me-2"), "Start Processing"],
                                     id="project-start-processing-btn",
                                     color="primary",
                                     className="me-2"
                                 ),
                                 dbc.Button(
-                                    [html.I(className="fas fa-stop me-2"), "Остановить"],
+                                    [html.I(className="fas fa-stop me-2"), "Stop"],
                                     id="project-cancel-processing-btn",
                                     color="secondary",
                                     disabled=True
@@ -303,43 +315,43 @@ def create_project_detail(project=None):
                     ])
                 ]),
             ])
-        ], label="Обработка", tab_id="processing-tab"),
+        ], label="Processing", tab_id="processing-tab"),
         
-        # Вкладка "Результаты"
+        # Results tab
         dbc.Tab([
             html.Div([
                 dbc.Card([
-                    dbc.CardHeader("История обработки"),
+                    dbc.CardHeader("Processing History"),
                     dbc.CardBody([
                         dbc.ListGroup([
                             *[
                                 dbc.ListGroupItem([
                                     html.Div([
                                         html.Div([
-                                            html.H6(f"Запуск {i+1}", className="mb-1"),
-                                            html.P(f"Начало: {format_date(run.get('start_time', ''))} | "
-                                                   f"Статус: {run.get('status', 'unknown')}", 
+                                            html.H6(f"Run {i+1}", className="mb-1"),
+                                            html.P(f"Start: {format_date(run.get('start_time', ''))} | "
+                                                   f"Status: {run.get('status', 'unknown')}",
                                                    className="mb-1 text-muted small"),
                                             html.Div([
                                                 dbc.Badge(
-                                                    "Завершено" if run.get("status") == "completed" 
-                                                    else "В процессе" if run.get("status") == "running"
-                                                    else "Ошибка" if run.get("status") == "error"
-                                                    else "Отменено",
+                                                    "Completed" if run.get("status") == "completed"
+                                                    else "Running" if run.get("status") == "running"
+                                                    else "Error" if run.get("status") == "error"
+                                                    else "Cancelled",
                                                     color="success" if run.get("status") == "completed"
                                                     else "warning" if run.get("status") == "running"
                                                     else "danger" if run.get("status") == "error"
                                                     else "secondary",
                                                     className="me-2"
                                                 ),
-                                                html.Small(f"Длительность: {run.get('total_duration_seconds', 0):.1f} сек", 
+                                                html.Small(f"Duration: {run.get('total_duration_seconds', 0):.1f} sec",
                                                           className="text-muted"),
                                             ]),
                                         ], className="flex-grow-1"),
                                         html.Div([
                                             dbc.Button(
-                                                "Просмотреть",
-                                                id={"type": "view-run-results", 
+                                                "View",
+                                                id={"type": "view-run-results",
                                                      "index": run.get("run_id", "")},
                                                 color="outline-primary",
                                                 size="sm"
@@ -355,7 +367,7 @@ def create_project_detail(project=None):
                     ])
                 ]),
             ])
-        ], label="Результаты", tab_id="results-tab"),
+        ], label="Results", tab_id="results-tab"),
     ], id="project-detail-tabs", active_tab="overview-tab")
     
     return html.Div([

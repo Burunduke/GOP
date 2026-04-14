@@ -1,143 +1,114 @@
-# GOP - Геопространственная обработка ортофотопланов
+# GOP - Geospatial Orthophoto Processing
 
-[![Версия Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
-[![Лицензия](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Статус сборки](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/indykovdm/GOP/actions)
-[![Покрытие тестами](https://img.shields.io/badge/coverage-85%25-yellow.svg)](https://github.com/indykovdm/GOP/actions)
-[![Стиль кода](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Научный](https://img.shields.io/badge/purpose-scientific-orange.svg)](https://github.com/indykovdm/GOP)
-[![Документация](https://img.shields.io/badge/docs-latest-blue.svg)](docs/api/_build/html/index.html)
-[![Производительность](https://img.shields.io/badge/performance-optimized-success.svg)](PHASE_3_COMPLETION_REPORT.md)
-[![Безопасность](https://img.shields.io/badge/security-audited-success.svg)](analysis/dependency_security_analysis.md)
+[![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/indykovdm/GOP/actions)
+[![Test Coverage](https://img.shields.io/badge/coverage-85%25-yellow.svg)](https://github.com/indykovdm/GOP/actions)
+[![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Scientific](https://img.shields.io/badge/purpose-scientific-orange.svg)](https://github.com/indykovdm/GOP)
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](docs/api/_build/html/index.html)
+[![Performance](https://img.shields.io/badge/performance-optimized-success.svg)](PHASE_3_COMPLETION_REPORT.md)
+[![Security](https://img.shields.io/badge/security-audited-success.svg)](analysis/dependency_security_analysis.md)
 
-**Версия 2.0.0 - Чистая научная архитектура с оптимизацией производительности**
+**Version 2.0.0 - Clean Scientific Architecture with Performance Optimization**
 
-Научная библиотека для обработки гиперспектральных данных и анализа состояния растений с использованием вегетационных индексов. Разработана на основе современных научных методов и алгоритмов обработки данных дистанционного зондирования.
+Scientific library for hyperspectral data processing and plant condition analysis using vegetation indices. Developed based on modern scientific methods and remote sensing data processing algorithms.
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### Установка
+### Installation
 
-#### Способ 1: Через pip (рекомендуется)
 ```bash
-# Установить все зависимости
+# Install all dependencies
 pip install -r requirements.txt
 
-# Проверить установку
-python -c "import src.core.pipeline; print('GOP успешно установлен')"
+# Verify installation
+python -c "import src.core.pipeline; print('GOP successfully installed')"
 ```
 
-#### Способ 2: Через Poetry (для разработки)
-```bash
-# Установить Poetry
-pip install poetry
-
-# Установить зависимости
-poetry install
-
-# Активировать виртуальное окружение
-poetry shell
-
-# Проверить установку
-python -c "import src.core.pipeline; print('GOP успешно установлен')"
-```
-
-#### Способ 3: Клонирование репозитория
-```bash
-# Клонировать репозиторий
-git clone https://github.com/indykovdm/GOP.git
-cd GOP
-
-# Установить зависимости
-pip install -r requirements.txt
-
-# Проверить установку
-python -c "import src.core.pipeline; print('GOP успешно установлен')"
-```
-
-### Первый запуск
+### First Run
 
 ```bash
-# Запустить пример обработки
+# Run processing example
 python examples/basic_processing.py
 ```
 
-## 📚 Документация
+## 📚 Documentation
 
-### Для пользователей
-- **[Руководство по установке](docs/INSTALLATION.md)** - Полные инструкции по настройке
-- **[Руководство пользователя](docs/USER_GUIDE.md)** - Как использовать GOP
-- **[Руководство по конфигурации](config/README.md)** - Полная документация по настройке
+### For Users
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete setup instructions
+- **[User Guide](docs/USER_GUIDE.md)** - How to use GOP
+- **[Configuration Guide](config/README.md)** - Complete configuration documentation
 
-### Для разработчиков
-- **[Руководство разработчика](docs/DEVELOPER.md)** - Документация API и разработка
-- **[Руководство по тестированию](docs/TESTING.md)** - Тестирование и CI/CD
-- **[Руководство по архитектуре](docs/ARCHITECTURE.md)** - Архитектура системы
+### For Developers
+- **[Developer Guide](docs/DEVELOPER.md)** - API documentation and development
+- **[Testing Guide](docs/TESTING.md)** - Testing and CI/CD
+- **[Architecture Guide](docs/ARCHITECTURE.md)** - System architecture
 
-### Научные материалы
-- **[Примеры](examples/README.md)** - Примеры использования и обучающие материалы
-- **[Исследовательские заметки](docs/research/TECHNICAL_NOTES.md)** - Техническая исследовательская документация
-- **[Справочник API](docs/api/_build/html/index.html)** - Полная документация API
+### Scientific Materials
+- **[Examples](examples/README.md)** - Usage examples and tutorials
+- **[Technical Notes](docs/research/TECHNICAL_NOTES.md)** - Technical research documentation
+- **[API Reference](docs/api/_build/html/index.html)** - Complete API documentation
 
-## ✨ Ключевые возможности
+## ✨ Key Features
 
-### 🎯 Научная обработка
-- **Обработка гиперспектральных данных** - Продвинутый спектральный анализ и коррекция
-- **Вегетационные индексы** - 20+ научных индексов для анализа растений
-- **Анализ ортофотопланов** - Геопространственная обработка и сегментация
-- **Научная валидация** - Оценка качества данных и валидация
+### 🎯 Scientific Processing
+- **Hyperspectral data processing** - Advanced spectral analysis and correction
+- **Vegetation indices** - 20+ scientific indices for plant analysis
+- **Orthophoto analysis** - Geospatial processing and segmentation
+- **Scientific validation** - Data quality assessment and validation
 
-### 🚀 Оптимизация производительности
-- **Эффективность памяти** - Поточная обработка больших наборов данных
-- **Параллельная обработка** - Поддержка многопоточности для быстрых вычислений
-- **Интеллектуальное кэширование** - Автоматическое кэширование промежуточных результатов
-- **Оптимизированные алгоритмы** - Векторизованные операции и эффективные структуры данных
+### 🚀 Performance Optimization
+- **Memory efficiency** - Stream processing of large datasets
+- **Parallel processing** - Multi-threading support for fast computations
+- **Intelligent caching** - Automatic caching of intermediate results
+- **Optimized algorithms** - Vectorized operations and efficient data structures
 
-### 🔒 Безопасность и качество
-- **Типобезопасность** - Полные аннотации типов во всей кодовой базе
-- **Обработка ошибок** - Надежная иерархия исключений для стабильной работы
-- **Валидация входных данных** - Строгая проверка и санитизация данных
-- **Аудит безопасности** - Анализ безопасности зависимостей и сканирование уязвимостей
+### 🔒 Security and Quality
+- **Type safety** - Full type annotations throughout codebase
+- **Error handling** - Robust exception hierarchy for stable operation
+- **Input validation** - Strict data validation and sanitization
+- **Security audit** - Dependency security analysis and vulnerability scanning
 
-### 📊 Научный анализ
-- **Статистический анализ** - Описательная статистика и корреляционный анализ
-- **Пространственный анализ** - Индекс Морана, анализ горячих точек, индексы фрагментации
-- **Метрики качества** - Отношение сигнал-шум, обнаружение выбросов
-- **Научные отчеты** - Генерация отчетов в форматах JSON/CSV/Excel
+### 📊 Scientific Analysis
+- **Statistical analysis** - Descriptive statistics and correlation analysis
+- **Spatial analysis** - Moran's I, hotspot analysis, fragmentation indices
+- **Quality metrics** - Signal-to-noise ratio, outlier detection
+- **Scientific reports** - Report generation in JSON/CSV/Excel formats
 
-## 🏗️ Архитектура
+## 🏗️ Architecture
 
-### Основные модули
-- **`src/core/`** - Основной конвейер обработки и конфигурация
-- **`src/processing/`** - Алгоритмы обработки данных и коррекции
-- **`src/indices/`** - Расчеты вегетационных индексов
-- **`src/segmentation/`** - Алгоритмы сегментации изображений
-- **`src/utils/`** - Вспомогательные функции и утилиты
+### Core Modules
+- **`src/core/`** - Main processing pipeline and configuration
+- **`src/processing/`** - Data processing algorithms and corrections
+- **`src/indices/`** - Vegetation index calculations
+- **`src/segmentation/`** - Image segmentation algorithms
+- **`src/utils/`** - Helper functions and utilities
 
-### Улучшенные утилиты (рефакторинг)
-- **`math_utils`** - Безопасные математические операции с обработкой ошибок
-- **`validators`** - Комплексная система валидации данных
-- **`gdal_utils`** - Утилиты интеграции с GDAL
-- **`image_utils`** - Утилиты обработки изображений
-- **`exceptions`** - Иерархическая система исключений
+### Enhanced Utilities (Refactoring)
+- **`math_utils`** - Safe mathematical operations with error handling
+- **`validators`** - Comprehensive data validation system
+- **`gdal_utils`** - GDAL integration utilities
+- **`image_utils`** - Image processing utilities
+- **`exceptions`** - Hierarchical exception system
 
-## 📈 Улучшения производительности
+## 📈 Performance Improvements
 
-### Результаты рефакторинга Фазы 3
-- **Скорость обработки**: Ускорение выполнения на 40-60%
-- **Использование памяти**: Снижение пикового потребления памяти на 30-50%
-- **Эффективность кэширования**: 70% попаданий для повторных операций
-- **Параллельное масштабирование**: Линейное масштабирование до 8 ядер
+### Phase 3 Refactoring Results
+- **Processing speed**: 40-60% faster execution
+- **Memory usage**: 30-50% reduction in peak memory consumption
+- **Caching efficiency**: 70% hit rate for repeated operations
+- **Parallel scaling**: Linear scaling up to 8 cores
 
-### Улучшения качества
-- **Покрытие тестами**: 85%+ покрытие кода
-- **Покрытие типов**: 95%+ покрытие аннотаций типов
-- **Качество кода**: Улучшенная поддерживаемость и читаемость
-- **Документация**: Полная документация API и использования
+### Quality Improvements
+- **Test coverage**: 85%+ code coverage
+- **Type coverage**: 95%+ type annotation coverage
+- **Code quality**: Improved maintainability and readability
+- **Documentation**: Complete API and usage documentation
 
-## 🔧 Конфигурация
+## 🔧 Configuration
 
-GOP использует иерархическую систему конфигурации:
+GOP uses a hierarchical configuration system:
 
 ```yaml
 # config/config.yaml
@@ -153,11 +124,11 @@ performance:
     ttl: 3600
 ```
 
-См. [Документацию по конфигурации](config/README.md) для полных деталей.
+See [Configuration Documentation](config/README.md) for full details.
 
-## 🧪 Примеры
+## 🧪 Examples
 
-### Базовая обработка
+### Basic Processing
 ```python
 from src.core.pipeline import Pipeline
 
@@ -169,7 +140,7 @@ results = pipeline.process(
 )
 ```
 
-### Научный анализ
+### Scientific Analysis
 ```python
 from src.processing.hyperspectral import HyperspectralProcessor
 
@@ -177,157 +148,157 @@ processor = HyperspectralProcessor()
 analysis = processor.analyze_spectral_properties(data)
 ```
 
-См. [Директорию примеров](examples/README.md) для комплексных примеров.
+See [Examples Directory](examples/README.md) for comprehensive examples.
 
-## 📊 Научные приложения
+## 📊 Scientific Applications
 
-### Сельское хозяйство
-- Мониторинг здоровья культур
-- Точное земледелие
-- Прогнозирование урожайности
-- Обнаружение стресса
+### Agriculture
+- Crop health monitoring
+- Precision agriculture
+- Yield prediction
+- Stress detection
 
-### Экологические исследования
-- Картографирование растительности
-- Оценка биоразнообразия
-- Исследования изменения климата
-- Мониторинг экосистем
+### Environmental Research
+- Vegetation mapping
+- Biodiversity assessment
+- Climate change studies
+- Ecosystem monitoring
 
-### Лесное хозяйство
-- Оценка здоровья лесов
-- Классификация видов
-- Оценка биомассы
-- Мониторинг вырубки лесов
+### Forestry
+- Forest health assessment
+- Species classification
+- Biomass estimation
+- Deforestation monitoring
 
-## 🔬 Исследовательские возможности
+## 🔬 Research Capabilities
 
-### Спектральный анализ
-- Методы атмосферной коррекции
-- Радиометрическая калибровка
-- Алгоритмы снижения шума
-- Спектральное передискретизация
+### Spectral Analysis
+- Atmospheric correction methods
+- Radiometric calibration
+- Noise reduction algorithms
+- Spectral resampling
 
-### Пространственный анализ
-- Геостатистические методы
-- Распознавание образов
-- Обнаружение горячих точек
-- Анализ фрагментации
+### Spatial Analysis
+- Geostatistical methods
+- Pattern recognition
+- Hotspot detection
+- Fragmentation analysis
 
-### Интеграция машинного обучения
-- Совместимость с scikit-learn
-- Инженерия признаков
-- Конвейеры обучения моделей
-- Рабочие процессы предсказания
+### Machine Learning Integration
+- scikit-learn compatibility
+- Feature engineering
+- Model training pipelines
+- Prediction workflows
 
-## 🛠️ Разработка
+## 🛠️ Development
 
-### Тестирование
+### Testing
 ```bash
-# Запустить все тесты
+# Run all tests
 pytest tests/
 
-# Запустить с покрытием
+# Run with coverage
 pytest --cov=src tests/
 
-# Запустить бенчмарки производительности
+# Run performance benchmarks
 pytest tests/benchmarks/
 ```
 
-### Качество кода
+### Code Quality
 ```bash
-# Форматирование кода
+# Code formatting
 black src/ tests/ examples/
 
-# Проверка типов
+# Type checking
 mypy src/
 
-# Линтинг
+# Linting
 flake8 src/ tests/
 ```
 
-### Документация
+### Documentation
 ```bash
-# Генерация документации API
+# Generate API documentation
 cd docs/api && make html
 
-# Проверка документации
+# Check documentation
 cd docs && python check_docs.py
 ```
 
-## 📋 Требования
+## 📋 Requirements
 
-### Основные зависимости
-Все зависимости включены в файл [`requirements.txt`](requirements.txt):
-- **Научные библиотеки**: NumPy, SciPy, pandas, matplotlib
-- **Обработка изображений**: OpenCV, scikit-image, scikit-learn, PyTorch
-- **Геоданные**: GDAL, rasterio, GeoPandas, Fiona
-- **Гиперспектральная обработка**: spectral
-- **Визуализация**: seaborn, plotly
+### Core Dependencies
+All dependencies included in [`requirements.txt`](requirements.txt):
+- **Scientific libraries**: NumPy, SciPy, pandas, matplotlib
+- **Image processing**: OpenCV, scikit-image, scikit-learn, PyTorch
+- **Geodata**: GDAL, rasterio, GeoPandas, Fiona
+- **Hyperspectral processing**: spectral
+- **Visualization**: seaborn, plotly
 - **GUI**: Dash, Flask, Dash Bootstrap Components
-- **Базы данных**: SQLAlchemy, Redis, psycopg2-binary
-- **Утилиты**: PyYAML, tqdm, python-dotenv
+- **Databases**: SQLAlchemy, Redis, psycopg2-binary
+- **Utilities**: PyYAML, tqdm, python-dotenv
 
-### Дополнительные зависимости для разработки
-- **Тестирование**: pytest, pytest-cov, pytest-mock
-- **Форматирование**: black, flake8, isort, pylint
-- **Типизация**: mypy, types-PyYAML
-- **Документация**: sphinx, sphinx-rtd-theme
-- **Безопасность**: bandit, safety, pip-audit
+### Development Dependencies
+- **Testing**: pytest, pytest-cov, pytest-mock
+- **Formatting**: black, flake8, isort, pylint
+- **Typing**: mypy, types-PyYAML
+- **Documentation**: sphinx, sphinx-rtd-theme
+- **Security**: bandit, safety, pip-audit
 
-### Системные требования
+### System Requirements
 - **Python**: 3.9+
-- **Оперативная память**: 8GB+ (рекомендуется 16GB)
-- **Дисковое пространство**: 2GB+ для установки зависимостей
-- **Операционная система**: Linux, macOS, Windows
+- **RAM**: 8GB+ (16GB recommended)
+- **Disk space**: 2GB+ for dependencies
+- **Operating system**: Linux, macOS, Windows
 
-## 🤝 Участие в разработке
+## 🤝 Contributing
 
-Мы приветствуем вклад! Пожалуйста, ознакомьтесь с:
-- [Руководством по участию](docs/api/contributing.rst)
-- [Кодексом поведения](CODE_OF_CONDUCT.md)
-- [Шаблонами задач](.github/ISSUE_TEMPLATE/)
+We welcome contributions! Please review:
+- [Contributing Guide](docs/api/contributing.rst)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Issue Templates](.github/ISSUE_TEMPLATE/)
 
-### Настройка среды разработки
+### Development Environment Setup
 ```bash
-# Форк и клонирование
+# Fork and clone
 gh repo fork indykovdm/GOP --clone
 cd GOP
 
-# Создать виртуальное окружение
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate
 
-# Установить все зависимости (включая dev)
+# Install all dependencies (including dev)
 pip install -r requirements.txt
 pip install -e .
 
-# Запустить тесты
+# Run tests
 pytest
 ```
 
-## 📄 Лицензия
+## 📄 License
 
-Этот проект лицензирован по лицензии MIT - см. файл [LICENSE](LICENSE) для деталей.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Благодарности
+## 🙏 Acknowledgments
 
-### Научные ссылки
-- Митрофанов Е.П., Петрушин А.Ф. "Использование данных аэрофотосъемки для технологий точного земледелия"
+### Scientific References
+- Mitrofanov E.P., Petrushin A.F. "Use of aerial photography data for precision agricultural technologies"
 - Chen L. et al. "Rethinking Atrous Convolution for Semantic Image Segmentation"
 - "CascadePSP: Toward Class-Agnostic and Very High-Resolution Segmentation via Global and Local Refinement"
 
-### Технические благодарности
-- Сообщество OpenDroneMap
-- Команда разработчиков GDAL/OGR
-- Экосистема научного Python
+### Technical Acknowledgments
+- OpenDroneMap community
+- GDAL/OGR development team
+- Scientific Python ecosystem
 
-## 📞 Контакты
+## 📞 Contact
 
-- **Автор**: Дмитрий Индыков
+- **Author**: Dmitry Indykov
 - **Email**: indykovdm@example.com
-- **Репозиторий**: https://github.com/indykovdm/GOP
-- **Документация**: https://indykovdm.github.io/GOP/
+- **Repository**: https://github.com/indykovdm/GOP
+- **Documentation**: https://indykovdm.github.io/GOP/
 
 ---
 
-**GOP v2.0.0** - Рефакторинг для производительности, безопасности и научного совершенства.
+**GOP v2.0.0** - Refactored for performance, security, and scientific excellence.

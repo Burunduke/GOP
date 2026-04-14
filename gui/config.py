@@ -1,18 +1,20 @@
 """
-Конфигурация GUI приложения GOP
+GUI configuration for GOP application
 """
 
 import os
 import secrets
 from pathlib import Path
+from typing import Dict, Type
+from flask import Flask
 
 
 class GUIConfig:
-    """Конфигурация GUI приложения"""
+    """GUI configuration for GOP application"""
     
-    # Основные настройки
-    DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-    SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
+    # Basic settings
+    DEBUG: bool = os.getenv('DEBUG', 'False').lower() == 'true'
+    SECRET_KEY: str = os.getenv('SECRET_KEY', secrets.token_hex(32))
     
     # Warn if using default generated key
     if not os.getenv('SECRET_KEY'):
@@ -22,57 +24,61 @@ class GUIConfig:
             UserWarning
         )
     
-    # Настройки сервера
-    HOST = os.getenv('HOST', '127.0.0.1')
-    PORT = int(os.getenv('PORT', 8050))
+    # Server settings
+    HOST: str = os.getenv('HOST', '127.0.0.1')
+    PORT: int = int(os.getenv('PORT', 8050))
     
-    # Настройки базы данных
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///gop_gui.db')
+    # Database settings
+    DATABASE_URL: str = os.getenv('DATABASE_URL', 'sqlite:///gop_gui.db')
     
-    # Настройки Redis
-    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    # Redis settings
+    REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     
-    # Настройки файловой системы
-    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'data/uploads')
-    PROJECTS_FOLDER = os.getenv('PROJECTS_FOLDER', 'data/projects')
-    CACHE_FOLDER = os.getenv('CACHE_FOLDER', 'data/cache')
+    # File system settings
+    UPLOAD_FOLDER: str = os.getenv('UPLOAD_FOLDER', 'data/uploads')
+    PROJECTS_FOLDER: str = os.getenv('PROJECTS_FOLDER', 'data/projects')
+    CACHE_FOLDER: str = os.getenv('CACHE_FOLDER', 'data/cache')
     
-    # Ограничения
-    MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 10 * 1024 * 1024 * 1024))  # 10GB
-    MAX_UPLOAD_FILES = int(os.getenv('MAX_UPLOAD_FILES', 100))
+    # Limits
+    MAX_FILE_SIZE: int = int(os.getenv('MAX_FILE_SIZE', 10 * 1024 * 1024 * 1024))  # 10GB
+    MAX_UPLOAD_FILES: int = int(os.getenv('MAX_UPLOAD_FILES', 100))
     
-    # Настройки обработки
-    CELERY_BROKER_URL = REDIS_URL
-    CELERY_RESULT_BACKEND = REDIS_URL
+    # Processing settings
+    CELERY_BROKER_URL: str = REDIS_URL
+    CELERY_RESULT_BACKEND: str = REDIS_URL
     
-    # Настройки GOP интеграции
-    GOP_CONFIG_PATH = os.getenv('GOP_CONFIG_PATH', 'config/config.yaml')
+    # GOP integration settings
+    GOP_CONFIG_PATH: str = os.getenv('GOP_CONFIG_PATH', 'config/config.yaml')
     
     @classmethod
-    def init_app(cls, app):
-        """Инициализация конфигурации приложения"""
-        # Создание необходимых директорий
+    def init_app(cls, app: Flask) -> None:
+        """Initialize application configuration
+        
+        Args:
+            app: Flask application instance
+        """
+        # Create necessary directories
         for folder in [cls.UPLOAD_FOLDER, cls.PROJECTS_FOLDER, cls.CACHE_FOLDER]:
             Path(folder).mkdir(parents=True, exist_ok=True)
         
-        # Настройка приложения
+        # Configure application
         app.config['SECRET_KEY'] = cls.SECRET_KEY
         app.config['MAX_CONTENT_LENGTH'] = cls.MAX_FILE_SIZE
 
 
 class DevelopmentConfig(GUIConfig):
-    """Конфигурация для разработки"""
-    DEBUG = True
-    TESTING = True
+    """Configuration for development environment"""
+    DEBUG: bool = True
+    TESTING: bool = True
 
 
 class ProductionConfig(GUIConfig):
-    """Конфигурация для продакшена"""
-    DEBUG = False
-    TESTING = False
+    """Configuration for production environment"""
+    DEBUG: bool = False
+    TESTING: bool = False
 
 
-config = {
+config: Dict[str, Type[GUIConfig]] = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
     'default': DevelopmentConfig

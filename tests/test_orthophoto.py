@@ -160,8 +160,8 @@ class TestOrthophotoProcessor(unittest.TestCase):
                 with self.assertRaises(Exception):
                     self.processor._create_with_odm(self.test_tiff_paths, self.temp_dir)
 
-    @patch("src.processing.orthophoto.gdal.Warp")
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Warp")
+    @patch("osgeo.gdal.Open")
     def test_create_with_gdal(self, mock_gdal_open, mock_gdal_warp):
         """Тест создания ортофотоплана через GDAL"""
         # Настройка моков
@@ -180,7 +180,7 @@ class TestOrthophotoProcessor(unittest.TestCase):
         self.assertEqual(result_path, expected_output)
         mock_gdal_warp.assert_called_once()
 
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Open")
     def test_create_with_gdal_open_error(self, mock_gdal_open):
         """Тест обработки ошибки открытия файлов в GDAL"""
         mock_gdal_open.side_effect = Exception("GDAL error")
@@ -233,7 +233,7 @@ class TestOrthophotoProcessor(unittest.TestCase):
         with open(src_path, "r") as src, open(dst_path, "r") as dst:
             self.assertEqual(src.read(), dst.read())
 
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Open")
     def test_validate_orthophoto(self, mock_gdal_open):
         """Тест валидации ортофотоплана"""
         # Настройка мока
@@ -265,7 +265,7 @@ class TestOrthophotoProcessor(unittest.TestCase):
         self.assertEqual(validation_result["dimensions"]["height"], 1000)
         self.assertEqual(validation_result["bands"], 3)
 
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Open")
     def test_validate_orthophoto_invalid_file(self, mock_gdal_open):
         """Тест валидации некорректного ортофотоплана"""
         mock_gdal_open.return_value = None
@@ -276,8 +276,8 @@ class TestOrthophotoProcessor(unittest.TestCase):
         self.assertFalse(validation_result["valid"])
         self.assertIn("error", validation_result)
 
-    @patch("src.processing.orthophoto.gdal.Translate")
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Translate")
+    @patch("osgeo.gdal.Open")
     def test_optimize_orthophoto(self, mock_gdal_open, mock_gdal_translate):
         """Тест оптимизации ортофотоплана"""
         # Настройка моков
@@ -297,7 +297,7 @@ class TestOrthophotoProcessor(unittest.TestCase):
         self.assertEqual(result_path, output_path)
         mock_gdal_translate.assert_called_once()
 
-    @patch("src.processing.orthophoto.gdal.Open")
+    @patch("osgeo.gdal.Open")
     def test_optimize_orthophoto_open_error(self, mock_gdal_open):
         """Тест обработки ошибки при оптимизации ортофотоплана"""
         mock_gdal_open.return_value = None

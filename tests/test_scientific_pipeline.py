@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from src.core.pipeline import Pipeline
-from src.core.config import config
+from src.core.config import get_config, Config
 from src.processing.hyperspectral import HyperspectralProcessor
 from src.indices.calculator import VegetationIndexCalculator
 
@@ -27,6 +27,7 @@ class TestScientificPipeline(unittest.TestCase):
         """Настройка тестового окружения"""
         self.test_dir = tempfile.mkdtemp()
         self.pipeline = Pipeline()
+        self.config = get_config()
 
         # Создание тестовых данных
         self.create_test_data()
@@ -34,6 +35,7 @@ class TestScientificPipeline(unittest.TestCase):
     def tearDown(self):
         """Очистка тестового окружения"""
         shutil.rmtree(self.test_dir, ignore_errors=True)
+        Config.reset_instance()
 
     def create_test_data(self):
         """Создание тестовых гиперспектральных данных"""
@@ -193,18 +195,18 @@ class TestScientificPipeline(unittest.TestCase):
     def test_config_system(self):
         """Тест системы конфигурации"""
         # Тест получения параметров
-        processing_config = config.get("processing", {})
+        processing_config = self.config.get("processing", {})
         self.assertIsInstance(processing_config, dict)
 
         # Тест установки параметров
-        config.set("test.parameter", "test_value")
-        self.assertEqual(config.get("test.parameter"), "test_value")
+        self.config.set("test.parameter", "test_value")
+        self.assertEqual(self.config.get("test.parameter"), "test_value")
 
         # Тест научных параметров
-        scientific_config = config.get("scientific_analysis", {})
+        scientific_config = self.config.get("scientific_analysis", {})
         self.assertIn("enabled", scientific_config)
 
-        indices_config = config.get("indices", {})
+        indices_config = self.config.get("indices", {})
         self.assertIn("default_indices", indices_config)
         self.assertIn("index_groups", indices_config)
 
@@ -275,10 +277,12 @@ class TestScientificIntegration(unittest.TestCase):
     def setUp(self):
         """Настройка тестового окружения"""
         self.test_dir = tempfile.mkdtemp()
+        self.config = get_config()
 
     def tearDown(self):
         """Очистка тестового окружения"""
         shutil.rmtree(self.test_dir, ignore_errors=True)
+        Config.reset_instance()
 
     def test_full_scientific_workflow(self):
         """Тест полного научного рабочего процесса"""
@@ -304,7 +308,7 @@ class TestScientificIntegration(unittest.TestCase):
     def test_scientific_config_validation(self):
         """Тест валидации научной конфигурации"""
         # Проверка наличия научных секций в конфигурации
-        scientific_config = config.get("scientific_analysis", {})
+        scientific_config = self.config.get("scientific_analysis", {})
         self.assertIn("enabled", scientific_config)
 
         # Проверка наличия параметров анализа
@@ -315,7 +319,7 @@ class TestScientificIntegration(unittest.TestCase):
             self.assertIn("classification", scientific_config)
 
         # Проверка конфигурации индексов
-        indices_config = config.get("indices", {})
+        indices_config = self.config.get("indices", {})
         self.assertIn("index_groups", indices_config)
         self.assertIn("default_indices", indices_config)
 

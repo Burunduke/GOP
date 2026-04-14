@@ -15,8 +15,8 @@ References:
 
 import numpy as np
 from typing import Dict, Callable, List, Tuple, Union
-from src.utils.math_utils import safe_divide
-from src.utils.exceptions import ValidationError
+from ..utils.math_utils import safe_divide
+from ..utils.exceptions import ValidationError
 
 
 class IndexDefinitions:
@@ -59,9 +59,9 @@ class IndexDefinitions:
     # Greenness indices - measure chlorophyll content and vegetation density
     GREENNESS_INDICES = {
         "NDVI": {
-            "name": "Normalized Difference Vegetation Index",
+            "name": "NDVI",
             "formula": "(NIR - Red) / (NIR + Red)",
-            "description": "Standard vegetation index for biomass estimation and vegetation monitoring",
+            "description": "Normalized Difference Vegetation Index - Standard vegetation index for biomass estimation and vegetation monitoring",
             "required_bands": ["NIR", "Red"],
             "range": (-1, 1),
             "category": "greenness",
@@ -69,9 +69,9 @@ class IndexDefinitions:
             "reference": "Tucker, C.J. (1979). Remote Sensing of Environment",
         },
         "GNDVI": {
-            "name": "Green Normalized Difference Vegetation Index",
+            "name": "GNDVI",
             "formula": "(NIR - Green) / (NIR + Green)",
-            "description": "Enhanced vegetation index using green band for better chlorophyll sensitivity",
+            "description": "Green Normalized Difference Vegetation Index - Enhanced vegetation index using green band for better chlorophyll sensitivity",
             "required_bands": ["NIR", "Green"],
             "range": (-1, 1),
             "category": "greenness",
@@ -240,9 +240,9 @@ class IndexDefinitions:
     # Water indices - assess water content and moisture stress
     WATER_INDICES = {
         "NDWI": {
-            "name": "Normalized Difference Water Index",
+            "name": "NDWI",
             "formula": "(Green - NIR) / (Green + NIR)",
-            "description": "Standard water index for vegetation water content estimation",
+            "description": "Normalized Difference Water Index - Standard water index for vegetation water content estimation",
             "required_bands": ["Green", "NIR"],
             "range": (-1, 1),
             "category": "water",
@@ -270,9 +270,9 @@ class IndexDefinitions:
             "reference": "Peñuelas, J., et al. (1993). Remote Sensing of Environment",
         },
         "NDII": {
-            "name": "Normalized Difference Infrared Index",
+            "name": "NDII",
             "formula": "(NIR - SWIR) / (NIR + SWIR)",
-            "description": "Normalized difference index for water content using SWIR",
+            "description": "Normalized Difference Infrared Index - Normalized difference index for water content using SWIR",
             "required_bands": ["NIR", "SWIR1"],
             "range": (-1, 1),
             "category": "water",
@@ -291,9 +291,9 @@ class IndexDefinitions:
             "reference": "Ceccato, P., et al. (2002). Remote Sensing of Environment",
         },
         "NDWI2": {
-            "name": "Normalized Difference Water Index 2",
+            "name": "NDWI2",
             "formula": "(NIR - SWIR2) / (NIR + SWIR2)",
-            "description": "Alternative water index using SWIR2 band",
+            "description": "Normalized Difference Water Index 2 - Alternative water index using SWIR2 band",
             "required_bands": ["NIR", "SWIR2"],
             "range": (-1, 1),
             "category": "water",
@@ -324,7 +324,9 @@ class IndexDefinitions:
             Dictionary containing index metadata including formula, description,
             required bands, range, category, and reference
         """
-        return cls.ALL_INDICES.get(index_name, {})
+        if index_name not in cls.ALL_INDICES:
+            raise KeyError(f"Index '{index_name}' not found")
+        return cls.ALL_INDICES[index_name]
 
     @classmethod
     def get_indices_by_group(cls, group: str) -> Dict[str, Dict]:
@@ -345,6 +347,20 @@ class IndexDefinitions:
             return cls.WATER_INDICES
         else:
             return {}
+
+    @classmethod
+    def get_indices_by_category(cls, category: str) -> List[str]:
+        """
+        Get list of indices belonging to a specific category.
+
+        Args:
+            category: Category name ('greenness', 'stress', 'water')
+
+        Returns:
+            List of index names in the specified category
+        """
+        indices_by_group = cls.get_indices_by_group(category)
+        return list(indices_by_group.keys())
 
     @classmethod
     def get_available_indices(cls, sensor_type: str) -> List[str]:
@@ -470,6 +486,42 @@ class IndexDefinitions:
 
         return normalized
 
+    @staticmethod
+    def normalize_values(values: np.ndarray) -> np.ndarray:
+        """
+        Normalize values to 0-1 range without index-specific information.
+        Simple normalization for general use cases.
+
+        Args:
+            values: Array of values to normalize
+
+        Returns:
+            Normalized values in 0-1 range
+        """
+        # Handle NaN values
+        valid_mask = ~np.isnan(values)
+        if not np.any(valid_mask):
+            return values.copy()
+        
+        # Get valid values for range calculation
+        valid_values = values[valid_mask]
+        min_val = np.nanmin(values)  # Use nanmin to ignore NaN values
+        max_val = np.nanmax(values)  # Use nanmax to ignore NaN values
+        
+        # Avoid division by zero
+        if max_val == min_val:
+            normalized = np.full_like(values, np.nan)
+            normalized[valid_mask] = 0.5  # Set to middle value for valid areas
+        else:
+            # Normalize to 0-1 range
+            normalized = (values - min_val) / (max_val - min_val)
+            normalized = np.clip(normalized, 0, 1)
+        
+        # Preserve NaN values
+        normalized[~valid_mask] = np.nan
+        
+        return normalized
+
     @classmethod
     def get_index_formula(cls, index_name: str) -> str:
         """
@@ -551,6 +603,21 @@ class IndexDefinitions:
         return all(band in available_bands for band in required_bands)
 
     @classmethod
+    def validate_index_requirements(cls, index_name: str, available_bands: List[str]) -> bool:
+        """
+        Validate if available bands are sufficient for calculating an index.
+        Alias for validate_bands_for_index for backward compatibility.
+
+        Args:
+            index_name: Name of the vegetation index
+            available_bands: List of available band names
+
+        Returns:
+            True if bands are sufficient, False otherwise
+        """
+        return cls.validate_bands_for_index(index_name, available_bands)
+
+    @classmethod
     def get_all_indices_info(cls) -> Dict[str, Dict]:
         """
         Get comprehensive information about all available vegetation indices.
@@ -559,6 +626,16 @@ class IndexDefinitions:
             Dictionary containing metadata for all indices
         """
         return cls.ALL_INDICES
+
+    @classmethod
+    def get_all_indices(cls) -> List[str]:
+        """
+        Get names of all available vegetation indices.
+        
+        Returns:
+            List of index names
+        """
+        return list(cls.ALL_INDICES.keys())
 
     @classmethod
     def get_indices_by_sensor_compatibility(cls, sensor_type: str) -> Dict[str, Dict]:
@@ -594,7 +671,10 @@ def calculate_multiple_indices(
         try:
             results[index_name] = IndexDefinitions.calculate_index(index_name, bands)
         except (ValueError, ZeroDivisionError) as e:
-            print(f"Warning: Could not calculate {index_name}: {e}")
+            # Use logging instead of print for warnings
+            import logging
+            logger = logging.getLogger("IndexDefinitions")
+            logger.warning(f"Could not calculate {index_name}: {e}")
             results[index_name] = None
 
     return results
@@ -611,18 +691,19 @@ def get_index_categories() -> Dict[str, List[str]]:
 
 
 if __name__ == "__main__":
-    # Example usage and testing
-    print("Available vegetation indices:")
-    for category, indices in IndexDefinitions.INDEX_GROUPS.items():
-        print(f"\n{category.upper()} INDICES ({len(indices)}):")
-        for idx in indices:
-            info = IndexDefinitions.get_index_info(idx)
-            print(f"  - {idx}: {info['name']}")
-
-    print(f"\nTotal indices: {len(IndexDefinitions.ALL_INDICES)}")
-
-    # Test sensor compatibility
-    for sensor in ["RGB", "Multispectral", "Hyperspectral"]:
-        available = IndexDefinitions.get_available_indices(sensor)
-        print(f"\n{sensor} sensor: {len(available)} indices available")
-        print(f"  Indices: {', '.join(available)}")
+    # Example usage and testing - commented out for production
+    # print("Available vegetation indices:")
+    # for category, indices in IndexDefinitions.INDEX_GROUPS.items():
+    #     print(f"\n{category.upper()} INDICES ({len(indices)}):")
+    #     for idx in indices:
+    #         info = IndexDefinitions.get_index_info(idx)
+    #         print(f"  - {idx}: {info['name']}")
+    #
+    # print(f"\nTotal indices: {len(IndexDefinitions.ALL_INDICES)}")
+    #
+    # # Test sensor compatibility
+    # for sensor in ["RGB", "Multispectral", "Hyperspectral"]:
+    #     available = IndexDefinitions.get_available_indices(sensor)
+    #     print(f"\n{sensor} sensor: {len(available)} indices available")
+    #     print(f"  Indices: {', '.join(available)}")
+    pass

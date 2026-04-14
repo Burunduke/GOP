@@ -1,105 +1,113 @@
 """
-Компонент боковой панели для GUI приложения GOP
+Sidebar component for GOP GUI application
 """
 
+from typing import Optional, List, Dict, Any
 import dash_bootstrap_components as dbc
 from dash import html
 from datetime import datetime
 
 
-def create_sidebar(projects=None, statistics=None):
-    """Создание боковой панели с реальными данными проектов"""
+def create_sidebar(
+    projects: Optional[List[Dict[str, Any]]] = None,
+    statistics: Optional[Dict[str, Any]] = None
+) -> html.Div:
+    """Create sidebar with real project data
+    
+    Args:
+        projects: List of project dictionaries with project data
+        statistics: Dictionary containing project statistics
+        
+    Returns:
+        html.Div: Sidebar component with project navigation and documentation links
+    """
     if projects is None:
         projects = []
     if statistics is None:
         statistics = {"total_projects": 0, "status_counts": {}, "total_files": 0}
     
-    # Форматирование даты в русском формате
-    def format_date(date_str):
+    # Date formatting function
+    def format_date(date_str: str) -> str:
+        """Format date string to international format
+        
+        Args:
+            date_str: Date string in ISO format
+            
+        Returns:
+            str: Formatted date string or original if formatting fails
+        """
         try:
             dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%d.%m.%Y %H:%M")
-        except:
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except (ValueError, AttributeError):
             return date_str
     
     return html.Div([
         
-        # Кнопки действий
+        # Control panel header
         html.Div([
+            html.H4("Control Panel", className="mb-3 text-center"),
             dbc.Button(
-                [html.I(className="fas fa-plus me-2"), "Новый проект"],
+                [html.I(className="fas fa-plus me-2"), "New Project"],
                 id="new-project-btn",
                 color="primary",
-                className="w-100 mb-2 mt-3",
+                className="w-100 mb-4",
                 outline=True
             ),
-            dbc.Button(
-                [html.I(className="fas fa-upload me-2"), "Загрузить файлы"],
-                id="upload-files-btn",
-                color="success",
-                className="w-100 mb-2",
-                outline=True
-            ),
-            dbc.Button(
-                [html.I(className="fas fa-cogs me-2"), "Настройки обработки"],
-                id="processing-settings-btn",
-                color="info",
-                className="w-100 mb-2",
-                outline=True
-            ),
-        ], className="px-3 mb-4"),
+        ], className="px-3 pt-4"),
         
-        # Список проектов
+        # Projects list (main navigation element)
         html.Div([
-            html.H6("Проекты", className="mb-3"),
+            html.H6("Projects", className="mb-3"),
             dbc.ListGroup([
                 *[
                     dbc.ListGroupItem([
                         html.Div([
-                            html.H6(project.get("name", "Без названия"), className="mb-1"),
-                            html.P(project.get("description", "") or "Описание отсутствует", 
+                            html.H6(project.get("name", "Untitled"), className="mb-1"),
+                            html.P(project.get("description", "") or "No description",
                                    className="mb-1 text-muted small"),
                             html.Div([
                                 dbc.Badge(
-                                    project.get("status_display", "Новый"), 
-                                    color=project.get("status_color", "secondary"), 
+                                    project.get("status_display", "New"),
+                                    color=project.get("status_color", "secondary"),
                                     className="me-1"
                                 ),
-                                html.Span(f"{len(project.get('files', []))} файл(ов)", 
+                                html.Span(f"{len(project.get('files', []))} file(s)",
                                          className="text-muted small"),
-                                html.Span(f"{format_date(project.get('updated_at', ''))}", 
+                                html.Span(f"{format_date(project.get('updated_at', ''))}",
                                          className="text-muted small ms-2"),
                             ], className="d-flex align-items-center")
                         ])
                     ], action=True,
                        id={"type": "project-item", "index": project.get("id", "")},
-                       n_clicks=0)
+                       n_clicks=0,
+                       className="mb-2")
                     for project in projects
                 ]
             ], flush=True),
-        ], className="px-3 mb-4"),
+        ], className="px-3"),
         
-        # Секция помощи
+        # Help and documentation section
         html.Div([
             html.Hr(className="my-3"),
-            html.H6("Помощь", className="mb-3"),
+            html.H6("Documentation", className="mb-3"),
             dbc.Nav([
                 dbc.NavLink(
-                    [html.I(className="fas fa-book me-2"), "Документация API"],
+                    [html.I(className="fas fa-book me-2"), "API Documentation"],
                     href="/docs/api",
-                    id="nav-api-docs",
+                    id="sidebar-nav-api-docs",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(
-                    [html.I(className="fas fa-user me-2"), "Руководство пользователя"],
+                    [html.I(className="fas fa-user me-2"), "User Guide"],
                     href="/docs/user-guide",
-                    id="nav-user-guide",
+                    id="sidebar-nav-user-guide",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(
-                    [html.I(className="fas fa-question-circle me-2"), "Часто задаваемые вопросы"],
+                    [html.I(className="fas fa-question-circle me-2"), "FAQ"],
                     href="/docs/faq",
-                    id="nav-faq",
+                    id="sidebar-nav-faq",
                     className="small text-decoration-none"
                 ),
                 dbc.NavLink(
@@ -110,17 +118,17 @@ def create_sidebar(projects=None, statistics=None):
             ], vertical=True, pills=True, className="flex-column"),
         ], className="px-3 mb-4"),
 
-        # Информация о системе (в самом низу)
+        # System information (at the bottom)
         html.Div([
             html.Hr(className="my-3"),
             html.Div([
                 html.P("GOP GUI v1.0.0", className="text-muted small text-center mb-1"),
-                html.P("Гиперспектральный анализ", className="text-muted small text-center"),
+                html.P("Hyperspectral Analysis", className="text-muted small text-center"),
             ])
         ], className="px-3 mt-auto"),
         
     ], id="sidebar", className="sidebar bg-light border-end", style={
         "width": "300px",
-        "min-height": "calc(100vh - 56px)",  # Высота экрана минус высота навбара
+        "min-height": "100vh",  # Full screen height
         "overflow-y": "auto"
     })

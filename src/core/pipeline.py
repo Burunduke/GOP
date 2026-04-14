@@ -1,15 +1,23 @@
 """
-Основной пайплайн обработки гиперспектральных данных
-Научно-ориентированная архитектура без GUI зависимостей
+Main pipeline for hyperspectral data processing
+Science-oriented architecture without GUI dependencies
 """
 
-import os
-import logging
 import json
-from typing import Dict, Any, Optional, List, Tuple, Union
+import logging
+import os
 from pathlib import Path
+from typing import Dict, Any, Optional, List, Union
+
 import numpy as np
 from numpy.typing import NDArray
+
+from .config import Config, get_config, create_config
+from ..indices.calculator import VegetationIndexCalculator
+from ..processing.hyperspectral import HyperspectralProcessor
+from ..processing.orthophoto import OrthophotoProcessor
+from ..segmentation.segmenter import ImageSegmenter
+from ..utils.logger import setup_logger
 
 # Type aliases for better type safety
 PipelineResult = Dict[str, Any]
@@ -17,18 +25,16 @@ BandData = NDArray[np.float32]
 ImageData = NDArray[np.uint8]
 ProcessingResult = Dict[str, Union[str, BandData, ImageData, Dict[str, Any]]]
 
-from .config import Config, config, get_config, create_config
-from ..processing.hyperspectral import HyperspectralProcessor
-from ..processing.orthophoto import OrthophotoProcessor
-from ..segmentation.segmenter import ImageSegmenter
-from ..indices.calculator import VegetationIndexCalculator
-from ..utils.logger import setup_logger
+# Constants for magic numbers
+CORRELATION_THRESHOLD = 0.7
+Z_SCORE_THRESHOLD = 1.96  # p < 0.05
+MIN_DATA_POINTS_FOR_CORRELATION = 100
 
 
 class Pipeline:
     """
-    Основной класс пайплайна для обработки гиперспектральных данных
-    Научно-ориентированная архитектура для обработки данных и анализа растений
+    Main pipeline class for hyperspectral data processing
+    Science-oriented architecture for data processing and plant analysis
     """
 
     def __init__(
@@ -37,13 +43,13 @@ class Pipeline:
         config_instance: Optional[Config] = None,
     ):
         """
-        Инициализация пайплайна
+        Initialize the pipeline
 
         Args:
-            config_path: Путь к файлу конфигурации
-            config_instance: Опциональный экземпляр конфигурации для dependency injection
+            config_path: Path to configuration file
+            config_instance: Optional configuration instance for dependency injection
         """
-        # Загрузка конфигурации с поддержкой dependency injection
+        # Load configuration with dependency injection support
         if config_instance is not None:
             self.config = config_instance
         elif config_path:
@@ -51,23 +57,23 @@ class Pipeline:
         else:
             self.config = get_config()
 
-        # Настройка логирования
+        # Setup logging
         self.logger = setup_logger(
             name="GOP",
             level=self.config.get("logging.level", "INFO"),
             log_file=self.config.get("logging.file"),
         )
 
-        # Инициализация компонентов
+        # Initialize components
         self.hyperspectral_processor = HyperspectralProcessor()
         self.orthophoto_processor = OrthophotoProcessor()
         self.segmenter = ImageSegmenter()
         self.index_calculator = VegetationIndexCalculator()
 
-        # Результаты обработки
+        # Processing results
         self.results = {}
 
-        self.logger.info("Научный пайплайн GOP инициализирован")
+        self.logger.info("GOP scientific pipeline initialized")
 
     def process(
         self,
@@ -80,46 +86,44 @@ class Pipeline:
         compression_ratio: Optional[float] = None,
     ) -> PipelineResult:
         """
-        Полный цикл обработки данных с научной методикой
+        Complete data processing cycle with scientific methodology
 
         Args:
-            input_path: Путь к входным данным
-            output_dir: Директория для сохранения результатов
-            sensor_type: Тип сенсора ('RGB', 'Multispectral', 'Hyperspectral')
-            segmentation_mask: Путь к маске сегментации (если None, будет создана)
-            selected_indices: Список индексов для расчета
-            use_refinement: Использовать уточнение границ сегментации
-            compression_ratio: Коэффициент сжатия для сегментации
+            input_path: Path to input data
+            output_dir: Directory for saving results
+            sensor_type: Sensor type ('RGB', 'Multispectral', 'Hyperspectral')
+            segmentation_mask: Path to segmentation mask (if None, will be created)
+            selected_indices: List of indices to calculate
+            use_refinement: Use boundary refinement for segmentation
+            compression_ratio: Compression ratio for segmentation
 
         Returns:
-            Словарь с результатами обработки
+            Dictionary with processing results
         """
         try:
-            self.logger.info(f"Начало научной обработки данных: {input_path}")
+            self.logger.info(f"Starting scientific data processing: {input_path}")
 
-            # Настройка выходной директории
-            output_dir = output_dir or config.get("output.results_dir", "results")
+            # Setup output directory
+            output_dir = output_dir or self.config.get("output.results_dir", "results")
             os.makedirs(output_dir, exist_ok=True)
 
-            # Этап 1: Предварительная обработка гиперспектральных данных
-            self.logger.info(
-                "Этап 1: Предварительная обработка гиперспектральных данных"
-            )
+            # Stage 1: Hyperspectral data preprocessing
+            self.logger.info("Stage 1: Hyperspectral data preprocessing")
             processed_data = self._preprocess_hyperspectral(input_path, output_dir)
 
-            # Этап 2: Создание ортофотоплана
-            self.logger.info("Этап 2: Создание ортофотоплана")
+            # Stage 2: Orthophoto creation
+            self.logger.info("Stage 2: Orthophoto creation")
             orthophoto_path = self._create_orthophoto(processed_data, output_dir)
 
-            # Этап 3: Сегментация изображений сверхвысокого разрешения
-            self.logger.info("Этап 3: Сегментация изображений")
+            # Stage 3: High-resolution image segmentation
+            self.logger.info("Stage 3: Image segmentation")
             if segmentation_mask is None:
                 segmentation_mask = self._segment_image(
                     orthophoto_path, output_dir, use_refinement, compression_ratio
                 )
 
-            # Этап 4: Расчет вегетационных индексов
-            self.logger.info("Этап 4: Расчет вегетационных индексов")
+            # Stage 4: Vegetation indices calculation
+            self.logger.info("Stage 4: Vegetation indices calculation")
             indices_results = self._calculate_indices(
                 orthophoto_path,
                 segmentation_mask,
@@ -128,17 +132,17 @@ class Pipeline:
                 output_dir,
             )
 
-            # Этап 5: Комплексная оценка состояния растений
-            self.logger.info("Этап 5: Комплексная оценка состояния растений")
+            # Stage 5: Comprehensive plant condition assessment
+            self.logger.info("Stage 5: Comprehensive plant condition assessment")
             plant_condition = self._assess_plant_condition(indices_results)
 
-            # Этап 6: Научный анализ и статистика
-            self.logger.info("Этап 6: Научный анализ и статистика")
+            # Stage 6: Scientific analysis and statistics
+            self.logger.info("Stage 6: Scientific analysis and statistics")
             scientific_analysis = self._perform_scientific_analysis(
                 indices_results, plant_condition, output_dir
             )
 
-            # Сбор результатов
+            # Collect results
             self.results = {
                 "input_path": input_path,
                 "output_dir": output_dir,
@@ -152,25 +156,25 @@ class Pipeline:
                 "processing_metadata": self._get_processing_metadata(),
             }
 
-            self.logger.info("Научная обработка завершена успешно")
+            self.logger.info("Scientific processing completed successfully")
             return self.results
 
         except Exception as e:
-            self.logger.error(f"Ошибка в процессе научной обработки: {e}")
+            self.logger.error(f"Error in scientific processing: {e}")
             raise
 
     def _preprocess_hyperspectral(
         self, input_path: str, output_dir: str
     ) -> Dict[str, Any]:
         """
-        Предварительная обработка гиперспектральных данных
+        Preprocess hyperspectral data
 
         Args:
-            input_path: Путь к входным данным
-            output_dir: Директория для сохранения результатов
+            input_path: Path to input data
+            output_dir: Directory for saving results
 
         Returns:
-            Словарь с результатами предобработки
+            Dictionary with preprocessing results
         """
         return self.hyperspectral_processor.process(input_path, output_dir)
 
@@ -178,14 +182,14 @@ class Pipeline:
         self, processed_data: Dict[str, Any], output_dir: str
     ) -> str:
         """
-        Создание ортофотоплана
+        Create orthophoto
 
         Args:
-            processed_data: Результаты предобработки
-            output_dir: Директория для сохранения результатов
+            processed_data: Preprocessing results
+            output_dir: Directory for saving results
 
         Returns:
-            Путь к созданному ортофотоплану
+            Path to created orthophoto
         """
         return self.orthophoto_processor.create_orthophoto(processed_data, output_dir)
 
@@ -194,19 +198,19 @@ class Pipeline:
         orthophoto_path: str,
         output_dir: str,
         use_refinement: bool = True,
-        compression_ratio: float = None,
+        compression_ratio: Optional[float] = None,
     ) -> str:
         """
-        Сегментация изображения с использованием каскадного подхода
+        Image segmentation using cascade approach
 
         Args:
-            orthophoto_path: Путь к ортофотоплану
-            output_dir: Директория для сохранения результатов
-            use_refinement: Использовать уточнение границ
-            compression_ratio: Коэффициент сжатия
+            orthophoto_path: Path to orthophoto
+            output_dir: Directory for saving results
+            use_refinement: Use boundary refinement
+            compression_ratio: Compression ratio
 
         Returns:
-            Путь к маске сегментации
+            Path to segmentation mask
         """
         return self.segmenter.segment(
             orthophoto_path, output_dir, use_refinement, compression_ratio
@@ -221,20 +225,20 @@ class Pipeline:
         output_dir: str,
     ) -> Dict[str, Any]:
         """
-        Расчет вегетационных индексов
+        Calculate vegetation indices
 
         Args:
-            orthophoto_path: Путь к ортофотоплану
-            segmentation_mask: Путь к маске сегментации
-            sensor_type: Тип сенсора
-            selected_indices: Список индексов для расчета
-            output_dir: Директория для сохранения результатов
+            orthophoto_path: Path to orthophoto
+            segmentation_mask: Path to segmentation mask
+            sensor_type: Sensor type
+            selected_indices: List of indices to calculate
+            output_dir: Directory for saving results
 
         Returns:
-            Словарь с результатами расчета индексов
+            Dictionary with index calculation results
         """
         if selected_indices is None:
-            selected_indices = config.get("indices.default_indices", [])
+            selected_indices = self.config.get("indices.default_indices", [])
 
         return self.index_calculator.calculate(
             orthophoto_path,
@@ -248,13 +252,13 @@ class Pipeline:
         self, indices_results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Комплексная оценка состояния растений
+        Comprehensive plant condition assessment
 
         Args:
-            indices_results: Результаты расчета индексов
+            indices_results: Index calculation results
 
         Returns:
-            Словарь с оценкой состояния растений
+            Dictionary with plant condition assessment
         """
         return self.index_calculator.assess_plant_condition(indices_results)
 
@@ -265,66 +269,66 @@ class Pipeline:
         output_dir: str,
     ) -> Dict[str, Any]:
         """
-        Научный анализ результатов
+        Scientific analysis of results
 
         Args:
-            indices_results: Результаты расчета индексов
-            plant_condition: Оценка состояния растений
-            output_dir: Директория для сохранения результатов
+            indices_results: Index calculation results
+            plant_condition: Plant condition assessment
+            output_dir: Directory for saving results
 
         Returns:
-            Словарь с научным анализом
+            Dictionary with scientific analysis
         """
         try:
             analysis = {}
 
-            # Статистический анализ индексов
+            # Statistical analysis of indices
             analysis["index_statistics"] = self._analyze_index_statistics(
                 indices_results
             )
 
-            # Корреляционный анализ
+            # Correlation analysis
             analysis["correlation_analysis"] = self._perform_correlation_analysis(
                 indices_results
             )
 
-            # Пространственный анализ
+            # Spatial analysis
             analysis["spatial_analysis"] = self._perform_spatial_analysis(
                 plant_condition
             )
 
-            # Классификация состояния растений
+            # Plant condition classification
             analysis["plant_classification"] = self._classify_plant_condition(
                 plant_condition
             )
 
-            # Сохранение научного отчета
+            # Save scientific report
             self._save_scientific_report(analysis, output_dir)
 
             return analysis
 
         except Exception as e:
-            self.logger.error(f"Ошибка научного анализа: {e}")
+            self.logger.error(f"Error in scientific analysis: {e}")
             return {"error": str(e)}
 
     def _analyze_index_statistics(
         self, indices_results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Статистический анализ вегетационных индексов
+        Statistical analysis of vegetation indices
 
         Args:
-            indices_results: Результаты расчета индексов
+            indices_results: Index calculation results
 
         Returns:
-            Словарь со статистикой
+            Dictionary with statistics
         """
         statistics = {}
         normalized_indices = indices_results.get("normalized_indices", {})
 
         for index_name, index_data in normalized_indices.items():
             if isinstance(index_data, np.ndarray):
-                # Расчет статистики только для области маски
+                # Calculate statistics only for masked area
                 valid_data = index_data[index_data > 0]
 
                 if len(valid_data) > 0:
@@ -346,66 +350,64 @@ class Pipeline:
         self, indices_results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Корреляционный анализ индексов
+        Correlation analysis of indices
 
         Args:
-            indices_results: Результаты расчета индексов
+            indices_results: Index calculation results
 
         Returns:
-            Словарь с корреляционным анализом
+            Dictionary with correlation analysis
         """
         try:
             normalized_indices = indices_results.get("normalized_indices", {})
 
-            # Создание матрицы данных для корреляционного анализа
+            # Create data matrix for correlation analysis
             index_names = []
             index_vectors = []
 
             for index_name, index_data in normalized_indices.items():
                 if isinstance(index_data, np.ndarray):
                     valid_data = index_data[index_data > 0]
-                    if (
-                        len(valid_data) > 100
-                    ):  # Минимальное количество точек для анализа
+                    if len(valid_data) > MIN_DATA_POINTS_FOR_CORRELATION:
                         index_names.append(index_name)
                         index_vectors.append(valid_data)
 
             if len(index_vectors) < 2:
-                return {"error": "Недостаточно данных для корреляционного анализа"}
+                return {"error": "Insufficient data for correlation analysis"}
 
-            # Выравнивание векторов по минимальной длине
+            # Align vectors to minimum length
             min_length = min(len(vec) for vec in index_vectors)
             aligned_vectors = [vec[:min_length] for vec in index_vectors]
 
-            # Расчет корреляционной матрицы
+            # Calculate correlation matrix
             correlation_matrix = np.corrcoef(aligned_vectors)
 
-            # Формирование результатов
+            # Format results
             correlation_analysis = {
                 "index_names": index_names,
                 "correlation_matrix": correlation_matrix.tolist(),
                 "strong_correlations": self._find_strong_correlations(
-                    index_names, correlation_matrix, threshold=0.7
+                    index_names, correlation_matrix, threshold=CORRELATION_THRESHOLD
                 ),
             }
 
             return correlation_analysis
 
         except Exception as e:
-            self.logger.error(f"Ошибка корреляционного анализа: {e}")
+            self.logger.error(f"Error in correlation analysis: {e}")
             return {"error": str(e)}
 
     def _perform_spatial_analysis(
         self, plant_condition: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Пространственный анализ состояния растений
+        Spatial analysis of plant condition
 
         Args:
-            plant_condition: Оценка состояния растений
+            plant_condition: Plant condition assessment
 
         Returns:
-            Словарь с пространственным анализом
+            Dictionary with spatial analysis
         """
         try:
             condition_maps = plant_condition.get("condition_maps", {})
@@ -428,55 +430,47 @@ class Pipeline:
             return spatial_analysis
 
         except Exception as e:
-            self.logger.error(f"Ошибка пространственного анализа: {e}")
+            self.logger.error(f"Error in spatial analysis: {e}")
             return {"error": str(e)}
 
     def _classify_plant_condition(
         self, plant_condition: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Классификация состояния растений
+        Plant condition classification
 
         Args:
-            plant_condition: Оценка состояния растений
+            plant_condition: Plant condition assessment
 
         Returns:
-            Словарь с классификацией
+            Dictionary with classification
         """
         try:
             statistics = plant_condition.get("statistics", {})
             overall_stats = statistics.get("overall", {})
 
             if not overall_stats:
-                return {"error": "Отсутствуют данные для классификации"}
+                return {"error": "No data available for classification"}
 
             overall_mean = overall_stats.get("mean", 0)
             overall_std = overall_stats.get("std", 0)
 
-            # Научная классификация на основе среднего значения и вариабельности
+            # Scientific classification based on mean value and variability
             if overall_mean > 0.8 and overall_std < 0.1:
-                condition_class = "Отличное"
-                condition_description = (
-                    "Растения в отличном состоянии, высокая однородность"
-                )
+                condition_class = "Excellent"
+                condition_description = "Plants in excellent condition, high uniformity"
                 confidence = 0.9
             elif overall_mean > 0.6 and overall_std < 0.2:
-                condition_class = "Хорошее"
-                condition_description = (
-                    "Растения в хорошем состоянии, умеренная однородность"
-                )
+                condition_class = "Good"
+                condition_description = "Plants in good condition, moderate uniformity"
                 confidence = 0.8
             elif overall_mean > 0.4:
-                condition_class = "Удовлетворительное"
-                condition_description = (
-                    "Растения в удовлетворительном состоянии, есть проблемы"
-                )
+                condition_class = "Satisfactory"
+                condition_description = "Plants in satisfactory condition, some issues present"
                 confidence = 0.7
             else:
-                condition_class = "Плохое"
-                condition_description = (
-                    "Растения в плохом состоянии, требуется вмешательство"
-                )
+                condition_class = "Poor"
+                condition_description = "Plants in poor condition, intervention required"
                 confidence = 0.8
 
             return {
@@ -488,11 +482,11 @@ class Pipeline:
             }
 
         except Exception as e:
-            self.logger.error(f"Ошибка классификации: {e}")
+            self.logger.error(f"Error in classification: {e}")
             return {"error": str(e)}
 
     def _calculate_skewness(self, data: np.ndarray) -> float:
-        """Расчет асимметрии распределения"""
+        """Calculate distribution skewness"""
         mean = np.mean(data)
         std = np.std(data)
         if std == 0:
@@ -500,7 +494,7 @@ class Pipeline:
         return np.mean(((data - mean) / std) ** 3)
 
     def _calculate_kurtosis(self, data: np.ndarray) -> float:
-        """Расчет эксцесса распределения"""
+        """Calculate distribution kurtosis"""
         mean = np.mean(data)
         std = np.std(data)
         if std == 0:
@@ -511,9 +505,9 @@ class Pipeline:
         self,
         index_names: List[str],
         correlation_matrix: np.ndarray,
-        threshold: float = 0.7,
+        threshold: float = CORRELATION_THRESHOLD,
     ) -> List[Dict[str, Any]]:
-        """Поиск сильных корреляций между индексами"""
+        """Find strong correlations between indices"""
         strong_correlations = []
 
         for i in range(len(index_names)):
@@ -532,28 +526,74 @@ class Pipeline:
         return strong_correlations
 
     def _calculate_morans_i(self, data: np.ndarray) -> float:
-        """Расчет индекса пространственной автокорреляции Морана"""
+        """Calculate Moran's I spatial autocorrelation index"""
         try:
-            # Упрощенная реализация индекса Морана
-            rows, cols = data.shape
-            if rows < 3 or cols < 3:
-                return 0.0
-
-            # Создание весовой матрицы (соседство)
-            weights = np.zeros((rows, cols, rows, cols))
-
-            for i in range(rows):
-                for j in range(cols):
-                    # Проверка соседних пикселей
+            # More efficient implementation using scipy if available
+            try:
+                from scipy.spatial.distance import pdist, squareform
+                from scipy.sparse import lil_matrix
+                
+                rows, cols = data.shape
+                if rows < 3 or cols < 3:
+                    return 0.0
+                
+                # Flatten the data and create coordinates
+                n = rows * cols
+                flat_data = data.flatten()
+                
+                # Create coordinate grid
+                coords = np.array([(i, j) for i in range(rows) for j in range(cols)])
+                
+                # Create spatial weights matrix (queen contiguity)
+                weights = lil_matrix((n, n))
+                
+                for idx, (i, j) in enumerate(coords):
+                    # Check 8-neighborhood
                     for di in [-1, 0, 1]:
                         for dj in [-1, 0, 1]:
                             if di == 0 and dj == 0:
                                 continue
                             ni, nj = i + di, j + dj
                             if 0 <= ni < rows and 0 <= nj < cols:
-                                weights[i, j, ni, nj] = 1
+                                neighbor_idx = ni * cols + nj
+                                weights[idx, neighbor_idx] = 1
+                
+                weights = weights.tocsr()
+                
+                # Calculate Moran's I
+                mean_val = np.mean(flat_data)
+                deviations = flat_data - mean_val
+                
+                # Sum of weights
+                weight_sum = weights.sum()
+                if weight_sum == 0:
+                    return 0.0
+                
+                # Calculate numerator and denominator
+                numerator = np.sum(weights.multiply(np.outer(deviations, deviations)))
+                denominator = np.sum(deviations ** 2)
+                
+                if denominator == 0:
+                    return 0.0
+                
+                morans_i = (n / weight_sum) * (numerator / denominator)
+                return float(morans_i)
+                
+            except ImportError:
+                # Fallback to simplified implementation if scipy not available
+                return self._calculate_morans_i_simple(data)
+                
+        except Exception:
+            return 0.0
 
-            # Расчет индекса Морана
+    def _calculate_morans_i_simple(self, data: np.ndarray) -> float:
+        """Simplified Moran's I implementation for when scipy is not available"""
+        try:
+            rows, cols = data.shape
+            if rows < 3 or cols < 3:
+                return 0.0
+
+            # Create weight matrix (neighborhood) - optimized version
             n = rows * cols
             mean_val = np.mean(data)
 
@@ -561,19 +601,22 @@ class Pipeline:
             denominator = 0
             weight_sum = 0
 
+            # Optimized implementation with reduced loops
             for i in range(rows):
                 for j in range(cols):
-                    for ni in range(rows):
-                        for nj in range(cols):
-                            if weights[i, j, ni, nj] > 0:
-                                numerator += (
-                                    weights[i, j, ni, nj]
-                                    * (data[i, j] - mean_val)
-                                    * (data[ni, nj] - mean_val)
-                                )
-                                weight_sum += weights[i, j, ni, nj]
-
-                    denominator += (data[i, j] - mean_val) ** 2
+                    deviation_i = data[i, j] - mean_val
+                    denominator += deviation_i ** 2
+                    
+                    # Check neighboring pixels
+                    for di in [-1, 0, 1]:
+                        for dj in [-1, 0, 1]:
+                            if di == 0 and dj == 0:
+                                continue
+                            ni, nj = i + di, j + dj
+                            if 0 <= ni < rows and 0 <= nj < cols:
+                                deviation_j = data[ni, nj] - mean_val
+                                numerator += deviation_i * deviation_j
+                                weight_sum += 1
 
             if weight_sum == 0 or denominator == 0:
                 return 0.0
@@ -585,20 +628,20 @@ class Pipeline:
             return 0.0
 
     def _perform_hotspot_analysis(self, data: np.ndarray) -> Dict[str, Any]:
-        """Анализ горячих точек"""
+        """Hotspot analysis"""
         try:
-            # Упрощенный анализ горячих точек на основе z-оценок
+            # Simplified hotspot analysis based on z-scores
             mean_val = np.mean(data)
             std_val = np.std(data)
 
             if std_val == 0:
                 return {"hotspots": 0, "coldspots": 0, "neutral": data.size}
 
-            # Классификация пикселей
+            # Pixel classification
             z_scores = (data - mean_val) / std_val
 
-            hotspots = np.sum(z_scores > 1.96)  # p < 0.05
-            coldspots = np.sum(z_scores < -1.96)  # p < 0.05
+            hotspots = np.sum(z_scores > Z_SCORE_THRESHOLD)  # p < 0.05
+            coldspots = np.sum(z_scores < -Z_SCORE_THRESHOLD)  # p < 0.05
             neutral = data.size - hotspots - coldspots
 
             return {
@@ -613,18 +656,18 @@ class Pipeline:
             return {"hotspots": 0, "coldspots": 0, "neutral": data.size}
 
     def _calculate_fragmentation_index(self, data: np.ndarray) -> float:
-        """Расчет индекса фрагментации"""
+        """Calculate fragmentation index"""
         try:
-            # Бинаризация данных
+            # Data binarization
             threshold = np.mean(data)
             binary = (data > threshold).astype(np.uint8)
 
-            # Подсчет связанных компонентов
+            # Count connected components
             from scipy import ndimage
 
             labeled, num_features = ndimage.label(binary)
 
-            # Расчет индекса фрагментации
+            # Calculate fragmentation index
             if num_features == 0:
                 return 0.0
 
@@ -641,24 +684,24 @@ class Pipeline:
     def _save_scientific_report(
         self, analysis: Dict[str, Any], output_dir: str
     ) -> None:
-        """Сохранение научного отчета"""
+        """Save scientific report"""
         try:
             report_path = os.path.join(output_dir, "scientific_report.json")
 
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(analysis, f, indent=2, ensure_ascii=False, default=str)
 
-            self.logger.info(f"Научный отчет сохранен: {report_path}")
+            self.logger.info(f"Scientific report saved: {report_path}")
 
         except Exception as e:
-            self.logger.error(f"Ошибка сохранения научного отчета: {e}")
+            self.logger.error(f"Error saving scientific report: {e}")
 
     def _get_processing_metadata(self) -> Dict[str, Any]:
-        """Получение метаданных обработки"""
+        """Get processing metadata"""
         return {
             "pipeline_version": "2.0.0",
             "processing_date": str(Path.cwd()),
-            "config_used": config.config,
+            "config_used": self.config.config,
             "scientific_methods": [
                 "radiometric_correction",
                 "pca_denoising",
@@ -671,42 +714,65 @@ class Pipeline:
 
     def get_results(self) -> Dict[str, Any]:
         """
-        Получить результаты последней обработки
+        Get results of the last processing
 
         Returns:
-            Словарь с результатами
+            Dictionary with results
         """
         return self.results.copy()
 
-    def save_results(self, output_path: str) -> None:
+    def save_results(self, results: Optional[Dict[str, Any]], output_path: str) -> None:
         """
-        Сохранить результаты обработки в файл
+        Save processing results to file
 
         Args:
-            output_path: Путь для сохранения результатов
+            results: Optional results to save (if None, saves pipeline results)
+            output_path: Path for saving results
         """
         try:
+            # Use provided results or pipeline results
+            results_to_save = results if results is not None else self.results
+            
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(self.results, f, indent=2, ensure_ascii=False, default=str)
-            self.logger.info(f"Результаты сохранены в: {output_path}")
+                json.dump(results_to_save, f, indent=2, ensure_ascii=False, default=str)
+            self.logger.info(f"Results saved to: {output_path}")
         except Exception as e:
-            self.logger.error(f"Ошибка сохранения результатов: {e}")
+            self.logger.error(f"Error saving results: {e}")
+
+    def load_results(self, input_path: str) -> Dict[str, Any]:
+        """
+        Load processing results from file
+
+        Args:
+            input_path: Path to load results from
+
+        Returns:
+            Dictionary with loaded results
+        """
+        try:
+            with open(input_path, "r", encoding="utf-8") as f:
+                results = json.load(f)
+            self.logger.info(f"Results loaded from: {input_path}")
+            return results
+        except Exception as e:
+            self.logger.error(f"Error loading results: {e}")
+            raise
 
     def export_scientific_data(self, output_dir: str) -> None:
         """
-        Экспорт научных данных для дальнейшего анализа
+        Export scientific data for further analysis
 
         Args:
-            output_dir: Директория для экспорта
+            output_dir: Directory for export
         """
         try:
             import pandas as pd
 
-            # Создание директории для экспорта
+            # Create export directory
             export_dir = os.path.join(output_dir, "scientific_export")
             os.makedirs(export_dir, exist_ok=True)
 
-            # Экспорт статистики индексов
+            # Export index statistics
             if "scientific_analysis" in self.results:
                 analysis = self.results["scientific_analysis"]
 
@@ -715,7 +781,7 @@ class Pipeline:
                     stats_path = os.path.join(export_dir, "index_statistics.csv")
                     stats_df.to_csv(stats_path)
                     self.logger.info(
-                        f"Статистика индексов экспортирована: {stats_path}"
+                        f"Index statistics exported: {stats_path}"
                     )
 
                 if "correlation_analysis" in analysis:
@@ -729,10 +795,10 @@ class Pipeline:
                         corr_path = os.path.join(export_dir, "correlation_matrix.csv")
                         corr_df.to_csv(corr_path)
                         self.logger.info(
-                            f"Корреляционная матрица экспортирована: {corr_path}"
+                            f"Correlation matrix exported: {corr_path}"
                         )
 
-            self.logger.info(f"Научные данные экспортированы в: {export_dir}")
+            self.logger.info(f"Scientific data exported to: {export_dir}")
 
         except Exception as e:
-            self.logger.error(f"Ошибка экспорта научных данных: {e}")
+            self.logger.error(f"Error exporting scientific data: {e}")

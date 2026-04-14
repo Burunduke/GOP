@@ -1,15 +1,15 @@
 """
-GOP - Гиперспектральная обработка и анализ растений
+GOP - Hyperspectral Processing and Plant Analysis
 
-Пакет для обработки гиперспектральных данных, создания ортофотопланов
-и анализа состояния растений с использованием вегетационных индексов.
+Package for processing hyperspectral data, creating orthophotos,
+and analyzing plant condition using vegetation indices.
 """
 
 __version__ = "2.0.0"
-__author__ = "Индыков Дмитрий Андреевич"
+__author__ = "Dmitry Indykov"
 __email__ = "indykovdm@example.com"
 
-from .core import Pipeline
+from .core import Pipeline, get_config, create_config
 from .processing import HyperspectralProcessor
 from .segmentation import ImageSegmenter
 from .indices import VegetationIndexCalculator
@@ -19,4 +19,6 @@ __all__ = [
     "HyperspectralProcessor",
     "ImageSegmenter",
     "VegetationIndexCalculator",
+    "get_config",
+    "create_config",
 ]

@@ -1,31 +1,36 @@
 """
-Компонент визуализации для GUI приложения GOP
+Visualization component for GOP GUI application
 """
 
+from typing import Optional, Dict, Any, List
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 import plotly.graph_objs as go
 
 
-def create_visualization_component():
-    """Создание компонента визуализации"""
+def create_visualization_component() -> html.Div:
+    """Create visualization component
+    
+    Returns:
+        html.Div: Visualization component with controls and display area
+    """
     return html.Div([
         dbc.Card([
             dbc.CardHeader([
-                html.H5("Визуализация данных", className="mb-0"),
+                html.H5("Data Visualization", className="mb-0"),
             ]),
             dbc.CardBody([
                 # Панель управления визуализацией
                 dbc.Row([
                     dbc.Col([
-                        html.Label("Тип визуализации:"),
+                        html.Label("Visualization Type:"),
                         dcc.Dropdown(
                             id='visualization-type',
                             options=[
-                                {'label': 'Индексное изображение', 'value': 'index_map'},
-                                {'label': 'Гистограмма распределения', 'value': 'histogram'},
-                                {'label': 'Спектральный профиль', 'value': 'spectral_profile'},
-                                {'label': '3D визуализация', 'value': '3d_visualization'},
+                                {'label': 'Index Map', 'value': 'index_map'},
+                                {'label': 'Distribution Histogram', 'value': 'histogram'},
+                                {'label': 'Spectral Profile', 'value': 'spectral_profile'},
+                                {'label': '3D Visualization', 'value': '3d_visualization'},
                             ],
                             value='index_map',
                             className="mb-3"
@@ -33,7 +38,7 @@ def create_visualization_component():
                     ], width=4),
                     
                     dbc.Col([
-                        html.Label("Вегетационный индекс:"),
+                        html.Label("Vegetation Index:"),
                         dcc.Dropdown(
                             id='index-selector',
                             options=[
@@ -47,7 +52,7 @@ def create_visualization_component():
                     ], width=4),
                     
                     dbc.Col([
-                        html.Label("Цветовая схема:"),
+                        html.Label("Color Scheme:"),
                         dcc.Dropdown(
                             id='colormap-selector',
                             options=[
@@ -76,25 +81,25 @@ def create_visualization_component():
                     dbc.Col([
                         dbc.ButtonGroup([
                             dbc.Button(
-                                [html.I(className="fas fa-search-plus me-1"), "Увеличить"],
+                                [html.I(className="fas fa-search-plus me-1"), "Zoom In"],
                                 id="zoom-in-btn",
                                 size="sm",
                                 outline=True
                             ),
                             dbc.Button(
-                                [html.I(className="fas fa-search-minus me-1"), "Уменьшить"],
+                                [html.I(className="fas fa-search-minus me-1"), "Zoom Out"],
                                 id="zoom-out-btn",
                                 size="sm",
                                 outline=True
                             ),
                             dbc.Button(
-                                [html.I(className="fas fa-expand me-1"), "Во весь экран"],
+                                [html.I(className="fas fa-expand me-1"), "Full Screen"],
                                 id="fullscreen-btn",
                                 size="sm",
                                 outline=True
                             ),
                             dbc.Button(
-                                [html.I(className="fas fa-download me-1"), "Скачать"],
+                                [html.I(className="fas fa-download me-1"), "Download"],
                                 id="download-visualization-btn",
                                 size="sm",
                                 outline=True
@@ -104,7 +109,7 @@ def create_visualization_component():
                     
                     dbc.Col([
                         html.Div([
-                            html.Label("Прозрачность:", className="me-2"),
+                            html.Label("Transparency:", className="me-2"),
                             dcc.Slider(
                                 id='transparency-slider',
                                 min=0,
@@ -123,9 +128,9 @@ def create_visualization_component():
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.H6("Статистика изображения", className="card-title"),
+                                html.H6("Image Statistics", className="card-title"),
                                 html.Div(id='image-stats', children=[
-                                    html.P("Загрузите данные для отображения статистики", 
+                                    html.P("Load data to display statistics",
                                            className="text-muted small")
                                 ])
                             ])
@@ -135,9 +140,9 @@ def create_visualization_component():
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.H6("Информация о пикселе", className="card-title"),
+                                html.H6("Pixel Information", className="card-title"),
                                 html.Div(id='pixel-info', children=[
-                                    html.P("Кликните по изображению для получения информации", 
+                                    html.P("Click on the image to get information",
                                            className="text-muted small")
                                 ])
                             ])
@@ -147,9 +152,9 @@ def create_visualization_component():
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([
-                                html.H6("Легенда", className="card-title"),
+                                html.H6("Legend", className="card-title"),
                                 html.Div(id='legend-info', children=[
-                                    html.P("Легенда будет отображена здесь", 
+                                    html.P("Legend will be displayed here",
                                            className="text-muted small")
                                 ])
                             ])
@@ -161,12 +166,16 @@ def create_visualization_component():
     ], id="visualization-container")
 
 
-def create_empty_figure():
-    """Создание пустой фигуры для визуализации"""
+def create_empty_figure() -> Dict[str, Any]:
+    """Create empty figure for visualization
+    
+    Returns:
+        Dict[str, Any]: Empty figure configuration
+    """
     return {
         'data': [],
         'layout': {
-            'title': 'Загрузите данные для начала визуализации',
+            'title': 'Load data to start visualization',
             'xaxis': {'visible': False},
             'yaxis': {'visible': False},
             'paper_bgcolor': '#f8f9fa',
@@ -174,7 +183,7 @@ def create_empty_figure():
             'height': 500,
             'annotations': [
                 {
-                    'text': 'Перетащите файлы данных в область загрузки',
+                    'text': 'Drag and drop data files into the upload area',
                     'xref': 'paper',
                     'yref': 'paper',
                     'x': 0.5,
@@ -188,12 +197,25 @@ def create_empty_figure():
     }
 
 
-def create_index_map_figure(data, index_name, colormap='viridis'):
-    """Создание фигуры для индексного изображения"""
-    # Временная реализация - будет заменена реальными данными
+def create_index_map_figure(
+    data: Any,
+    index_name: str,
+    colormap: str = 'viridis'
+) -> Dict[str, Any]:
+    """Create figure for index map visualization
+    
+    Args:
+        data: Input data for visualization
+        index_name: Name of the vegetation index
+        colormap: Color scheme for the map
+        
+    Returns:
+        Dict[str, Any]: Figure configuration for index map
+    """
+    # Temporary implementation - will be replaced with real data
     import numpy as np
     
-    # Создание тестовых данных
+    # Create test data
     x = np.linspace(0, 10, 100)
     y = np.linspace(0, 10, 100)
     z = np.random.rand(100, 100)
@@ -206,25 +228,33 @@ def create_index_map_figure(data, index_name, colormap='viridis'):
                 y=y,
                 colorscale=colormap,
                 name=index_name,
-                hovertemplate='X: %{x:.2f}<br>Y: %{y:.2f}<br>Значение: %{z:.3f}<extra></extra>'
+                hovertemplate='X: %{x:.2f}<br>Y: %{y:.2f}<br>Value: %{z:.3f}<extra></extra>'
             )
         ],
         'layout': {
-            'title': f'Карта индекса {index_name}',
-            'xaxis': {'title': 'Координата X'},
-            'yaxis': {'title': 'Координата Y'},
+            'title': f'{index_name} Index Map',
+            'xaxis': {'title': 'X Coordinate'},
+            'yaxis': {'title': 'Y Coordinate'},
             'height': 500,
             'margin': {'l': 50, 'r': 50, 't': 50, 'b': 50}
         }
     }
 
 
-def create_histogram_figure(data, index_name):
-    """Создание фигуры для гистограммы распределения"""
-    # Временная реализация
+def create_histogram_figure(data: Any, index_name: str) -> Dict[str, Any]:
+    """Create figure for distribution histogram
+    
+    Args:
+        data: Input data for visualization
+        index_name: Name of the vegetation index
+        
+    Returns:
+        Dict[str, Any]: Figure configuration for histogram
+    """
+    # Temporary implementation
     import numpy as np
     
-    # Создание тестовых данных
+    # Create test data
     values = np.random.normal(0.5, 0.2, 1000)
     
     return {
@@ -234,13 +264,13 @@ def create_histogram_figure(data, index_name):
                 nbinsx=50,
                 name=index_name,
                 marker_color='rgba(55, 128, 191, 0.7)',
-                hovertemplate='Диапазон: %{x}<br>Количество: %{y}<extra></extra>'
+                hovertemplate='Range: %{x}<br>Count: %{y}<extra></extra>'
             )
         ],
         'layout': {
-            'title': f'Распределение значений индекса {index_name}',
-            'xaxis': {'title': 'Значение индекса'},
-            'yaxis': {'title': 'Частота'},
+            'title': f'{index_name} Value Distribution',
+            'xaxis': {'title': 'Index Value'},
+            'yaxis': {'title': 'Frequency'},
             'height': 500,
             'margin': {'l': 50, 'r': 50, 't': 50, 'b': 50}
         }

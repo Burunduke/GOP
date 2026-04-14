@@ -168,7 +168,8 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
 
     def test_indices_integration(self):
         """Тест интеграции калькулятора индексов с определениями"""
-        calculator = IndexCalculator()
+        from src.indices.calculator import VegetationIndexCalculator
+        calculator = VegetationIndexCalculator()
 
         # Создание тестовых данных
         spectral_data = np.random.rand(self.height, self.width, self.bands) * 0.5 + 0.25
@@ -237,7 +238,7 @@ wavelength = {{400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 
         large_data = np.random.rand(500, 500, 50)  # Большие размеры
 
         # Проверка, что компоненты могут обрабатывать большие данные
-        calculator = IndexCalculator()
+        calculator = VegetationIndexCalculator()
         segmentation_mask = np.random.randint(0, 5, (500, 500))
 
         # Расчет индексов с оптимизацией памяти

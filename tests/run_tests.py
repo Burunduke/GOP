@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Скрипт для запуска всех тестов проекта
+Script for running all tests in the GOP project
 """
 
 import unittest
@@ -8,79 +8,79 @@ import sys
 import os
 from pathlib import Path
 
-# Добавление src в Python path
+# Add src to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 
-def discover_and_run_tests():
-    """Обнаружение и запуск всех тестов"""
-    # Директория с тестами
+def discover_and_run_tests() -> int:
+    """Discover and run all tests"""
+    # Test directory
     test_dir = Path(__file__).parent
 
-    # Обнаружение тестов
+    # Discover tests
     loader = unittest.TestLoader()
     suite = loader.discover(str(test_dir), pattern="test_*.py")
 
-    # Запуск тестов
+    # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
 
-    # Возврат кода завершения
+    # Return exit code
     return 0 if result.wasSuccessful() else 1
 
 
-def run_specific_test(test_module):
-    """Запуск конкретного тестового модуля"""
+def run_specific_test(test_module: str) -> int:
+    """Run specific test module"""
     try:
         suite = unittest.TestLoader().loadTestsFromName(test_module)
         runner = unittest.TextTestRunner(verbosity=2)
         result = runner.run(suite)
         return 0 if result.wasSuccessful() else 1
     except Exception as e:
-        print(f"Ошибка при запуске теста {test_module}: {e}")
+        print(f"Error running test {test_module}: {e}")
         return 1
 
 
-def main():
-    """Главная функция"""
+def main() -> int:
+    """Main function"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Запуск тестов проекта GOP")
+    parser = argparse.ArgumentParser(description="Run GOP project tests")
     parser.add_argument(
         "--module",
         "-m",
-        help="Запустить конкретный тестовый модуль (например: test_indices)",
+        help="Run specific test module (e.g., test_indices)",
     )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Подробный вывод")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument(
-        "--list", "-l", action="store_true", help="Показать доступные тестовые модули"
+        "--list", "-l", action="store_true", help="Show available test modules"
     )
 
     args = parser.parse_args()
 
-    # Показать доступные тесты
+    # Show available tests
     if args.list:
         test_dir = Path(__file__).parent
         test_files = list(test_dir.glob("test_*.py"))
-        print("Доступные тестовые модули:")
+        print("Available test modules:")
         for test_file in test_files:
             module_name = test_file.stem
             print(f"  {module_name}")
         return 0
 
-    # Установка уровня детализации
+    # Set verbosity level
     if args.verbose:
         verbosity = 2
     else:
         verbosity = 1
 
-    # Запуск конкретного модуля
+    # Run specific module
     if args.module:
         return run_specific_test(args.module)
 
-    # Запуск всех тестов
-    print("Запуск всех тестов проекта GOP...")
+    # Run all tests
+    print("Running all GOP project tests...")
     print("=" * 50)
 
     return discover_and_run_tests()

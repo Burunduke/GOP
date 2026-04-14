@@ -1,5 +1,5 @@
 """
-Модели данных для GUI приложения GOP
+Data models for GOP GUI application
 """
 
 from .project import (
@@ -14,7 +14,7 @@ from .project import (
 
 __all__ = [
     "Project",
-    "ProjectFile", 
+    "ProjectFile",
     "ProjectStatus",
     "PipelineStage",
     "ProcessingConfig",

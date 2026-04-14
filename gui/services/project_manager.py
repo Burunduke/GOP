@@ -1,4 +1,4 @@
-"""Менеджер проектов GOP - управление жизненным циклом проектов."""
+"""GOP project manager - project lifecycle management."""
 
 import json
 import os
@@ -7,10 +7,10 @@ import hashlib
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 from gui.models.project import (
-    Project, ProjectFile, ProcessingConfig, 
+    Project, ProjectFile, ProcessingConfig,
     ProcessingResult, ProcessingHistory, ProjectStatus, PipelineStage
 )
 
@@ -18,22 +18,22 @@ logger = logging.getLogger(__name__)
 
 
 class ProjectManager:
-    """Менеджер для управления проектами GOP."""
+    """Manager for GOP project management."""
     
-    def __init__(self, projects_dir: str = "projects"):
+    def __init__(self, projects_dir: str = "projects") -> None:
         """
-        Инициализация менеджера проектов.
+        Initialize project manager.
         
         Args:
-            projects_dir: Путь к директории хранения проектов
+            projects_dir: Path to project storage directory
         """
         self.projects_dir = Path(projects_dir)
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        self._cache: dict[str, Project] = {}
+        self._cache: Dict[str, Project] = {}
         self._load_all_projects()
     
     def _load_all_projects(self) -> None:
-        """Загрузка всех проектов из файловой системы в кэш."""
+        """Load all projects from filesystem into cache."""
         self._cache.clear()
         if not self.projects_dir.exists():
             return
@@ -48,14 +48,14 @@ class ProjectManager:
                         project = Project.from_dict(data)
                         self._cache[project.id] = project
                     except (json.JSONDecodeError, Exception) as e:
-                        logger.error(f"Ошибка загрузки проекта из {project_file}: {e}")
+                        logger.error(f"Error loading project from {project_file}: {e}")
     
     def _save_project(self, project: Project) -> None:
-        """Сохранение проекта в файловую систему."""
+        """Save project to filesystem."""
         project_dir = self.projects_dir / project.id
         project_dir.mkdir(parents=True, exist_ok=True)
         
-        # Создаём поддиректории
+        # Create subdirectories
         (project_dir / "files").mkdir(exist_ok=True)
         (project_dir / "results").mkdir(exist_ok=True)
         
@@ -65,19 +65,19 @@ class ProjectManager:
         
         self._cache[project.id] = project
     
-    # === CRUD операции ===
+    # === CRUD operations ===
     
-    def create_project(self, name: str, description: str = "", tags: list[str] = None) -> Project:
+    def create_project(self, name: str, description: str = "", tags: List[str] = None) -> Project:
         """
-        Создание нового проекта.
+        Create a new project.
         
         Args:
-            name: Название проекта
-            description: Описание проекта
-            tags: Теги проекта
+            name: Project name
+            description: Project description
+            tags: Project tags
             
         Returns:
-            Созданный проект
+            Created project
         """
         project = Project(
             name=name,
@@ -85,35 +85,35 @@ class ProjectManager:
             tags=tags or [],
         )
         self._save_project(project)
-        logger.info(f"Создан проект: {project.name} (ID: {project.id})")
+        logger.info(f"Created project: {project.name} (ID: {project.id})")
         return project
     
     def get_project(self, project_id: str) -> Optional[Project]:
         """
-        Получение проекта по ID.
+        Get project by ID.
         
         Args:
-            project_id: ID проекта
+            project_id: Project ID
             
         Returns:
-            Проект или None если не найден
+            Project or None if not found
         """
         return self._cache.get(project_id)
     
     def update_project(self, project_id: str, **kwargs) -> Optional[Project]:
         """
-        Обновление полей проекта.
+        Update project fields.
         
         Args:
-            project_id: ID проекта
-            **kwargs: Поля для обновления
+            project_id: Project ID
+            **kwargs: Fields to update
             
         Returns:
-            Обновлённый проект или None
+            Updated project or None
         """
         project = self.get_project(project_id)
         if project is None:
-            logger.warning(f"Проект не найден: {project_id}")
+            logger.warning(f"Project not found: {project_id}")
             return None
         
         for key, value in kwargs.items():
@@ -122,18 +122,18 @@ class ProjectManager:
         
         project.updated_at = datetime.now().isoformat()
         self._save_project(project)
-        logger.info(f"Обновлён проект: {project.name} (ID: {project.id})")
+        logger.info(f"Updated project: {project.name} (ID: {project.id})")
         return project
     
     def delete_project(self, project_id: str) -> bool:
         """
-        Удаление проекта.
+        Delete project.
         
         Args:
-            project_id: ID проекта
+            project_id: Project ID
             
         Returns:
-            True если проект удалён
+            True if project deleted
         """
         project = self.get_project(project_id)
         if project is None:
@@ -144,25 +144,25 @@ class ProjectManager:
             shutil.rmtree(project_dir)
         
         self._cache.pop(project_id, None)
-        logger.info(f"Удалён проект: {project.name} (ID: {project_id})")
+        logger.info(f"Deleted project: {project.name} (ID: {project_id})")
         return True
     
     def list_projects(
-        self, 
+        self,
         status: Optional[str] = None,
         sort_by: str = "updated_at",
         reverse: bool = True
-    ) -> list[Project]:
+    ) -> List[Project]:
         """
-        Получение списка проектов с фильтрацией.
+        Get list of projects with filtering.
         
         Args:
-            status: Фильтр по статусу
-            sort_by: Поле для сортировки
-            reverse: Обратная сортировка
+            status: Status filter
+            sort_by: Field to sort by
+            reverse: Reverse sort
             
         Returns:
-            Список проектов
+            List of projects
         """
         projects = list(self._cache.values())
         
@@ -172,15 +172,15 @@ class ProjectManager:
         projects.sort(key=lambda p: getattr(p, sort_by, ""), reverse=reverse)
         return projects
     
-    def search_projects(self, query: str) -> list[Project]:
+    def search_projects(self, query: str) -> List[Project]:
         """
-        Поиск проектов по имени и описанию.
+        Search projects by name and description.
         
         Args:
-            query: Поисковый запрос
+            query: Search query
             
         Returns:
-            Список найденных проектов
+            List of found projects
         """
         query_lower = query.lower()
         return [

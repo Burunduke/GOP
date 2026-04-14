@@ -1,13 +1,15 @@
 """
-Основное Dash приложение для GUI GOP
+Main Dash application for GOP GUI
 """
 
 import os
 import logging
+import sys
 from pathlib import Path
+from typing import Optional
 
 import dash
-from flask import Flask
+from flask import Flask, redirect, send_from_directory
 import dash_bootstrap_components as dbc
 
 from ..config import config
@@ -15,9 +17,11 @@ from ..api.routes import api_blueprint
 from ..components.layout import create_main_layout
 from ..components.callbacks import register_callbacks
 
+logger = logging.getLogger(__name__)
 
-def setup_logging():
-    """Настройка логирования"""
+
+def setup_logging() -> None:
+    """Configure logging for the application"""
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
     
@@ -31,24 +35,30 @@ def setup_logging():
     )
 
 
-def create_app(config_name='default'):
-    """Создание и конфигурация Dash приложения"""
+def create_app(config_name: str = 'default') -> dash.Dash:
+    """Create and configure Dash application
     
-    # Настройка логирования
+    Args:
+        config_name: Configuration name ('development', 'production', 'default')
+        
+    Returns:
+        Configured Dash application instance
+    """
+    # Configure logging
     setup_logging()
     
-    # Получение конфигурации
+    # Get configuration
     app_config = config[config_name]
     
-    # Создание Flask сервера
+    # Create Flask server
     server = Flask(__name__)
     server.config['SECRET_KEY'] = app_config.SECRET_KEY
     server.config['MAX_CONTENT_LENGTH'] = app_config.MAX_FILE_SIZE
     
-    # Инициализация конфигурации
+    # Initialize configuration
     app_config.init_app(server)
     
-    # Создание Dash приложения
+    # Create Dash application
     app = dash.Dash(
         __name__,
         server=server,
@@ -65,13 +75,13 @@ def create_app(config_name='default'):
         suppress_callback_exceptions=True
     )
     
-    # Регистрация API маршрутов
+    # Register API routes
     server.register_blueprint(api_blueprint, url_prefix='/api')
     
-    # Настройка основного layout
+    # Configure main layout
     app.layout = create_main_layout()
     
-    # Инициализация сервисов
+    # Initialize services
     from gui.services.project_manager import ProjectManager
     from gui.services.pipeline_executor import PipelineExecutor
     from gui.services.gop_adapter import GOPAdapter
@@ -80,58 +90,58 @@ def create_app(config_name='default'):
     gop_adapter = GOPAdapter()
     pipeline_executor = PipelineExecutor(project_manager=project_manager, gop_adapter=gop_adapter)
 
-    # Регистрация колбэков с сервисами
+    # Register callbacks with services
     register_callbacks(app, project_manager=project_manager, pipeline_executor=pipeline_executor)
     
-    # Настройка статических файлов
+    # Configure static files
     _setup_static_files(server)
     
+    logger.info(f"GUI application created with config: {config_name}")
     return app
 
 
-def _setup_static_files(server):
-    """Настройка статических файлов"""
+def _setup_static_files(server: Flask) -> None:
+    """Configure static file serving
+    
+    Args:
+        server: Flask server instance
+    """
     @server.route('/')
     def serve_root():
-        from flask import redirect
         return redirect('/dashboard')
     
     @server.route('/static/<path:filename>')
-    def serve_static(filename):
-        from flask import send_from_directory
+    def serve_static(filename: str):
         static_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
         return send_from_directory(static_dir, filename)
     
     @server.route('/docs/<path:filename>')
-    def serve_docs(filename):
-        from flask import send_from_directory
+    def serve_docs(filename: str):
         docs_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'docs')
         return send_from_directory(docs_dir, filename)
 
 
-def main():
-    """Главная функция для запуска GUI приложения"""
-    import sys
-    
-    # Определение конфигурации
+def main() -> None:
+    """Main function to launch GUI application"""
+    # Determine configuration
     config_name = os.getenv('FLASK_ENV', 'development')
     if len(sys.argv) > 1 and sys.argv[1] == '--production':
         config_name = 'production'
     
-    # Создание приложения
+    # Create application
     app = create_app(config_name)
     app_config = config[config_name]
     
-    print(f"Запуск GOP GUI в режиме '{config_name}'")
-    print(f"Адрес: http://{app_config.HOST}:{app_config.PORT}")
+    logger.info(f"Starting GOP GUI in '{config_name}' mode")
+    logger.info(f"Address: http://{app_config.HOST}:{app_config.PORT}")
     
-    # Запуск приложения
+    # Run application
     app.run(
         host=app_config.HOST,
         port=app_config.PORT,
         debug=app_config.DEBUG,
         threaded=True,
-        use_reloader=False  # Отключаем релоадер для предотвращения двойной инициализации
+        use_reloader=False  # Disable reloader to prevent double initialization
     )
 
 

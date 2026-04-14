@@ -1,5 +1,7 @@
 """
-Модуль валидации данных для гиперспектральной обработки
+Data validation module for hyperspectral processing.
+
+This module provides validation functions for hyperspectral data and processing parameters.
 """
 
 import os
@@ -13,112 +15,112 @@ from src.utils.validators import (
 
 
 class HyperspectralValidator:
-    """Класс для валидации гиперспектральных данных и параметров"""
+    """Class for validating hyperspectral data and parameters."""
 
     @staticmethod
     def validate_input_path(input_path: str) -> None:
         """
-        Валидация пути к входному файлу
+        Validate input file path.
 
         Args:
-            input_path: Путь к входному файлу
+            input_path: Path to input file
 
         Raises:
-            ValueError: Если путь невалидный
-            FileNotFoundError: Если файл не существует
+            ValueError: If path is invalid
+            FileNotFoundError: If file does not exist
         """
         validate_file_path(input_path, must_exist=True, must_be_readable=True)
 
     @staticmethod
     def validate_output_dir(output_dir: str) -> None:
         """
-        Валидация выходной директории
+        Validate output directory.
 
         Args:
-            output_dir: Путь к выходной директории
+            output_dir: Path to output directory
 
         Raises:
-            ValueError: Если путь невалидный
+            ValueError: If path is invalid
         """
         if not output_dir or not isinstance(output_dir, str):
-            raise ValueError("output_dir должен быть непустой строкой")
+            raise ValueError("output_dir must be a non-empty string")
 
     @staticmethod
     def validate_file_format(file_path: str, supported_formats: List[str]) -> None:
         """
-        Валидация формата файла
+        Validate file format.
 
         Args:
-            file_path: Путь к файлу
-            supported_formats: Список поддерживаемых форматов
+            file_path: Path to file
+            supported_formats: List of supported formats
 
         Raises:
-            ValueError: Если формат не поддерживается
+            ValueError: If format is not supported
         """
         file_ext = os.path.splitext(file_path)[1].lower()
         if file_ext not in supported_formats:
             raise ValueError(
-                f"Неподдерживаемый формат файла: {file_ext}. Поддерживаемые форматы: {supported_formats}"
+                f"Unsupported file format: {file_ext}. Supported formats: {supported_formats}"
             )
 
     @staticmethod
     def validate_image_data(image_data: np.ndarray) -> None:
         """
-        Валидация данных изображения
+        Validate image data.
 
         Args:
-            image_data: Данные изображения
+            image_data: Image data
 
         Raises:
-            ValueError: Если данные невалидные
+            ValueError: If data is invalid
         """
         if image_data is None or image_data.size == 0:
-            raise ValueError("Входные данные изображения пусты или None")
+            raise ValueError("Input image data is empty or None")
 
         if len(image_data.shape) != 3:
-            raise ValueError(f"Ожидается 3D массив, получен {len(image_data.shape)}D")
+            raise ValueError(f"Expected 3D array, got {len(image_data.shape)}D")
 
         rows, cols, bands = image_data.shape
         if rows <= 0 or cols <= 0 or bands <= 0:
-            raise ValueError(f"Некорректные размеры изображения: {rows}x{cols}x{bands}")
+            raise ValueError(f"Invalid image dimensions: {rows}x{cols}x{bands}")
 
     @staticmethod
     def validate_wavelengths(wavelengths: Optional[np.ndarray]) -> None:
         """
-        Валидация длин волн
+        Validate wavelengths.
 
         Args:
-            wavelengths: Массив длин волн
+            wavelengths: Array of wavelengths
 
         Raises:
-            ValueError: Если длины волн невалидные
+            ValueError: If wavelengths are invalid
         """
         if wavelengths is not None:
             if not isinstance(wavelengths, np.ndarray):
-                raise ValueError("Длины волн должны быть numpy массивом")
+                raise ValueError("Wavelengths must be a numpy array")
 
             if wavelengths.size == 0:
-                raise ValueError("Массив длин волн пуст")
+                raise ValueError("Wavelengths array is empty")
 
             if np.any(np.isnan(wavelengths)) or np.any(np.isinf(wavelengths)):
-                raise ValueError("Массив длин волн содержит NaN или Inf значения")
+                raise ValueError("Wavelengths array contains NaN or Inf values")
 
             if np.any(wavelengths <= 0):
-                raise ValueError("Длины волн должны быть положительными")
+                raise ValueError("Wavelengths must be positive")
 
     @staticmethod
     def validate_dataset(dataset: Any) -> None:
         """
-        Валидация набора данных GDAL
+        Validate GDAL dataset.
 
         Args:
-            dataset: Набор данных GDAL
+            dataset: GDAL dataset
 
         Raises:
-            ValueError: Если набор данных невалидный
+            ValueError: If dataset is invalid
         """
         if dataset is None:
-            raise ValueError("Набор данных не может быть None")
+            raise ValueError("Dataset cannot be None")
 
         if (
             hasattr(dataset, "RasterXSize")
@@ -131,65 +133,65 @@ class HyperspectralValidator:
                 or dataset.RasterCount <= 0
             ):
                 raise ValueError(
-                    f"Некорректные размеры набора данных: {dataset.RasterYSize}x{dataset.RasterXSize}, каналов: {dataset.RasterCount}"
+                    f"Invalid dataset dimensions: {dataset.RasterYSize}x{dataset.RasterXSize}, channels: {dataset.RasterCount}"
                 )
         else:
-            raise ValueError("Набор данных не имеет необходимых атрибутов")
+            raise ValueError("Dataset does not have required attributes")
 
     @staticmethod
     def validate_processing_parameters(
         method: str, available_methods: List[str]
     ) -> None:
         """
-        Валидация параметров обработки
+        Validate processing parameters.
 
         Args:
-            method: Метод обработки
-            available_methods: Список доступных методов
+            method: Processing method
+            available_methods: List of available methods
 
         Raises:
-            ValueError: Если метод недоступен
+            ValueError: If method is not available
         """
         if method not in available_methods:
             raise ValueError(
-                f"Неизвестный метод: {method}. Доступные методы: {available_methods}"
+                f"Unknown method: {method}. Available methods: {available_methods}"
             )
 
     @staticmethod
     def validate_pca_parameters(n_components: float) -> None:
         """
-        Валидация параметров PCA
+        Validate PCA parameters.
 
         Args:
-            n_components: Количество компонентов или доля объясненной дисперсии
+            n_components: Number of components or explained variance ratio
 
         Raises:
-            ValueError: Если параметры невалидные
+            ValueError: If parameters are invalid
         """
         if not (0 < n_components <= 1) and not isinstance(n_components, int):
             raise ValueError(
-                "n_components должен быть в диапазоне (0, 1] или целым числом"
+                "n_components must be in range (0, 1] or an integer"
             )
 
     @staticmethod
     def validate_rgb_bands(rgb_bands: tuple, max_bands: int) -> None:
         """
-        Валидация параметров RGB композита
+        Validate RGB composite parameters.
 
         Args:
-            rgb_bands: Индексы каналов для RGB
-            max_bands: Максимальное количество каналов
+            rgb_bands: Channel indices for RGB
+            max_bands: Maximum number of channels
 
         Raises:
-            ValueError: Если параметры невалидные
+            ValueError: If parameters are invalid
         """
         if not isinstance(rgb_bands, tuple) or len(rgb_bands) != 3:
-            raise ValueError("rgb_bands должен быть кортежем из 3 элементов")
+            raise ValueError("rgb_bands must be a tuple of 3 elements")
 
         if not all(isinstance(band, int) and band > 0 for band in rgb_bands):
-            raise ValueError("rgb_bands должен содержать положительные целые числа")
+            raise ValueError("rgb_bands must contain positive integers")
 
         if max(rgb_bands) > max_bands:
             raise ValueError(
-                f"Недостаточно каналов для RGB композита. Требуется: {max(rgb_bands)}, доступно: {max_bands}"
+                f"Insufficient channels for RGB composite. Required: {max(rgb_bands)}, available: {max_bands}"
             )

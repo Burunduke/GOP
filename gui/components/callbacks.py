@@ -1,10 +1,14 @@
 """
-Callbacks для GUI приложения GOP с интеграцией управления проектами.
+Callbacks for GOP GUI application with project management integration.
+
+This module contains all Dash callbacks that handle user interactions and state management
+for the GOP GUI application, including project management, file uploads, and processing.
 """
 
 import json
 import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from dash import Input, Output, State, callback_context, no_update, ALL, MATCH, html
 from dash.exceptions import PreventUpdate
@@ -20,8 +24,19 @@ from gui.models.project import Project, ProjectStatus, PipelineStage
 logger = logging.getLogger(__name__)
 
 
-def register_callbacks(app, project_manager=None, pipeline_executor=None):
-    """Register all application callbacks."""
+def register_callbacks(
+    app: dash.Dash,
+    project_manager: Optional[Any] = None,
+    pipeline_executor: Optional[Any] = None
+) -> None:
+    """
+    Register all application callbacks.
+    
+    Args:
+        app: Dash application instance
+        project_manager: Project manager service (optional)
+        pipeline_executor: Pipeline executor service (optional)
+    """
     
     # === 1. Page routing callback ===
     @app.callback(
@@ -37,9 +52,9 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         if pathname == "/" or pathname == "/dashboard":
             if project_manager:
                 stats = project_manager.get_statistics()
-                recent = project_manager.get_recent_projects(5)
-                recent_dicts = [p.to_dict() for p in recent]
-                return create_dashboard(statistics=stats, recent_projects=recent_dicts)
+                all_projects = project_manager.list_projects()
+                all_projects_dicts = [p.to_dict() for p in all_projects]
+                return create_dashboard(statistics=stats, all_projects=all_projects_dicts)
             return create_dashboard()
         
         elif pathname == "/docs/api":
@@ -57,18 +72,39 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
                     return create_project_detail(project.to_dict())
             return create_project_detail(None)
         
-        elif pathname == "/projects":
-            return _create_projects_page()
-        
-        # Default
+        # Default - always show project management panel
         if project_manager:
             stats = project_manager.get_statistics()
-            recent = project_manager.get_recent_projects(5)
-            recent_dicts = [p.to_dict() for p in recent]
-            return create_dashboard(statistics=stats, recent_projects=recent_dicts)
+            all_projects = project_manager.list_projects()
+            all_projects_dicts = [p.to_dict() for p in all_projects]
+            return create_dashboard(statistics=stats, all_projects=all_projects_dicts)
         return create_dashboard()
     
-    # === 2. Sidebar update callback ===
+    # === 2. URL redirect callback for unrecognized paths ===
+    @app.callback(
+        Output("url", "pathname", allow_duplicate=True),
+        Input("url", "pathname"),
+        prevent_initial_call=True
+    )
+    def redirect_unrecognized_paths(pathname):
+        """Redirect unrecognized paths to dashboard."""
+        if pathname is None:
+            raise PreventUpdate
+        
+        # List of valid paths
+        valid_paths = ["/", "/dashboard", "/docs/api", "/docs/user-guide", "/docs/faq"]
+        
+        # Check if path starts with /project/
+        if pathname.startswith("/project/"):
+            return dash.no_update
+        
+        # If path is not recognized, redirect to dashboard
+        if pathname not in valid_paths:
+            return "/dashboard"
+        
+        return dash.no_update
+    
+    # === 3. Sidebar update callback ===
     @app.callback(
         Output("sidebar", "children"),
         Input("projects-store", "data"),
@@ -82,77 +118,36 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
             return create_sidebar(projects=projects_dicts, statistics=stats)
         return create_sidebar()
     
-    # === 3. Navigation callback (keep existing) ===
+
+    # === 3. Documentation navigation callback ===
     @app.callback(
         Output('url', 'pathname', allow_duplicate=True),
-        [Input('nav-dashboard', 'n_clicks'),
-         Input('nav-projects', 'n_clicks'),
-         Input('nav-brand', 'n_clicks'),
-         Input('nav-api-docs', 'n_clicks'),
-         Input('nav-user-guide', 'n_clicks'),
-         Input('nav-faq', 'n_clicks')],
+        [Input('sidebar-nav-api-docs', 'n_clicks'),
+         Input('sidebar-nav-user-guide', 'n_clicks'),
+         Input('sidebar-nav-faq', 'n_clicks')],
         prevent_initial_call=True
     )
-    def navigate_to_page(dashboard_clicks, projects_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks):
-        """Обработка навигации между страницами"""
+    def navigate_to_docs(
+        api_docs_clicks: Optional[int],
+        user_guide_clicks: Optional[int],
+        faq_clicks: Optional[int]
+    ) -> str:
+        """Handle navigation to documentation pages."""
         ctx = callback_context
         if not ctx.triggered:
             return dash.no_update
         
-        # Check if this is an initial call (all clicks are None)
-        all_clicks = [dashboard_clicks, projects_clicks, brand_clicks, api_docs_clicks, user_guide_clicks, faq_clicks]
-        
-        if all(click is None for click in all_clicks):
-            return dash.no_update
-        
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
         
-        # Filter out non-navigation button clicks (like project items)
-        valid_nav_buttons = ['nav-dashboard', 'nav-projects', 'nav-brand', 'nav-api-docs', 'nav-user-guide', 'nav-faq']
-        
-        if button_id not in valid_nav_buttons:
-            return dash.no_update
-        
-        # DEBUG: Log which navigation button was clicked
-        print(f"[DEBUG] Navigation button clicked: {button_id}")
-        
-        if button_id == 'nav-dashboard' or button_id == 'nav-brand':
-            return '/'
-        elif button_id == 'nav-projects':
-            return '/projects'
-        elif button_id == 'nav-api-docs':
+        if button_id == 'sidebar-nav-api-docs':
             return '/docs/api'
-        elif button_id == 'nav-user-guide':
+        elif button_id == 'sidebar-nav-user-guide':
             return '/docs/user-guide'
-        elif button_id == 'nav-faq':
+        elif button_id == 'sidebar-nav-faq':
             return '/docs/faq'
-        else:
-            return '/'
+        
+        return dash.no_update
     
-    # === 4. Active nav highlighting (keep existing) ===
-    @app.callback(
-        [Output('nav-dashboard', 'active'),
-         Output('nav-projects', 'active')],
-        [Input('nav-dashboard', 'n_clicks'),
-         Input('nav-projects', 'n_clicks'),
-         Input('nav-brand', 'n_clicks')],
-        prevent_initial_call=True
-    )
-    def update_active_tab(dashboard_clicks, projects_clicks, brand_clicks):
-        """Обновление подсветки активной вкладки"""
-        ctx = callback_context
-        if not ctx.triggered:
-            return True, False  # Dashboard активен по умолчанию
-        
-        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        
-        if button_id == 'nav-dashboard' or button_id == 'nav-brand':
-            return True, False
-        elif button_id == 'nav-projects':
-            return False, True
-        
-        return True, False  # По умолчанию dashboard
-
     # === 5. Create project modal ===
     @app.callback(
         Output("create-project-modal", "is_open"),
@@ -164,7 +159,14 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
          State("project-description-input", "value")],
         prevent_initial_call=True,
     )
-    def toggle_create_project_modal(new_btn, create_btn, cancel_btn, is_open, name, description):
+    def toggle_create_project_modal(
+        new_btn: Optional[int],
+        create_btn: Optional[int],
+        cancel_btn: Optional[int],
+        is_open: bool,
+        name: Optional[str],
+        description: Optional[str]
+    ) -> Union[bool, Any]:
         """Handle create project modal open/close and project creation."""
         ctx = callback_context
         if not ctx.triggered:
@@ -173,7 +175,7 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         
         # Debug logging to help identify the issue
-        print(f"[DEBUG] Modal trigger: {trigger_id}, clicks: new={new_btn}, create={create_btn}, cancel={cancel_btn}")
+        logger.debug(f"Modal trigger: {trigger_id}, clicks: new={new_btn}, create={create_btn}, cancel={cancel_btn}")
         
         # Additional safety check: ensure we only respond to actual button clicks
         if trigger_id == "new-project-btn":
@@ -195,7 +197,7 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         return not is_open
     
-    # === 6. Refresh projects store after creation ===
+    # === 7. Refresh projects store after creation ===
     @app.callback(
         Output("projects-store", "data"),
         [Input("create-project-modal", "is_open"),
@@ -210,20 +212,20 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
             return [p.to_dict() for p in projects]
         return []
     
-    # === 7. New project button click -> navigate to projects page ===
+    # === 8. New project button click -> navigate to projects page ===
     @app.callback(
         Output("url", "pathname", allow_duplicate=True),
         Input("new-project-btn", "n_clicks"),
         prevent_initial_call=True,
     )
     def navigate_to_projects_page(n_clicks):
-        """Navigate to projects page when new project button is clicked."""
+        """Navigate to dashboard when new project button is clicked."""
         if n_clicks is None or n_clicks == 0:
             raise PreventUpdate
         
-        return "/projects"
+        return "/"
     
-    # === 8. Project item click -> navigate to project detail ===
+    # === 9. Project item click -> navigate to project detail ===
     @app.callback(
         Output("url", "pathname", allow_duplicate=True),
         Input({"type": "project-item", "index": ALL}, "n_clicks"),
@@ -245,7 +247,7 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         return f"/project/{project_id}"
     
-    # === 8. Dashboard project button click -> navigate to project detail ===
+    # === 10. Dashboard project button click -> navigate to project detail ===
     @app.callback(
         Output("url", "pathname", allow_duplicate=True),
         Input({"type": "dashboard-project-btn", "index": ALL}, "n_clicks"),
@@ -265,7 +267,7 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         return f"/project/{project_id}"
     
-    # === 9. Start processing callback ===
+    # === 11. Start processing callback ===
     @app.callback(
         [Output("project-processing-progress", "value"),
          Output("project-processing-progress", "label"),
@@ -286,7 +288,7 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         
         raise PreventUpdate
     
-    # === 10. Cancel processing callback ===
+    # === 12. Cancel processing callback ===
     @app.callback(
         Output("notification-toast", "is_open", allow_duplicate=True),
         Input("project-cancel-processing-btn", "n_clicks"),
@@ -393,8 +395,13 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         [State('upload-files-modal', 'is_open')],
         prevent_initial_call=True
     )
-    def toggle_upload_files_modal(sidebar_btn, modal_btn, cancel_btn, is_open):
-        """Управление модальным окном загрузки файлов"""
+    def toggle_upload_files_modal(
+        sidebar_btn: Optional[int],
+        modal_btn: Optional[int],
+        cancel_btn: Optional[int],
+        is_open: bool
+    ) -> bool:
+        """Manage file upload modal window."""
         if sidebar_btn:
             return True
         elif modal_btn or cancel_btn:
@@ -409,8 +416,13 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         [State('processing-settings-modal', 'is_open')],
         prevent_initial_call=True
     )
-    def toggle_processing_settings_modal(sidebar_btn, start_btn, cancel_btn, is_open):
-        """Управление модальным окном настроек обработки"""
+    def toggle_processing_settings_modal(
+        sidebar_btn: Optional[int],
+        start_btn: Optional[int],
+        cancel_btn: Optional[int],
+        is_open: bool
+    ) -> bool:
+        """Manage processing settings modal window."""
         if sidebar_btn:
             return True
         elif start_btn or cancel_btn:
@@ -427,36 +439,40 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
          State('file-upload', 'last_modified')],
         prevent_initial_call=True
     )
-    def handle_file_upload_legacy(contents, filenames, last_modified):
-        """Обработка загрузки файлов (legacy)"""
+    def handle_file_upload_legacy(
+        contents: Optional[List[str]],
+        filenames: Optional[List[str]],
+        last_modified: Optional[List[float]]
+    ) -> Tuple[Union[str, List[html.Div]], Union[str, dbc.Alert], bool]:
+        """Handle file uploads (legacy implementation)."""
         if not contents:
-            return "Файлы еще не загружены", "", True
+            return "No files uploaded yet", "", True
         
         file_items = []
         total_size = 0
         
         for i, (content, filename, modified) in enumerate(zip(contents, filenames, last_modified)):
-            # Расчет размера файла (приблизительно)
+            # Calculate file size (approximate)
             content_type, content_string = content.split(',')
             decoded = base64.b64decode(content_string)
             file_size = len(decoded)
             total_size += file_size
             
-            # Форматирование времени загрузки
+            # Format upload time
             upload_time = datetime.fromtimestamp(modified / 1000).strftime('%H:%M:%S')
             
             file_items.append(
                 html.Div([
                     html.H6(filename, className="mb-1"),
-                    html.P(f"Размер: {file_size} байт | Время: {upload_time}", 
+                    html.P(f"Size: {file_size} bytes | Time: {upload_time}",
                            className="text-muted small"),
                 ], className="border-bottom pb-2 mb-2")
             )
         
         file_info = dbc.Alert([
-            html.H6("Информация о загруженных файлах:", className="alert-heading"),
-            html.P(f"Всего файлов: {len(filenames)}"),
-            html.P(f"Общий размер: {total_size} байт"),
+            html.H6("Uploaded files information:", className="alert-heading"),
+            html.P(f"Total files: {len(filenames)}"),
+            html.P(f"Total size: {total_size} bytes"),
         ], color="success")
         
         return file_items, file_info, False
@@ -469,8 +485,12 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
          Input('colormap-selector', 'value')],
         prevent_initial_call=True
     )
-    def update_visualization(viz_type, index_name, colormap):
-        """Обновление визуализации"""
+    def update_visualization(
+        viz_type: Optional[str],
+        index_name: Optional[str],
+        colormap: Optional[str]
+    ) -> Any:
+        """Update visualization based on user selections."""
         from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
         
         if viz_type == 'index_map':
@@ -486,63 +506,9 @@ def register_callbacks(app, project_manager=None, pipeline_executor=None):
         [Input('start-processing-btn', 'n_clicks')],
         prevent_initial_call=True
     )
-    def toggle_progress_interval(start_click):
-        """Включение/выключение интервала прогресса"""
+    def toggle_progress_interval(start_click: Optional[int]) -> bool:
+        """Enable/disable progress interval."""
         if start_click:
-            return False  # Включить интервал
-        return True  # Выключить интервал
-
-
-def _create_projects_page():
-    """Создание страницы проектов"""
-    return html.Div([
-        html.H2("Проекты", className="mb-4"),
-        
-        # Карточки проектов
-        dbc.Row([
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader([
-                        html.H5("Анализ поля пшеницы", className="mb-0"),
-                    ]),
-                    dbc.CardBody([
-                        html.P("NDVI анализ для оценки состояния посевов", className="text-muted"),
-                        html.Div([
-                            dbc.Badge("Завершен", color="success", className="me-2"),
-                            html.Span("15.01.2024", className="text-muted"),
-                        ], className="mb-3"),
-                        dbc.Button("Открыть проект", color="primary", size="sm")
-                    ])
-                ], className="h-100")
-            ], width=6, className="mb-3"),
-            
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader([
-                        html.H5("Тестирование индексов", className="mb-0"),
-                    ]),
-                    dbc.CardBody([
-                        html.P("Сравнительный анализ различных вегетационных индексов", className="text-muted"),
-                        html.Div([
-                            dbc.Badge("В обработке", color="warning", className="me-2"),
-                            html.Span("16.01.2024", className="text-muted"),
-                        ], className="mb-3"),
-                        dbc.Button("Открыть проект", color="primary", size="sm")
-                    ])
-                ], className="h-100")
-            ], width=6, className="mb-3"),
-        ]),
-        
-        # Кнопка создания нового проекта
-        dbc.Row([
-            dbc.Col([
-                dbc.Button(
-                    [html.I(className="fas fa-plus me-2"), "Создать новый проект"],
-                    color="primary",
-                    size="lg",
-                    className="w-100"
-                )
-            ], width=6, className="mx-auto mt-4")
-        ])
-    ])
+            return False  # Enable interval
+        return True  # Disable interval
 
