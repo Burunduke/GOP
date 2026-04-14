@@ -49,6 +49,10 @@ def register_callbacks(
         if pathname is None:
             raise PreventUpdate
         
+        # Show documentation for docs/api since we now have documentation integrated in dashboard
+        if pathname == "/docs/api":
+            return create_documentation_component('api')
+        
         if pathname == "/" or pathname == "/dashboard":
             if project_manager:
                 stats = project_manager.get_statistics()
@@ -57,8 +61,6 @@ def register_callbacks(
                 return create_dashboard(statistics=stats, all_projects=all_projects_dicts)
             return create_dashboard()
         
-        elif pathname == "/docs/api":
-            return create_documentation_component('api')
         elif pathname == "/docs/user-guide":
             return create_documentation_component('user_guide')
         elif pathname == "/docs/faq":
@@ -119,34 +121,6 @@ def register_callbacks(
         return create_sidebar()
     
 
-    # === 3. Documentation navigation callback ===
-    @app.callback(
-        Output('url', 'pathname', allow_duplicate=True),
-        [Input('sidebar-nav-api-docs', 'n_clicks'),
-         Input('sidebar-nav-user-guide', 'n_clicks'),
-         Input('sidebar-nav-faq', 'n_clicks')],
-        prevent_initial_call=True
-    )
-    def navigate_to_docs(
-        api_docs_clicks: Optional[int],
-        user_guide_clicks: Optional[int],
-        faq_clicks: Optional[int]
-    ) -> str:
-        """Handle navigation to documentation pages."""
-        ctx = callback_context
-        if not ctx.triggered:
-            return dash.no_update
-        
-        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        
-        if button_id == 'sidebar-nav-api-docs':
-            return '/docs/api'
-        elif button_id == 'sidebar-nav-user-guide':
-            return '/docs/user-guide'
-        elif button_id == 'sidebar-nav-faq':
-            return '/docs/faq'
-        
-        return dash.no_update
     
     # === 5. Create project modal ===
     @app.callback(

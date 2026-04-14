@@ -108,6 +108,12 @@ def _setup_static_files(server: Flask) -> None:
     """
     @server.route('/')
     def serve_root():
+        # Redirect to dashboard, but handle any browser cache issues
+        return redirect('/dashboard')
+    
+    @server.route('/docs/api')
+    def redirect_docs_api():
+        # Redirect docs/api to dashboard to prevent automatic browser opening
         return redirect('/dashboard')
     
     @server.route('/static/<path:filename>')
@@ -134,9 +140,13 @@ def main() -> None:
     
     logger.info(f"Starting GOP GUI in '{config_name}' mode")
     logger.info(f"Address: http://{app_config.HOST}:{app_config.PORT}")
+    logger.info("Application will start without automatically opening browser")
     
-    # Run application
-    app.run(
+    # Set environment variable to prevent browser opening
+    os.environ['DASH_OPEN_BROWSER'] = 'False'
+    
+    # Run application using Flask server directly to prevent browser opening
+    app.server.run(
         host=app_config.HOST,
         port=app_config.PORT,
         debug=app_config.DEBUG,

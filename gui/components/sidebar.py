@@ -87,29 +87,11 @@ def create_sidebar(
             ], flush=True),
         ], className="px-3"),
         
-        # Help and documentation section
+        # Contact information section (keep only email)
         html.Div([
             html.Hr(className="my-3"),
-            html.H6("Documentation", className="mb-3"),
+            html.H6("Contact", className="mb-3"),
             dbc.Nav([
-                dbc.NavLink(
-                    [html.I(className="fas fa-book me-2"), "API Documentation"],
-                    href="/docs/api",
-                    id="sidebar-nav-api-docs",
-                    className="small text-decoration-none"
-                ),
-                dbc.NavLink(
-                    [html.I(className="fas fa-user me-2"), "User Guide"],
-                    href="/docs/user-guide",
-                    id="sidebar-nav-user-guide",
-                    className="small text-decoration-none"
-                ),
-                dbc.NavLink(
-                    [html.I(className="fas fa-question-circle me-2"), "FAQ"],
-                    href="/docs/faq",
-                    id="sidebar-nav-faq",
-                    className="small text-decoration-none"
-                ),
                 dbc.NavLink(
                     [html.I(className="fas fa-envelope me-2"), "st087204@student.spbu.ru"],
                     href="mailto:st087204@student.spbu.ru",

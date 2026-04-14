@@ -1,0 +1,47 @@
+{
+  "id": "4d0b0763-6ed1-49c8-8365-d2b23f0c4e1b",
+  "name": "123",
+  "description": "",
+  "status": "new",
+  "created_at": "2026-04-14T05:14:51.836882",
+  "updated_at": "2026-04-14T05:14:51.836911",
+  "files": [],
+  "processing_config": {
+    "stages": [
+      "preprocessing",
+      "orthophoto",
+      "segmentation",
+      "indices",
+      "assessment",
+      "analysis"
+    ],
+    "preprocessing": {
+      "radiometric_correction": true,
+      "atmospheric_correction": true,
+      "denoising_method": "pca",
+      "denoising_components": 10
+    },
+    "orthophoto": {
+      "resolution": 0.1,
+      "crs": "EPSG:4326"
+    },
+    "segmentation": {
+      "model": "deeplabv3",
+      "refinement": true,
+      "min_area": 100
+    },
+    "indices": {
+      "selected_indices": [
+        "NDVI",
+        "GNDVI",
+        "MCARI",
+        "RENDVI"
+      ],
+      "custom_indices": []
+    }
+  },
+  "current_stage": null,
+  "progress": 0.0,
+  "processing_history": [],
+  "tags": []
+}

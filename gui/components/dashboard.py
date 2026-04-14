@@ -101,8 +101,9 @@ def create_dashboard(
             ], width=3),
         ], className="mb-4"),
         
-        # All projects
+        # Main content area with projects and documentation
         dbc.Row([
+            # Projects column (reduced width)
             dbc.Col([
                 dbc.Card([
                     dbc.CardHeader([
@@ -144,7 +145,59 @@ def create_dashboard(
                         
                     ])
                 ])
-            ], width=12),
+            ], width=8),  # Reduced from 12 to 8
             
+            # Documentation column
+            dbc.Col([
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.H5("Documentation", className="mb-0"),
+                    ]),
+                    dbc.CardBody([
+                        html.P("Quick access to project documentation:", className="text-muted"),
+                        dbc.ListGroup([
+                            dbc.ListGroupItem([
+                                html.Div([
+                                    html.I(className="fas fa-book me-2 text-primary"),
+                                    html.Span("User Guide", className="fw-bold")
+                                ]),
+                                html.Small("Complete user manual", className="text-muted d-block mt-1")
+                            ], action=True, href="/docs/user-guide", target="_blank"),
+                            
+                            dbc.ListGroupItem([
+                                html.Div([
+                                    html.I(className="fas fa-code me-2 text-success"),
+                                    html.Span("API Documentation", className="fw-bold")
+                                ]),
+                                html.Small("Technical API reference", className="text-muted d-block mt-1")
+                            ], action=True, href="/docs/api", target="_blank"),
+                            
+                            dbc.ListGroupItem([
+                                html.Div([
+                                    html.I(className="fas fa-question-circle me-2 text-info"),
+                                    html.Span("FAQ", className="fw-bold")
+                                ]),
+                                html.Small("Frequently asked questions", className="text-muted d-block mt-1")
+                            ], action=True, href="/docs/faq", target="_blank"),
+                            
+                            dbc.ListGroupItem([
+                                html.Div([
+                                    html.I(className="fas fa-graduation-cap me-2 text-warning"),
+                                    html.Span("Examples", className="fw-bold")
+                                ]),
+                                html.Small("Code examples and tutorials", className="text-muted d-block mt-1")
+                            ], action=True, href="/docs/examples", target="_blank"),
+                        ], flush=True),
+                        
+                        html.Hr(),
+                        
+                        html.Div([
+                            html.H6("Quick Actions", className="mb-3"),
+                            dbc.Button("Create New Project", color="primary", size="sm", className="me-2"),
+                            dbc.Button("Upload Files", color="outline-secondary", size="sm"),
+                        ], className="mt-3")
+                    ])
+                ], className="h-100")
+            ], width=4),  # Documentation column
         ]),
     ], className="dashboard")
