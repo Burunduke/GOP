@@ -91,7 +91,7 @@ def create_project() -> Dict[str, Any]:
 
 @api_blueprint.route('/projects/<project_id>/files', methods=['POST'])
 def upload_files(project_id: str) -> Dict[str, Any]:
-    """Upload files to a project
+    """Upload files to a project using streaming to avoid memory issues
     
     Args:
         project_id: Project identifier
@@ -109,18 +109,86 @@ def upload_files(project_id: str) -> Dict[str, Any]:
         if file.filename == '':
             continue
         
-        # Save file
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), project_id, filename)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        file.save(file_path)
+        try:
+            # Use streaming upload to avoid memory issues
+            from gui.utils.file_upload_utils import FileUploadManager
+            
+            upload_manager = FileUploadManager()
+            filename = secure_filename(file.filename)
+            
+            # Save file using streaming
+            temp_file_path, file_size, checksum = upload_manager.save_streaming_upload_to_temp_file(
+                file.stream, filename
+            )
+            
+            # Move to final location
+            final_path = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), project_id, filename)
+            os.makedirs(os.path.dirname(final_path), exist_ok=True)
+            shutil.move(temp_file_path, final_path)
+            
+            uploaded_files.append({
+                'name': filename,
+                'path': final_path,
+                'size': file_size,
+                'checksum': checksum,
+                'uploaded_at': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error uploading file {file.filename}: {e}")
+            return jsonify({'error': f'Failed to upload {file.filename}: {str(e)}'}), 500
+    
+    return jsonify({'uploaded_files': uploaded_files})
+
+
+@api_blueprint.route('/projects/<project_id>/files/streaming', methods=['POST'])
+def upload_files_streaming(project_id: str) -> Dict[str, Any]:
+    """Upload files to a project using true streaming (form-based upload)
+    
+    Args:
+        project_id: Project identifier
         
-        uploaded_files.append({
-            'name': filename,
-            'path': file_path,
-            'size': os.path.getsize(file_path),
-            'uploaded_at': datetime.now().isoformat()
-        })
+    Returns:
+        Uploaded files information
+    """
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+    
+    files = request.files.getlist('files')
+    uploaded_files = []
+    
+    for file in files:
+        if file.filename == '':
+            continue
+        
+        try:
+            # Use streaming upload to avoid memory issues
+            from gui.utils.file_upload_utils import FileUploadManager
+            
+            upload_manager = FileUploadManager()
+            filename = secure_filename(file.filename)
+            
+            # Save file using true streaming (file stream instead of base64)
+            temp_file_path, file_size, checksum = upload_manager.save_streaming_upload_to_temp_file(
+                file.stream, filename
+            )
+            
+            # Move to final location
+            final_path = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), project_id, filename)
+            os.makedirs(os.path.dirname(final_path), exist_ok=True)
+            shutil.move(temp_file_path, final_path)
+            
+            uploaded_files.append({
+                'name': filename,
+                'path': final_path,
+                'size': file_size,
+                'checksum': checksum,
+                'uploaded_at': datetime.now().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Error uploading file {file.filename}: {e}")
+            return jsonify({'error': f'Failed to upload {file.filename}: {str(e)}'}), 500
     
     return jsonify({'uploaded_files': uploaded_files})
 

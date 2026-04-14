@@ -349,12 +349,13 @@ def register_callbacks(
             upload_manager = FileUploadManager()
             uploaded_count = 0
             
-            for content, filename in zip(
-                contents if isinstance(contents, list) else [contents],
-                filenames if isinstance(filenames, list) else [filenames]
-            ):
+            # Handle both single and multiple files
+            contents_list = contents if isinstance(contents, list) else [contents]
+            filenames_list = filenames if isinstance(filenames, list) else [filenames]
+            
+            for content, filename in zip(contents_list, filenames_list):
                 try:
-                    # Save to temporary file using streaming
+                    # Save to temporary file using streaming with optimized chunk size
                     temp_file_path, file_size, checksum = upload_manager.save_uploaded_content_to_temp_file(content, filename)
                     
                     # Add file to project using file path (not in-memory content)

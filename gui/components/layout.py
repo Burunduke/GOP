@@ -102,16 +102,27 @@ def _create_modals() -> html.Div:
                 html.P("Select hyperspectral data to upload:"),
                 html.P("Supported formats: BIL/HDR, TIFF, DAT", className="text-muted small"),
                 
-                dcc.Upload(
-                    id='file-upload',
-                    children=html.Div([
-                        html.I(className="fas fa-cloud-upload-alt fa-2x mb-2"),
-                        html.P("Drag and drop files here or click to select"),
-                        html.P("Maximum file size: 10GB", className="text-muted small")
-                    ]),
-                    multiple=True,
-                    className="upload-area p-4 border border-dashed rounded text-center"
-                ),
+                html.Div([
+                    html.I(className="fas fa-cloud-upload-alt fa-2x mb-2"),
+                    html.P("Drag and drop files here or click to select"),
+                    html.P("Maximum file size: 10GB", className="text-muted small"),
+                    html.Form([
+                        dcc.Input(
+                            id='file-upload-input',
+                            type='file',
+                            multiple=True,
+                            className="d-none"
+                        ),
+                        html.Div(
+                            id='file-upload-dropzone',
+                            children=[
+                                html.P("Drop files here or click to select", className="mb-0"),
+                            ],
+                            className="upload-area p-4 border border-dashed rounded text-center cursor-pointer"
+                        )
+                    ], id='file-upload-form', encType='multipart/form-data'),
+                    html.Div(id='selected-files-info', className="mt-2")
+                ], className="upload-container"),
                 
                 html.Div(id='upload-file-list', className="mt-3"),
             ]),

@@ -40,6 +40,7 @@ function initializeApp() {
  * Инициализация компонента загрузки файлов
  */
 function initializeFileUpload() {
+    // Обработка старых upload-area компонентов (для совместимости)
     const uploadAreas = document.querySelectorAll('.upload-area');
     
     uploadAreas.forEach(area => {
@@ -67,6 +68,50 @@ function initializeFileUpload() {
                 fileInput.click();
             }
         });
+    });
+    
+    // Обработка новых компонентов загрузки файлов
+    const dropzones = document.querySelectorAll('#file-upload-dropzone');
+    const fileInputs = document.querySelectorAll('#file-upload-input');
+    
+    dropzones.forEach(dropzone => {
+        // Предотвращение стандартного поведения drag & drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        // Подсветка при перетаскивании
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, unhighlight, false);
+        });
+        
+        // Обработка сброшенных файлов
+        dropzone.addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            const fileInput = document.querySelector('#file-upload-input');
+            if (fileInput) {
+                fileInput.files = files;
+                handleFileSelect({ currentTarget: fileInput });
+            }
+        }, false);
+        
+        // Обработка клика для выбора файлов
+        dropzone.addEventListener('click', function() {
+            const fileInput = document.querySelector('#file-upload-input');
+            if (fileInput) {
+                fileInput.click();
+            }
+        });
+    });
+    
+    fileInputs.forEach(input => {
+        input.addEventListener('change', handleFileSelect);
     });
 }
 
@@ -282,6 +327,7 @@ function handleFileSelect(event) {
     const input = event.currentTarget;
     const files = input.files;
     const fileList = document.getElementById('upload-file-list');
+    const fileInfo = document.getElementById('selected-files-info');
     
     if (fileList && files.length > 0) {
         fileList.innerHTML = '';
@@ -291,11 +337,24 @@ function handleFileSelect(event) {
             fileList.appendChild(fileItem);
         });
         
+        // Показ информации о выбранных файлах
+        if (fileInfo) {
+            const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+            fileInfo.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>Выбрано файлов:</strong> ${files.length}<br>
+                    <strong>Общий размер:</strong> ${formatFileSize(totalSize)}
+                </div>
+            `;
+        }
+        
         // Активация кнопки загрузки
         const uploadButton = document.getElementById('upload-files-btn');
         if (uploadButton) {
             uploadButton.disabled = false;
         }
+    } else if (fileInfo) {
+        fileInfo.innerHTML = '';
     }
 }
 
@@ -389,14 +448,23 @@ async function createProject() {
 }
 
 /**
- * Загрузка файлов
+ * Загрузка файлов с использованием потоковой передачи
  */
 async function uploadFiles() {
-    const fileInput = document.querySelector('#file-upload input[type="file"]');
+    const fileInput = document.querySelector('#file-upload-input');
     const files = fileInput.files;
     
     if (files.length === 0) {
         showNotification('warning', 'Выберите файлы для загрузки');
+        return;
+    }
+    
+    // Проверка размера файлов
+    const totalSize = Array.from(files).reduce((sum, file) => sum + file.size, 0);
+    const maxSize = 10 * 1024 * 1024 * 1024; // 10GB
+    
+    if (totalSize > maxSize) {
+        showNotification('danger', 'Общий размер файлов превышает допустимый лимит (10GB)');
         return;
     }
     
@@ -405,12 +473,35 @@ async function uploadFiles() {
         formData.append('files', file);
     });
     
-    if (gopApp.currentProject) {
-        formData.append('project_id', gopApp.currentProject.id);
+    // Получение ID текущего проекта из URL или хранилища
+    let projectId = null;
+    if (gopApp.currentProject && gopApp.currentProject.id) {
+        projectId = gopApp.currentProject.id;
+    } else {
+        // Попытка получить ID проекта из URL
+        const urlPath = window.location.pathname;
+        const projectMatch = urlPath.match(/\/project\/([^\/]+)/);
+        if (projectMatch) {
+            projectId = projectMatch[1];
+        }
     }
     
+    if (!projectId) {
+        showNotification('danger', 'Не удалось определить проект для загрузки файлов');
+        return;
+    }
+    
+    const uploadUrl = `/api/projects/${projectId}/files/streaming`;
+    
     try {
-        const response = await fetch('/api/upload', {
+        // Показ индикатора загрузки
+        const uploadButton = document.getElementById('upload-files-modal-btn');
+        if (uploadButton) {
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Загрузка...';
+        }
+        
+        const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
         });
@@ -418,14 +509,47 @@ async function uploadFiles() {
         const data = await response.json();
         
         if (response.ok) {
-            showNotification('success', 'Файлы загружены успешно');
+            showNotification('success', `Файлы загружены успешно (${data.uploaded_files.length})`);
             updateFileList(data.uploaded_files);
+            
+            // Закрытие модального окна
+            const modal = document.getElementById('upload-files-modal');
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            }
+            
+            // Сброс формы
+            const form = document.getElementById('file-upload-form');
+            if (form) {
+                form.reset();
+            }
+            
+            // Очистка списка файлов
+            const fileList = document.getElementById('upload-file-list');
+            if (fileList) {
+                fileList.innerHTML = '';
+            }
+            
+            const fileInfo = document.getElementById('selected-files-info');
+            if (fileInfo) {
+                fileInfo.innerHTML = '';
+            }
         } else {
             showNotification('danger', data.error || 'Ошибка загрузки файлов');
         }
     } catch (error) {
         console.error('Ошибка загрузки файлов:', error);
-        showNotification('danger', 'Произошла ошибка при загрузке файлов');
+        showNotification('danger', 'Произошла ошибка при загрузке файлов: ' + error.message);
+    } finally {
+        // Восстановление кнопки
+        const uploadButton = document.getElementById('upload-files-modal-btn');
+        if (uploadButton) {
+            uploadButton.disabled = false;
+            uploadButton.innerHTML = 'Upload';
+        }
     }
 }
 
