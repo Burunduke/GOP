@@ -337,24 +337,41 @@ def register_callbacks(
         prevent_initial_call=True,
     )
     def handle_file_upload(contents, filenames, pathname):
-        """Handle file upload to current project."""
+        """Handle file upload to current project with streaming."""
         if not contents or not pathname or not pathname.startswith("/project/"):
             raise PreventUpdate
         
         project_id = pathname.split("/project/")[-1]
         
         if project_manager and filenames:
-            import base64
+            from gui.utils.file_upload_utils import FileUploadManager
+            
+            upload_manager = FileUploadManager()
+            uploaded_count = 0
+            
             for content, filename in zip(
                 contents if isinstance(contents, list) else [contents],
                 filenames if isinstance(filenames, list) else [filenames]
             ):
-                # Decode base64 content
-                content_type, content_string = content.split(",")
-                decoded = base64.b64decode(content_string)
-                project_manager.add_file_to_project(project_id, filename, decoded)
+                try:
+                    # Save to temporary file using streaming
+                    temp_file_path, file_size, checksum = upload_manager.save_uploaded_content_to_temp_file(content, filename)
+                    
+                    # Add file to project using file path (not in-memory content)
+                    project_manager.add_file_to_project(
+                        project_id,
+                        filename,
+                        file_path=temp_file_path
+                    )
+                    uploaded_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error uploading file {filename}: {e}")
+                    # Clean up temporary file on error
+                    if 'temp_file_path' in locals():
+                        upload_manager.cleanup_temp_file(temp_file_path)
             
-            return True, f"Загружено файлов: {len(filenames) if isinstance(filenames, list) else 1}"
+            return True, f"Загружено файлов: {uploaded_count}"
         
         raise PreventUpdate
     
@@ -418,7 +435,7 @@ def register_callbacks(
         filenames: Optional[List[str]],
         last_modified: Optional[List[float]]
     ) -> Tuple[Union[str, List[html.Div]], Union[str, dbc.Alert], bool]:
-        """Handle file uploads (legacy implementation)."""
+        """Handle file uploads with streaming (legacy implementation)."""
         if not contents:
             return "No files uploaded yet", "", True
         
@@ -426,27 +443,37 @@ def register_callbacks(
         total_size = 0
         
         for i, (content, filename, modified) in enumerate(zip(contents, filenames, last_modified)):
-            # Calculate file size (approximate)
-            content_type, content_string = content.split(',')
-            decoded = base64.b64decode(content_string)
-            file_size = len(decoded)
-            total_size += file_size
-            
-            # Format upload time
-            upload_time = datetime.fromtimestamp(modified / 1000).strftime('%H:%M:%S')
-            
-            file_items.append(
-                html.Div([
-                    html.H6(filename, className="mb-1"),
-                    html.P(f"Size: {file_size} bytes | Time: {upload_time}",
-                           className="text-muted small"),
-                ], className="border-bottom pb-2 mb-2")
-            )
+            try:
+                # Calculate file size using streaming
+                content_type, content_string = content.split(',')
+                
+                # Estimate file size from base64 content (approx 75% of encoded size)
+                file_size = int(len(content_string) * 0.75)
+                total_size += file_size
+                
+                # Format upload time
+                upload_time = datetime.fromtimestamp(modified / 1000).strftime('%H:%M:%S')
+                
+                file_items.append(
+                    html.Div([
+                        html.H6(filename, className="mb-1"),
+                        html.P(f"Size: {file_size:,} bytes | Time: {upload_time}",
+                               className="text-muted small"),
+                    ], className="border-bottom pb-2 mb-2")
+                )
+            except Exception as e:
+                logger.error(f"Error processing file {filename}: {e}")
+                file_items.append(
+                    html.Div([
+                        html.H6(filename, className="mb-1 text-danger"),
+                        html.P(f"Error processing file", className="text-danger small"),
+                    ], className="border-bottom pb-2 mb-2")
+                )
         
         file_info = dbc.Alert([
             html.H6("Uploaded files information:", className="alert-heading"),
             html.P(f"Total files: {len(filenames)}"),
-            html.P(f"Total size: {total_size} bytes"),
+            html.P(f"Total size: {total_size:,} bytes ({total_size / (1024*1024):.2f} MB)"),
         ], color="success")
         
         return file_items, file_info, False

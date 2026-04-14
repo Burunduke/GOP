@@ -25,6 +25,9 @@ def setup_logging() -> None:
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
     
+    # Completely disable Flask/Werkzeug request logging
+    logging.getLogger('werkzeug').disabled = True
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

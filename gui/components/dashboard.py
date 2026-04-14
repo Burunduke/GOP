@@ -191,11 +191,6 @@ def create_dashboard(
                         
                         html.Hr(),
                         
-                        html.Div([
-                            html.H6("Quick Actions", className="mb-3"),
-                            dbc.Button("Create New Project", color="primary", size="sm", className="me-2"),
-                            dbc.Button("Upload Files", color="outline-secondary", size="sm"),
-                        ], className="mt-3")
                     ])
                 ], className="h-100")
             ], width=4),  # Documentation column

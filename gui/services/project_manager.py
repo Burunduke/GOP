@@ -13,6 +13,7 @@ from gui.models.project import (
     Project, ProjectFile, ProcessingConfig,
     ProcessingResult, ProcessingHistory, ProjectStatus, PipelineStage
 )
+from gui.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -191,10 +192,11 @@ class ProjectManager:
     # === Управление файлами ===
     
     def add_file_to_project(
-        self, 
-        project_id: str, 
-        filename: str, 
-        file_content: bytes,
+        self,
+        project_id: str,
+        filename: str,
+        file_content: Optional[bytes] = None,
+        file_path: Optional[str] = None,
         file_type: str = "hyperspectral"
     ) -> Optional[ProjectFile]:
         """
@@ -203,7 +205,8 @@ class ProjectManager:
         Args:
             project_id: ID проекта
             filename: Имя файла
-            file_content: Содержимое файла
+            file_content: Содержимое файла (bytes) - для small files
+            file_path: Путь к временному файлу - для large files
             file_type: Тип файла
             
         Returns:
@@ -213,23 +216,41 @@ class ProjectManager:
         if project is None:
             return None
         
+        if file_content is None and file_path is None:
+            raise ValueError("Either file_content or file_path must be provided")
+        
+        # Calculate file size and checksum
+        if file_path:
+            # For large files - read from temporary file
+            file_size = os.path.getsize(file_path)
+            checksum = self._calculate_file_checksum(file_path)
+        else:
+            # For small files - use in-memory content
+            file_size = len(file_content)
+            checksum = hashlib.md5(file_content).hexdigest()
+        
         project_file = ProjectFile(
             filename=filename,
             original_name=filename,
             file_type=file_type,
-            file_size=len(file_content),
-            checksum=hashlib.md5(file_content).hexdigest(),
+            file_size=file_size,
+            checksum=checksum,
         )
         
         # Сохраняем файл на диск
         files_dir = self.projects_dir / project_id / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
-        file_path = files_dir / f"{project_file.id}_{filename}"
+        final_file_path = files_dir / f"{project_file.id}_{filename}"
         
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        if file_path:
+            # Move temporary file to final location
+            shutil.move(file_path, final_file_path)
+        else:
+            # Write in-memory content
+            with open(final_file_path, "wb") as f:
+                f.write(file_content)
         
-        project_file.file_path = str(file_path)
+        project_file.file_path = str(final_file_path)
         
         # Обновляем проект
         project.files.append(project_file.to_dict())
@@ -243,6 +264,17 @@ class ProjectManager:
         
         logger.info(f"Добавлен файл {filename} к проекту {project.name}")
         return project_file
+    
+    def _calculate_file_checksum(self, file_path: str) -> str:
+        """Calculate MD5 checksum of a file using streaming."""
+        app_config = config['default']
+        chunk_size = app_config.STREAMING_CHUNK_SIZE
+        
+        hasher = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(chunk_size), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
     
     def remove_file_from_project(self, project_id: str, file_id: str) -> bool:
         """

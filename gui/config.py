@@ -42,6 +42,8 @@ class GUIConfig:
     # Limits
     MAX_FILE_SIZE: int = int(os.getenv('MAX_FILE_SIZE', 10 * 1024 * 1024 * 1024))  # 10GB
     MAX_UPLOAD_FILES: int = int(os.getenv('MAX_UPLOAD_FILES', 100))
+    MAX_MEMORY_FILE_SIZE: int = int(os.getenv('MAX_MEMORY_FILE_SIZE', 100 * 1024 * 1024))  # 100MB
+    STREAMING_CHUNK_SIZE: int = int(os.getenv('STREAMING_CHUNK_SIZE', 8192))  # 8KB
     
     # Processing settings
     CELERY_BROKER_URL: str = REDIS_URL
