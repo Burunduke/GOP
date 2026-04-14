@@ -239,10 +239,6 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                         options=[
                                             {"label": "Preprocessing", "value": "preprocessing"},
                                             {"label": "Orthophoto", "value": "orthophoto"},
-                                            {"label": "Segmentation", "value": "segmentation"},
-                                            {"label": "Index Calculation", "value": "indices"},
-                                            {"label": "Assessment", "value": "assessment"},
-                                            {"label": "Analysis", "value": "analysis"},
                                         ],
                                         value=project.get("processing_config", {}).get("stages", []),
                                         inline=False,
@@ -252,34 +248,13 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                 dbc.Col([
                                     html.H6("Settings", className="mb-3"),
                                     html.Div([
-                                        dbc.Label("Vegetation Indices",
-                                                  html_for="indices-select"),
-                                        dcc.Dropdown(
-                                            id="indices-select",
-                                            options=[
-                                                {"label": "NDVI", "value": "NDVI"},
-                                                {"label": "EVI", "value": "EVI"},
-                                                {"label": "SAVI", "value": "SAVI"},
-                                                {"label": "GNDVI", "value": "GNDVI"},
-                                                {"label": "MCARI", "value": "MCARI"},
-                                                {"label": "RENDVI", "value": "RENDVI"},
-                                            ],
-                                            value=project.get("processing_config", {})
-                                                .get("indices", {})
-                                                .get("selected_indices", ["NDVI", "EVI"]),
-                                            multi=True,
-                                            className="mb-3"
-                                        ),
                                         dbc.Checklist(
                                             id="processing-options",
                                             options=[
                                                 {"label": "Apply atmospheric correction",
                                                  "value": "atmospheric_correction"},
-                                                {"label": "Remove noise", "value": "denoising"},
-                                                {"label": "Plant segmentation",
-                                                 "value": "segmentation"},
                                             ],
-                                            value=["atmospheric_correction", "denoising"],
+                                            value=["atmospheric_correction"],
                                         ),
                                     ]),
                                 ], width=6),

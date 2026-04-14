@@ -22,10 +22,6 @@ class PipelineStage(str, Enum):
     """Pipeline processing stages enumeration."""
     PREPROCESSING = "preprocessing"
     ORTHOPHOTO = "orthophoto"
-    SEGMENTATION = "segmentation"
-    INDICES = "indices"
-    ASSESSMENT = "assessment"
-    ANALYSIS = "analysis"
 
 
 @dataclass
@@ -67,22 +63,11 @@ class ProcessingConfig:
     stages: List[str] = field(default_factory=lambda: [s.value for s in PipelineStage])
     preprocessing: Dict[str, Any] = field(default_factory=lambda: {
         "radiometric_correction": True,
-        "atmospheric_correction": True,
-        "denoising_method": "pca",
-        "denoising_components": 10
+        "atmospheric_correction": True
     })
     orthophoto: Dict[str, Any] = field(default_factory=lambda: {
         "resolution": 0.1,
         "crs": "EPSG:4326"
-    })
-    segmentation: Dict[str, Any] = field(default_factory=lambda: {
-        "model": "deeplabv3",
-        "refinement": True,
-        "min_area": 100
-    })
-    indices: Dict[str, Any] = field(default_factory=lambda: {
-        "selected_indices": ["NDVI", "GNDVI", "MCARI", "RENDVI"],
-        "custom_indices": []
     })
     
     def to_dict(self) -> Dict[str, Any]:

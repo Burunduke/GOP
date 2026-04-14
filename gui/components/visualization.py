@@ -27,29 +27,14 @@ def create_visualization_component() -> html.Div:
                         dcc.Dropdown(
                             id='visualization-type',
                             options=[
-                                {'label': 'Index Map', 'value': 'index_map'},
+                                {'label': 'Orthophoto View', 'value': 'orthophoto'},
+                                {'label': 'RGB Composite', 'value': 'rgb_composite'},
                                 {'label': 'Distribution Histogram', 'value': 'histogram'},
-                                {'label': 'Spectral Profile', 'value': 'spectral_profile'},
-                                {'label': '3D Visualization', 'value': '3d_visualization'},
                             ],
-                            value='index_map',
+                            value='orthophoto',
                             className="mb-3"
                         )
-                    ], width=4),
-                    
-                    dbc.Col([
-                        html.Label("Vegetation Index:"),
-                        dcc.Dropdown(
-                            id='index-selector',
-                            options=[
-                                {'label': 'NDVI', 'value': 'NDVI'},
-                                {'label': 'EVI', 'value': 'EVI'},
-                                {'label': 'SAVI', 'value': 'SAVI'},
-                            ],
-                            value='NDVI',
-                            className="mb-3"
-                        )
-                    ], width=4),
+                    ], width=6),
                     
                     dbc.Col([
                         html.Label("Color Scheme:"),
@@ -64,7 +49,8 @@ def create_visualization_component() -> html.Div:
                             value='viridis',
                             className="mb-3"
                         )
-                    ], width=4),
+                    ], width=6),
+                    
                 ], className="mb-4"),
                 
                 # Область визуализации
@@ -197,20 +183,18 @@ def create_empty_figure() -> Dict[str, Any]:
     }
 
 
-def create_index_map_figure(
+def create_orthophoto_figure(
     data: Any,
-    index_name: str,
     colormap: str = 'viridis'
 ) -> Dict[str, Any]:
-    """Create figure for index map visualization
+    """Create figure for orthophoto visualization
     
     Args:
         data: Input data for visualization
-        index_name: Name of the vegetation index
         colormap: Color scheme for the map
         
     Returns:
-        Dict[str, Any]: Figure configuration for index map
+        Dict[str, Any]: Figure configuration for orthophoto
     """
     # Temporary implementation - will be replaced with real data
     import numpy as np
@@ -227,12 +211,12 @@ def create_index_map_figure(
                 x=x,
                 y=y,
                 colorscale=colormap,
-                name=index_name,
+                name='Orthophoto',
                 hovertemplate='X: %{x:.2f}<br>Y: %{y:.2f}<br>Value: %{z:.3f}<extra></extra>'
             )
         ],
         'layout': {
-            'title': f'{index_name} Index Map',
+            'title': 'Orthophoto View',
             'xaxis': {'title': 'X Coordinate'},
             'yaxis': {'title': 'Y Coordinate'},
             'height': 500,
@@ -241,12 +225,43 @@ def create_index_map_figure(
     }
 
 
-def create_histogram_figure(data: Any, index_name: str) -> Dict[str, Any]:
+def create_rgb_composite_figure(data: Any) -> Dict[str, Any]:
+    """Create figure for RGB composite visualization
+    
+    Args:
+        data: Input data for visualization
+        
+    Returns:
+        Dict[str, Any]: Figure configuration for RGB composite
+    """
+    # Temporary implementation
+    import numpy as np
+    
+    # Create test RGB data
+    rgb_data = np.random.rand(100, 100, 3)
+    
+    return {
+        'data': [
+            go.Image(
+                z=rgb_data,
+                name='RGB Composite'
+            )
+        ],
+        'layout': {
+            'title': 'RGB Composite',
+            'xaxis': {'title': 'X Coordinate'},
+            'yaxis': {'title': 'Y Coordinate'},
+            'height': 500,
+            'margin': {'l': 50, 'r': 50, 't': 50, 'b': 50}
+        }
+    }
+
+
+def create_histogram_figure(data: Any) -> Dict[str, Any]:
     """Create figure for distribution histogram
     
     Args:
         data: Input data for visualization
-        index_name: Name of the vegetation index
         
     Returns:
         Dict[str, Any]: Figure configuration for histogram
@@ -262,14 +277,14 @@ def create_histogram_figure(data: Any, index_name: str) -> Dict[str, Any]:
             go.Histogram(
                 x=values,
                 nbinsx=50,
-                name=index_name,
+                name='Data Distribution',
                 marker_color='rgba(55, 128, 191, 0.7)',
                 hovertemplate='Range: %{x}<br>Count: %{y}<extra></extra>'
             )
         ],
         'layout': {
-            'title': f'{index_name} Value Distribution',
-            'xaxis': {'title': 'Index Value'},
+            'title': 'Data Value Distribution',
+            'xaxis': {'title': 'Value'},
             'yaxis': {'title': 'Frequency'},
             'height': 500,
             'margin': {'l': 50, 'r': 50, 't': 50, 'b': 50}

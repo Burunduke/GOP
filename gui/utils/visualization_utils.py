@@ -264,41 +264,6 @@ def create_scatter_figure(x_data: np.ndarray, y_data: np.ndarray,
         return go.Figure()
 
 
-def create_spectral_profile_figure(wavelengths: np.ndarray, 
-                                 reflectance: np.ndarray,
-                                 title: str = "Спектральный профиль") -> go.Figure:
-    """
-    Create spectral profile figure for Plotly
-    
-    Args:
-        wavelengths: Wavelengths
-        reflectance: Reflectance values
-        title: Title
-        
-    Returns:
-        Plotly figure
-    """
-    try:
-        fig = go.Figure(data=go.Scatter(
-            x=wavelengths,
-            y=reflectance,
-            mode='lines',
-            line=dict(color='blue', width=2),
-            hovertemplate='Wavelength: %{x} nm<br>Reflectance: %{y:.3f}<extra></extra>'
-        ))
-        
-        fig.update_layout(
-            title=title,
-            xaxis_title="Wavelength (nm)",
-            yaxis_title="Reflectance",
-            margin=dict(l=50, r=50, t=50, b=50)
-        )
-        
-        return fig
-        
-    except Exception as e:
-        print(f"Error creating spectral profile: {e}")
-        return go.Figure()
 
 
 def calculate_statistics(data: np.ndarray) -> Dict[str, float]:

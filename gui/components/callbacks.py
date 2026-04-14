@@ -478,28 +478,6 @@ def register_callbacks(
         
         return file_items, file_info, False
     
-    # Визуализация
-    @app.callback(
-        Output('main-visualization', 'figure'),
-        [Input('visualization-type', 'value'),
-         Input('index-selector', 'value'),
-         Input('colormap-selector', 'value')],
-        prevent_initial_call=True
-    )
-    def update_visualization(
-        viz_type: Optional[str],
-        index_name: Optional[str],
-        colormap: Optional[str]
-    ) -> Any:
-        """Update visualization based on user selections."""
-        from .visualization import create_index_map_figure, create_histogram_figure, create_empty_figure
-        
-        if viz_type == 'index_map':
-            return create_index_map_figure(None, index_name, colormap)
-        elif viz_type == 'histogram':
-            return create_histogram_figure(None, index_name)
-        else:
-            return create_empty_figure()
     
     # Прогресс обработки
     @app.callback(

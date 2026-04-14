@@ -1,5 +1,5 @@
 """
-Performance benchmarks for processing operations
+Performance benchmarks for data loading and orthophoto creation
 """
 
 import time
@@ -11,87 +11,50 @@ import os
 # Add the src directory to the path to import modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.processing.hyperspectral.corrections import HyperspectralCorrections
-from src.processing.hyperspectral.denoising import HyperspectralDenoising
+from src.processing.hyperspectral import HyperspectralProcessor
 
 
-def benchmark_corrections() -> Dict[str, float]:
-    """Benchmark correction operations performance."""
+def benchmark_data_loading() -> Dict[str, float]:
+    """Benchmark data loading operations performance."""
     # Create test data
     data = np.random.rand(500, 500, 10).astype(np.float32)
-    corrections = HyperspectralCorrections()
-
-    methods = ["dark_current", "empirical_line", "flat_field"]
-    results = {}
-
-    for method in methods:
-        start = time.time()
-        iterations = 5
-
-        for _ in range(iterations):
-            corrected = corrections.radiometric_correction(data, method)
-
-        elapsed = time.time() - start
-
-        results[method] = {
-            "operation": f"Radiometric correction ({method})",
-            "iterations": iterations,
-            "total_time": elapsed,
-            "time_per_iteration": elapsed / iterations,
-            "data_size": f"{data.shape[0]}x{data.shape[1]}x{data.shape[2]}",
-        }
-
-    return results
-
-
-def benchmark_denoising() -> Dict[str, float]:
-    """Benchmark denoising operations performance."""
-    # Create test data with some noise
-    data = np.random.rand(300, 300, 20).astype(np.float32)
-    # Add some noise
-    noise = np.random.normal(0, 0.1, data.shape).astype(np.float32)
-    noisy_data = data + noise
-
-    denoising = HyperspectralDenoising()
-    methods = ["pca", "savgol"]
-    results = {}
-
-    for method in methods:
-        start = time.time()
-        iterations = 3  # Fewer iterations due to longer processing time
-
-        for _ in range(iterations):
-            denoised = denoising.advanced_noise_reduction(noisy_data, method)
-
-        elapsed = time.time() - start
-
-        results[method] = {
-            "operation": f"Denoising ({method})",
-            "iterations": iterations,
-            "total_time": elapsed,
-            "time_per_iteration": elapsed / iterations,
-            "data_size": f"{noisy_data.shape[0]}x{noisy_data.shape[1]}x{noisy_data.shape[2]}",
-        }
-
-    return results
-
-
-def benchmark_atmospheric_correction() -> Dict[str, float]:
-    """Benchmark atmospheric correction performance."""
-    # Create test data
-    data = np.random.rand(400, 400, 15).astype(np.float32)
-    corrections = HyperspectralCorrections()
+    processor = HyperspectralProcessor()
 
     start = time.time()
     iterations = 5
 
     for _ in range(iterations):
-        corrected = corrections.atmospheric_correction(data)
+        # Simulate data loading operation
+        loaded_data = processor._read_hyperspectral_data("test_path.bil")
 
     elapsed = time.time() - start
 
     return {
-        "operation": "Atmospheric correction",
+        "operation": "Data loading",
+        "iterations": iterations,
+        "total_time": elapsed,
+        "time_per_iteration": elapsed / iterations,
+        "data_size": f"{data.shape[0]}x{data.shape[1]}x{data.shape[2]}",
+    }
+
+
+def benchmark_orthophoto_creation() -> Dict[str, float]:
+    """Benchmark orthophoto creation performance."""
+    # Create test data
+    data = np.random.rand(300, 300, 20).astype(np.float32)
+    processor = HyperspectralProcessor()
+
+    start = time.time()
+    iterations = 3  # Fewer iterations due to longer processing time
+
+    for _ in range(iterations):
+        # Simulate orthophoto creation
+        orthophoto = processor._convert_to_tiff(data, np.linspace(400, 900, 20), {}, "output.tif")
+
+    elapsed = time.time() - start
+
+    return {
+        "operation": "Orthophoto creation",
         "iterations": iterations,
         "total_time": elapsed,
         "time_per_iteration": elapsed / iterations,
@@ -203,33 +166,25 @@ def benchmark_memory_efficiency() -> Dict[str, float]:
 
 def run_all_benchmarks() -> List[Dict[str, float]]:
     """Run all processing benchmarks and return results."""
-    print("Running processing performance benchmarks...")
+    print("Running data processing performance benchmarks...")
     print("=" * 60)
 
     results = []
 
-    # Corrections benchmark
-    print("\n1. Corrections Benchmark")
-    corrections_results = benchmark_corrections()
-    for method, result in corrections_results.items():
-        results.append(result)
-        print(f"   {method}: {result['time_per_iteration']:.4f}s per iteration")
+    # Data loading benchmark
+    print("\n1. Data Loading Benchmark")
+    loading_result = benchmark_data_loading()
+    results.append(loading_result)
+    print(f"   Time per iteration: {loading_result['time_per_iteration']:.4f}s")
 
-    # Denoising benchmark
-    print("\n2. Denoising Benchmark")
-    denoising_results = benchmark_denoising()
-    for method, result in denoising_results.items():
-        results.append(result)
-        print(f"   {method}: {result['time_per_iteration']:.4f}s per iteration")
-
-    # Atmospheric correction benchmark
-    print("\n3. Atmospheric Correction Benchmark")
-    atmos_result = benchmark_atmospheric_correction()
-    results.append(atmos_result)
-    print(f"   Time per iteration: {atmos_result['time_per_iteration']:.4f}s")
+    # Orthophoto creation benchmark
+    print("\n2. Orthophoto Creation Benchmark")
+    orthophoto_result = benchmark_orthophoto_creation()
+    results.append(orthophoto_result)
+    print(f"   Time per iteration: {orthophoto_result['time_per_iteration']:.4f}s")
 
     # Cache benchmark
-    print("\n4. Cache Performance Benchmark")
+    print("\n3. Cache Performance Benchmark")
     try:
         cache_result = benchmark_cache_performance()
         results.append(cache_result)
@@ -240,7 +195,7 @@ def run_all_benchmarks() -> List[Dict[str, float]]:
         print(f"   Cache benchmark failed: {e}")
 
     # Memory efficiency benchmark
-    print("\n5. Memory Efficiency Benchmark")
+    print("\n4. Memory Efficiency Benchmark")
     try:
         memory_results = benchmark_memory_efficiency()
         for key, result in memory_results.items():

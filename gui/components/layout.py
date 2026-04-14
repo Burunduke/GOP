@@ -160,10 +160,8 @@ def _create_modals() -> html.Div:
                                 id="processing-options",
                                 options=[
                                     {"label": "Apply atmospheric correction", "value": "atmospheric_correction"},
-                                    {"label": "Remove noise", "value": "denoising"},
-                                    {"label": "Plant segmentation", "value": "segmentation"},
                                 ],
-                                value=["atmospheric_correction", "denoising"],
+                                value=["atmospheric_correction"],
                             ),
                         ]),
                     ], className="mt-3"),

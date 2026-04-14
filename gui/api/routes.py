@@ -161,37 +161,7 @@ def get_processing_status(task_id: str) -> Dict[str, Any]:
         'message': 'Processing completed successfully',
         'result': {
             'output_path': f'data/results/{task_id}',
-            'indices_calculated': ['NDVI', 'EVI', 'SAVI'],
             'processing_time': '00:05:23'
         }
     })
 
-
-@api_blueprint.route('/indices', methods=['GET'])
-def get_available_indices() -> Dict[str, Any]:
-    """Get available vegetation indices
-    
-    Returns:
-        List of available indices
-    """
-    indices = [
-        {
-            'id': 'NDVI',
-            'name': 'Normalized Difference Vegetation Index',
-            'description': 'Normalized Difference Vegetation Index',
-            'formula': '(NIR - Red) / (NIR + Red)'
-        },
-        {
-            'id': 'EVI',
-            'name': 'Enhanced Vegetation Index',
-            'description': 'Enhanced Vegetation Index',
-            'formula': '2.5 * ((NIR - Red) / (NIR + 6 * Red - 7.5 * Blue + 1))'
-        },
-        {
-            'id': 'SAVI',
-            'name': 'Soil Adjusted Vegetation Index',
-            'description': 'Soil Adjusted Vegetation Index',
-            'formula': '((NIR - Red) / (NIR + Red + L)) * (1 + L)'
-        }
-    ]
-    return jsonify({'indices': indices})

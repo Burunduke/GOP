@@ -17,21 +17,13 @@ class PipelineExecutor:
     
     # Mapping of stages to their weights for progress calculation
     STAGE_WEIGHTS: Dict[str, int] = {
-        PipelineStage.PREPROCESSING.value: 25,
-        PipelineStage.ORTHOPHOTO.value: 20,
-        PipelineStage.SEGMENTATION.value: 20,
-        PipelineStage.INDICES.value: 15,
-        PipelineStage.ASSESSMENT.value: 10,
-        PipelineStage.ANALYSIS.value: 10,
+        PipelineStage.PREPROCESSING.value: 50,
+        PipelineStage.ORTHOPHOTO.value: 50,
     }
     
     STAGE_NAMES: Dict[str, str] = {
         PipelineStage.PREPROCESSING.value: "Preprocessing",
         PipelineStage.ORTHOPHOTO.value: "Orthophoto creation",
-        PipelineStage.SEGMENTATION.value: "Segmentation",
-        PipelineStage.INDICES.value: "Vegetation indices",
-        PipelineStage.ASSESSMENT.value: "Health assessment",
-        PipelineStage.ANALYSIS.value: "Scientific analysis",
     }
     
     def __init__(self, project_manager: ProjectManager, gop_adapter=None) -> None:
@@ -270,10 +262,6 @@ class PipelineExecutor:
         stage_durations = {
             PipelineStage.PREPROCESSING.value: (2, 4),
             PipelineStage.ORTHOPHOTO.value: (2, 3),
-            PipelineStage.SEGMENTATION.value: (2, 4),
-            PipelineStage.INDICES.value: (1, 3),
-            PipelineStage.ASSESSMENT.value: (1, 2),
-            PipelineStage.ANALYSIS.value: (1, 2),
         }
         
         min_dur, max_dur = stage_durations.get(stage, (1, 2))
@@ -305,37 +293,12 @@ class PipelineExecutor:
                 "snr_improvement": round(random.uniform(5, 15), 2),
                 "bands_processed": random.randint(100, 300),
                 "correction_applied": "radiometric + atmospheric",
-                "denoising_method": "PCA",
             },
             PipelineStage.ORTHOPHOTO.value: {
                 "resolution_m": 0.1,
                 "coverage_area_ha": round(random.uniform(1, 50), 2),
                 "crs": "EPSG:4326",
                 "tiles_generated": random.randint(4, 16),
-            },
-            PipelineStage.SEGMENTATION.value: {
-                "segments_found": random.randint(50, 500),
-                "vegetation_coverage_pct": round(random.uniform(40, 85), 1),
-                "model_used": "DeepLabV3+",
-                "refinement": "CascadePSP",
-            },
-            PipelineStage.INDICES.value: {
-                "indices_calculated": ["NDVI", "GNDVI", "MCARI", "RENDVI"],
-                "mean_ndvi": round(random.uniform(0.3, 0.8), 3),
-                "mean_gndvi": round(random.uniform(0.2, 0.7), 3),
-                "pixels_processed": random.randint(100000, 1000000),
-            },
-            PipelineStage.ASSESSMENT.value: {
-                "healthy_pct": round(random.uniform(50, 90), 1),
-                "stressed_pct": round(random.uniform(5, 30), 1),
-                "damaged_pct": round(random.uniform(1, 15), 1),
-                "assessment_method": "multi-index",
-            },
-            PipelineStage.ANALYSIS.value: {
-                "correlation_pairs": random.randint(5, 20),
-                "spatial_clusters": random.randint(3, 8),
-                "statistical_tests": ["t-test", "ANOVA", "Kruskal-Wallis"],
-                "significant_findings": random.randint(1, 5),
             },
         }
         

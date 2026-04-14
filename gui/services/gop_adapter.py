@@ -15,9 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 try:
     from src.core.pipeline import Pipeline
-    from src.indices.calculator import VegetationIndexCalculator
     from src.processing.hyperspectral.processor import HyperspectralProcessor
-    from src.segmentation.segmenter import ImageSegmenter
     GOP_AVAILABLE = True
 except ImportError:
     GOP_AVAILABLE = False
@@ -43,9 +41,7 @@ class GOPAdapter:
             try:
                 self.pipeline = Pipeline(self.config_path)
                 # Use components from pipeline instead of creating separate instances
-                self.indices_calculator = self.pipeline.index_calculator
                 self.hyperspectral_processor = self.pipeline.hyperspectral_processor
-                self.segmenter = self.pipeline.segmenter
                 self.gop_mode = "full"
             except Exception as e:
                 logger.error(f"GOP initialization error: {e}")
@@ -119,18 +115,14 @@ class GOPAdapter:
             'input_path': config.get('input_path', 'unknown'),
             'output_dir': config.get('output_dir', f'data/results/{task_id}'),
             'processing_time': '00:02:15',
-            'indices_calculated': config.get('selected_indices', ['NDVI']),
             'status': 'completed',
             'created_at': datetime.now().isoformat(),
-            'files_generated': [
-                f'{index}_map.tif' for index in config.get('selected_indices', ['NDVI'])
-            ],
+            'files_generated': ['orthophoto.tif', 'preprocessed_data.hdr'],
             'statistics': {
                 'total_pixels': 1000000,
                 'processed_pixels': 950000,
-                'ndvi_mean': 0.65,
-                'ndvi_std': 0.15,
-                'vegetation_coverage': 0.78
+                'bands_processed': 224,
+                'resolution_m': 0.1
             }
         }
         
@@ -140,45 +132,6 @@ class GOPAdapter:
             'error': None
         }
     
-    def get_available_indices(self, sensor_type: str = 'hyperspectral') -> List[Dict[str, Any]]:
-        """
-        Get available vegetation indices
-        
-        Args:
-            sensor_type: Sensor type
-            
-        Returns:
-            List of available indices
-        """
-        if self.gop_mode == "full":
-            try:
-                from src.indices.definitions import IndexDefinitions
-                indices = IndexDefinitions.get_available_indices(sensor_type)
-                return [{'id': idx, 'name': idx, 'description': f'Index {idx}'} for idx in indices]
-            except Exception:
-                pass
-        
-        # Return basic indices in emulation mode
-        return [
-            {
-                'id': 'NDVI',
-                'name': 'Normalized Difference Vegetation Index',
-                'description': 'Normalized Difference Vegetation Index',
-                'formula': '(NIR - Red) / (NIR + Red)'
-            },
-            {
-                'id': 'EVI',
-                'name': 'Enhanced Vegetation Index',
-                'description': 'Enhanced Vegetation Index',
-                'formula': '2.5 * ((NIR - Red) / (NIR + 6 * Red - 7.5 * Blue + 1))'
-            },
-            {
-                'id': 'SAVI',
-                'name': 'Soil Adjusted Vegetation Index',
-                'description': 'Soil Adjusted Vegetation Index',
-                'formula': '((NIR - Red) / (NIR + Red + L)) * (1 + L)'
-            }
-        ]
 
     def validate_input_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -251,7 +204,7 @@ class GOPAdapter:
             'message': 'Обработка завершена успешно',
             'result': {
                 'output_path': f'data/results/{task_id}',
-                'indices_calculated': ['NDVI', 'EVI'],
+                'files_generated': ['orthophoto.tif', 'preprocessed_data.hdr'],
                 'processing_time': '00:05:23'
             }
         }

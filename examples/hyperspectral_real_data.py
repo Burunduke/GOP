@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Advanced Hyperspectral Data Processing Example
-using GOP Scientific Library v2.0
+Hyperspectral Data Loading Example
+using GOP Library v2.0
 
 This example demonstrates:
-- Loading and preprocessing real hyperspectral data
-- Applying various correction methods
-- Spectral analysis and visualization
-- Calculating specialized indices
+- Loading hyperspectral data
+- Creating orthophotos
+- Basic data visualization
 """
 
 import os
@@ -22,7 +21,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.core.pipeline import Pipeline
 from src.processing.hyperspectral import HyperspectralProcessor
-from src.indices.calculator import VegetationIndexCalculator
 from src.utils.logger import setup_logger
 
 
@@ -71,58 +69,47 @@ def create_sample_data(file_path):
         print(f"Error creating sample data: {e}")
 
 
-def plot_spectral_signatures(processor, output_dir):
-    """Plot spectral signatures from processed data"""
+def plot_orthophoto_preview(data, output_dir):
+    """Create a preview of the orthophoto data"""
     try:
-        # Get spectral data
-        spectral_data = processor.get_spectral_data()
-        if spectral_data is None:
-            print("No spectral data available for plotting")
+        if data is None:
+            print("No data available for plotting")
             return
         
         # Create plots directory
         plots_dir = os.path.join(output_dir, 'plots')
         os.makedirs(plots_dir, exist_ok=True)
         
-        # Plot average spectral signature
-        plt.figure(figsize=(12, 8))
-        
-        if hasattr(spectral_data, 'wavelengths') and hasattr(spectral_data, 'reflectance'):
-            wavelengths = spectral_data.wavelengths
-            reflectance = spectral_data.reflectance
+        # Create a simple RGB preview (using first 3 bands)
+        if len(data.shape) >= 3 and data.shape[2] >= 3:
+            rgb_preview = data[:, :, :3]
             
-            # Plot average spectrum
-            avg_spectrum = np.mean(reflectance, axis=(0, 1))
-            plt.plot(wavelengths, avg_spectrum, 'b-', linewidth=2, label='Average Spectrum')
+            # Normalize for display
+            rgb_preview = (rgb_preview - np.min(rgb_preview)) / (np.max(rgb_preview) - np.min(rgb_preview))
             
-            # Highlight key spectral regions
-            plt.axvspan(400, 700, alpha=0.2, color='green', label='Visible (400-700nm)')
-            plt.axvspan(700, 1300, alpha=0.2, color='red', label='NIR (700-1300nm)')
-            plt.axvspan(1300, 2500, alpha=0.2, color='orange', label='SWIR (1300-2500nm)')
-            
-            plt.xlabel('Wavelength (nm)')
-            plt.ylabel('Reflectance')
-            plt.title('Average Spectral Signature')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
+            plt.figure(figsize=(10, 8))
+            plt.imshow(rgb_preview)
+            plt.title('Orthophoto Preview (RGB Composite)')
+            plt.colorbar(label='Normalized Reflectance')
+            plt.axis('off')
             
             # Save plot
-            plt.savefig(os.path.join(plots_dir, 'spectral_signature.png'), 
+            plt.savefig(os.path.join(plots_dir, 'orthophoto_preview.png'),
                        dpi=300, bbox_inches='tight')
             plt.close()
             
-            print(f"Spectral signature plot saved: {plots_dir}/spectral_signature.png")
+            print(f"Orthophoto preview saved: {plots_dir}/orthophoto_preview.png")
             
     except Exception as e:
-        print(f"Error plotting spectral signatures: {e}")
+        print(f"Error creating orthophoto preview: {e}")
 
 
 def main():
-    """Main function for advanced hyperspectral processing example"""
+    """Main function for hyperspectral data loading example"""
     
     # Setup logging
     logger = setup_logger('GOP_RealData', level=logging.INFO)
-    logger.info("Starting advanced hyperspectral data processing example")
+    logger.info("Starting hyperspectral data loading example")
     
     try:
         # Path to input data (replace with your path)
@@ -140,75 +127,47 @@ def main():
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(os.path.join(output_dir, 'plots'), exist_ok=True)
         
-        # Initialize components
-        logger.info("Initializing hyperspectral processor")
-        processor = HyperspectralProcessor()
-        calculator = VegetationIndexCalculator()
+        # Initialize pipeline
+        logger.info("Initializing pipeline")
+        pipeline = Pipeline()
         
-        # Load and preprocess data
-        logger.info(f"Loading data from: {input_path}")
-        
-        # Apply atmospheric corrections
-        logger.info("Applying atmospheric corrections")
-        corrected_data = processor.apply_atmospheric_correction(
+        # Process data to create orthophoto
+        logger.info(f"Processing file: {input_path}")
+        results = pipeline.process(
             input_path=input_path,
-            method='empirical_line'
+            output_dir=output_dir,
+            sensor_type='Hyperspectral',
+            compression_ratio=0.125
         )
         
-        # Apply denoising
-        logger.info("Applying denoising")
-        denoised_data = processor.apply_denoising(
-            data=corrected_data,
-            method='wavelet'
-        )
+        # Create orthophoto preview
+        logger.info("Generating orthophoto preview")
+        if 'processed_data' in results and results['processed_data'] is not None:
+            plot_orthophoto_preview(results['processed_data'], output_dir)
         
-        # Calculate vegetation indices
-        logger.info("Calculating vegetation indices")
-        indices = calculator.calculate_indices(
-            data=denoised_data,
-            indices=['NDVI', 'GNDVI', 'EVI', 'SAVI', 'MSAVI', 'NDWI', 'MSI']
-        )
-        
-        # Plot spectral signatures
-        logger.info("Generating spectral plots")
-        plot_spectral_signatures(processor, output_dir)
-        
-        # Save processed data
-        logger.info("Saving processed data")
-        processor.save_processed_data(
-            data=denoised_data,
-            output_path=os.path.join(output_dir, 'processed_data.npy')
-        )
-        
-        # Save indices
-        for index_name, index_data in indices.items():
-            np.save(os.path.join(output_dir, f'{index_name}.npy'), index_data)
+        # Save results
+        logger.info("Saving results")
+        results_file = os.path.join(output_dir, 'processing_results.json')
+        pipeline.save_results(results_file)
         
         # Display results
         print("\n" + "="*60)
-        print("ADVANCED PROCESSING RESULTS")
+        print("DATA LOADING RESULTS")
         print("="*60)
         
-        print(f"Input file: {input_path}")
+        print(f"Input file: {results['input_path']}")
+        print(f"Orthophoto: {results['orthophoto_path']}")
         print(f"Output directory: {output_dir}")
-        print(f"Processed data shape: {denoised_data.shape if denoised_data is not None else 'N/A'}")
-        print(f"Calculated indices: {list(indices.keys())}")
-        
-        # Display index statistics
-        for index_name, index_data in indices.items():
-            if index_data is not None:
-                print(f"\n{index_name}:")
-                print(f"  Min: {np.min(index_data):.3f}")
-                print(f"  Max: {np.max(index_data):.3f}")
-                print(f"  Mean: {np.mean(index_data):.3f}")
-                print(f"  Std: {np.std(index_data):.3f}")
+        print(f"Sensor type: {results['sensor_type']}")
+        print(f"Data size: {results['processed_data']['shape']}")
+        print(f"Number of bands: {results['processed_data']['bands']}")
         
         print("\n" + "="*60)
-        print("Advanced processing example completed successfully!")
+        print("Data loading example completed successfully!")
         print("="*60)
         
     except Exception as e:
-        logger.error(f"Error in advanced processing example: {e}")
+        logger.error(f"Error in data loading example: {e}")
         print(f"Error: {e}")
         return 1
     

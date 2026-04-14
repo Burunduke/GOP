@@ -98,7 +98,7 @@ def validate_processing_config(config: Dict[str, Any]) -> Dict[str, Any]:
     
     # Validate processing options
     if 'processing_options' in config:
-        valid_options = ['atmospheric_correction', 'denoising', 'segmentation', 'geometric_correction']
+        valid_options = ['atmospheric_correction', 'geometric_correction']
         for option in config['processing_options']:
             if option not in valid_options:
                 result['warnings'].append(f'Processing option {option} may not be supported')

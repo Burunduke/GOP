@@ -44,94 +44,6 @@ processing:
       swir1: [1400, 1800]
       swir2: [2000, 2500]
 
-# Image Segmentation
-segmentation:
-  model_path: "models/segmentation/best_deeplabv3plus_resnet50_voc_os16.pth"
-  device: "auto"  # auto, cpu, cuda
-  confidence_threshold: 0.5
-  
-  # Cascade segmentation parameters
-  cascade_psp:
-    enabled: true
-    l_parameter: 500  # L parameter for CascadePSP
-    refinement_threshold: 0.7
-  
-  # Scientific quality assessment parameters
-  quality_metrics:
-    iou_threshold: 0.5
-    dice_threshold: 0.5
-    boundary_precision: 0.8
-
-# Vegetation Indices
-indices:
-  sensor_types: ["RGB", "Multispectral", "Hyperspectral"]
-  
-  # Scientific index classification
-  index_groups:
-    greenness: ["GNDVI", "MCARI", "MNLI", "OSAVI", "TVI", "NDVI"]
-    stress: ["SIPI2", "mARI", "PRI", "CRI"]
-    water: ["NDWI", "MSI", "WI", "NDII"]
-    pigment: ["CARI", "PSRI", "SIPI"]
-    structure: ["MSR", "MSAVI", "TVI"]
-  
-  default_indices: [
-    "GNDVI", "MCARI", "MNLI", "OSAVI", "TVI",
-    "SIPI2", "mARI", "NDWI", "MSI"
-  ]
-  
-  # Spectral channels for different sensors
-  sensor_bands:
-    RGB:
-      Blue: 0
-      Green: 1
-      Red: 2
-    
-    Multispectral:
-      Blue: 0
-      Green: 1
-      Red: 2
-      RedEdge: 3
-      NIR: 4
-    
-    Hyperspectral:
-      Blue: 10    # ~450 nm
-      Green: 20   # ~550 nm
-      Red: 30     # ~650 nm
-      RedEdge: 35 # ~720 nm
-      NIR: 50     # ~800 nm
-      SWIR: 80    # ~1600 nm
-
-# Scientific Analysis
-scientific_analysis:
-  enabled: true
-  
-  # Statistical analysis
-  statistics:
-    confidence_level: 0.95
-    outlier_detection: true
-    outlier_method: "iqr"  # iqr, zscore, isolation_forest
-  
-  # Correlation analysis
-  correlation:
-    method: "pearson"  # pearson, spearman, kendall
-    threshold: 0.7
-    significance_test: true
-  
-  # Spatial analysis
-  spatial:
-    morans_i: true
-    hotspot_analysis: true
-    fragmentation_index: true
-    spatial_autocorrelation: true
-  
-  # Plant condition classification
-  classification:
-    method: "threshold"  # threshold, clustering, ml
-    thresholds:
-      excellent: 0.8
-      good: 0.6
-      satisfactory: 0.4
-      poor: 0.0
 
 # Output Results
 output:
@@ -139,28 +51,12 @@ output:
   save_intermediate: true
   output_format: "GeoTIFF"
   
-  # Scientific reports
-  scientific_reports:
-    enabled: true
-    format: "json"  # json, csv, excel
-    include_statistics: true
-    include_correlations: true
-    include_spatial_analysis: true
-  
   # Visualization
   visualization:
     enabled: true
     format: "png"  # png, pdf, svg
     dpi: 300
     colormap: "viridis"
-    
-    # Visualization types
-    types:
-      index_maps: true
-      condition_maps: true
-      correlation_matrices: true
-      spatial_patterns: true
-      histograms: true
 
 # Logging
 logging:
@@ -169,13 +65,6 @@ logging:
   max_size: "10MB"
   backup_count: 5
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  
-  # Scientific logging
-  scientific_logging:
-    enabled: true
-    log_processing_steps: true
-    log_quality_metrics: true
-    log_performance_metrics: true
 
 # Performance
 performance:
@@ -253,17 +142,11 @@ experimental:
 
 # Metadata
 metadata:
-  project_name: "GOP - Hyperspectral Processing and Plant Analysis"
+  project_name: "GOP - Hyperspectral Processing and Orthophoto Creation"
   version: "2.0.0"
-  description: "Scientific library for hyperspectral data processing and plant condition analysis"
+  description: "Library for hyperspectral data loading and orthophoto creation"
   authors:
     - "Dmitry Indykov"
-  
-  # Scientific references
-  references:
-    - "Mitrofanov E.P., Petrushin A.F. Use of aerial photography data for precision agricultural practices"
-    - "Chen L. et al. Rethinking Atrous Convolution for Semantic Image Segmentation"
-    - "CascadePSP: Toward Class-Agnostic and Very High-Resolution Segmentation via Global and Local Refinement"
   
   # Contact information
   contact:
