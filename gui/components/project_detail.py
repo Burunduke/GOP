@@ -10,6 +10,8 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc
 from datetime import datetime
 
+from gui.components.server_file_picker import create_server_file_picker
+
 
 def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
     """
@@ -79,7 +81,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                         html.Div([
                             html.Span(f"Files: {len(project.get('files', []))}",
                                      className="text-muted me-3"),
-                            html.Span(f"Size: {format_file_size(project.get('total_file_size', 0))}",
+                            html.Span(f"Size: {format_file_size(sum(f.get('file_size', 0) for f in project.get('files', [])))}",
                                      className="text-muted"),
                         ], className="text-end"),
                     ], width=4),
@@ -122,7 +124,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                 ], className="mb-3"),
                                 html.Div([
                                     html.Strong("Total Size:"),
-                                    html.P(format_file_size(project.get("total_file_size", 0)),
+                                    html.P(format_file_size(sum(f.get("file_size", 0) for f in project.get("files", []))),
                                            className="text-muted"),
                                 ]),
                             ])
@@ -163,14 +165,8 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
             html.Div([
                 dbc.Card([
                     dbc.CardHeader([
-                        html.H5("Project Files", className="mb-0"),
-                        dbc.Button(
-                            [html.I(className="fas fa-plus me-2"), "Add Files"],
-                            id="add-files-btn",
-                            color="primary",
-                            size="sm"
-                        ),
-                    ], className="d-flex justify-content-between align-items-center"),
+                                            html.H5("Project Files", className="mb-0"),
+                                        ], className="d-flex justify-content-between align-items-center"),
                     dbc.CardBody([
                         dbc.ListGroup([
                             *[
@@ -186,39 +182,23 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                         ], className="flex-grow-1"),
                                         html.Div([
                                             dbc.Button(
-                                                html.I(className="fas fa-trash"),
+                                                html.I(className="fas fa-times"),
                                                 id={"type": "project-file-delete",
                                                      "index": file.get("id", "")},
                                                 color="outline-danger",
                                                 size="sm",
-                                                className="me-2"
+                                                className="delete-file-btn"
                                             ),
-                                            dbc.Button(
-                                                html.I(className="fas fa-download"),
-                                                id={"type": "project-file-download",
-                                                     "index": file.get("id", "")},
-                                                color="outline-primary",
-                                                size="sm"
-                                            ),
-                                        ], className="ms-3"),
+                                        ], className="ms-3 d-flex align-items-center"),
                                     ], className="d-flex align-items-center")
                                 ])
                                 for file in project.get("files", [])
                             ]
                         ], flush=True),
                         
-                        # File upload area
-                        dcc.Upload(
-                            id='project-file-upload',
-                            children=html.Div([
-                                html.I(className="fas fa-cloud-upload-alt fa-2x mb-2"),
-                                html.P("Drag and drop files here or click to select"),
-                                html.P("Supported formats: BIL/HDR, TIFF, DAT",
-                                       className="text-muted small")
-                            ]),
-                            multiple=True,
-                            className="upload-area p-4 border border-dashed rounded text-center mt-3"
-                        ),
+                        # Server-side file browser (copies files at filesystem level — no OOM)
+                        html.Hr(className="my-3"),
+                        create_server_file_picker(),
                     ])
                 ]),
             ])

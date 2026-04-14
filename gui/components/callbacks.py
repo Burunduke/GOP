@@ -327,56 +327,186 @@ def register_callbacks(
         
         return is_open
     
-    # === 13. File upload to project ===
+    # === 13. File browser: navigate directory / refresh ===
+    @app.callback(
+        Output("file-browser-contents", "children"),
+        Output("file-browser-breadcrumb", "children"),
+        Output("file-browser-current-path", "data"),
+        Input("file-browser-refresh-btn", "n_clicks"),
+        Input("file-browser-go-up-btn", "n_clicks"),
+        Input("file-browser-go-root-btn", "n_clicks"),
+        Input({"type": "file-browser-folder", "index": ALL}, "n_clicks"),
+        State("file-browser-current-path", "data"),
+        prevent_initial_call=True,
+    )
+    def navigate_file_browser(refresh_clicks, up_clicks, root_clicks,
+                              folder_clicks, current_path):
+        """Handle file browser navigation: refresh, go up, go root, enter folder."""
+        from gui.components.server_file_picker import (
+            list_directory, render_directory_contents, render_breadcrumb,
+            get_default_browse_root,
+        )
+
+        ctx = callback_context
+        if not ctx.triggered:
+            raise PreventUpdate
+
+        trigger = ctx.triggered[0]["prop_id"]
+        target_path = current_path
+
+        if "file-browser-go-root-btn" in trigger:
+            target_path = get_default_browse_root()
+        elif "file-browser-go-up-btn" in trigger:
+            from pathlib import Path
+            parent = str(Path(current_path).parent)
+            target_path = parent
+        elif "file-browser-folder" in trigger:
+            # Extract folder path from pattern-matching trigger
+            if any(c for c in (folder_clicks or []) if c):
+                prop_id = trigger.split(".")[0]
+                id_dict = json.loads(prop_id)
+                target_path = id_dict["index"]
+            else:
+                raise PreventUpdate
+        elif "file-browser-refresh-btn" in trigger:
+            target_path = current_path
+        else:
+            raise PreventUpdate
+
+        try:
+            listing = list_directory(target_path)
+            contents = render_directory_contents(listing)
+            breadcrumb = render_breadcrumb(listing['path'], get_default_browse_root())
+            return contents, breadcrumb, listing['path']
+        except Exception as e:
+            logger.error(f"Error browsing directory {target_path}: {e}")
+            error_msg = dbc.Alert(
+                f"Error browsing directory: {e}",
+                color="danger", className="py-2 small",
+            )
+            return error_msg, html.Span(str(target_path)), current_path
+
+    # === 14. File browser: enable/disable add button ===
+    @app.callback(
+        Output("add-server-files-btn", "disabled"),
+        Input("server-files-checklist", "value"),
+        prevent_initial_call=True,
+    )
+    def toggle_add_server_files_btn(selected_files):
+        """Enable the 'Add' button when at least one file is selected."""
+        if selected_files and len(selected_files) > 0:
+            return False
+        return True
+
+    # === 15. File browser: add selected files to project ===
     @app.callback(
         Output("notification-toast", "is_open", allow_duplicate=True),
         Output("notification-toast", "children", allow_duplicate=True),
-        Input("project-file-upload", "contents"),
-        State("project-file-upload", "filename"),
+        Output("page-content", "children", allow_duplicate=True),
+        Input("add-server-files-btn", "n_clicks"),
+        State("server-files-checklist", "value"),
         State("url", "pathname"),
         prevent_initial_call=True,
     )
-    def handle_file_upload(contents, filenames, pathname):
-        """Handle file upload to current project with streaming."""
-        if not contents or not pathname or not pathname.startswith("/project/"):
+    def add_server_files_to_project(n_clicks, selected_paths, pathname):
+        """
+        Add server-side files to the current project using filesystem copy.
+
+        This is the key fix for the OOM issue: instead of reading file contents
+        into memory (as dcc.Upload does via base64), we use shutil.copy2 which
+        copies the file at the OS level with constant memory usage.
+        """
+        if not n_clicks or not selected_paths or not pathname:
+            raise PreventUpdate
+
+        if not pathname.startswith("/project/"):
+            raise PreventUpdate
+
+        project_id = pathname.split("/project/")[-1]
+
+        if not project_manager:
+            raise PreventUpdate
+
+        added_count = 0
+        errors = []
+
+        for file_path in selected_paths:
+            try:
+                project_manager.add_file_by_server_path(
+                    project_id=project_id,
+                    source_path=file_path,
+                    copy=True,  # Copy, don't move — keep original in uploads
+                )
+                added_count += 1
+            except FileNotFoundError as e:
+                errors.append(f"File not found: {file_path}")
+                logger.error(f"Server file not found: {e}")
+            except Exception as e:
+                errors.append(f"Error adding {file_path}: {e}")
+                logger.error(f"Error adding server file {file_path}: {e}")
+
+        # Build notification message
+        if errors:
+            msg = f"Added {added_count} file(s). Errors: {'; '.join(errors)}"
+        else:
+            msg = f"Successfully added {added_count} file(s)"
+
+        # Refresh project detail page
+        project = project_manager.get_project(project_id)
+        page_content = no_update
+        if project:
+            page_content = create_project_detail(project.to_dict())
+
+        return True, msg, page_content
+
+    # === Keep existing callbacks that still work ===
+    
+    # === 16. File deletion callback ===
+    @app.callback(
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("page-content", "children", allow_duplicate=True),
+        Input({"type": "project-file-delete", "index": ALL}, "n_clicks"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def delete_project_file(n_clicks, pathname):
+        """Delete a file from the current project."""
+        if not any(n_clicks) or not pathname or not pathname.startswith("/project/") or not project_manager:
             raise PreventUpdate
         
+        ctx = callback_context
+        if not ctx.triggered:
+            raise PreventUpdate
+        
+        # Get the file ID from the triggered button
+        trigger = ctx.triggered[0]
+        prop_id = trigger["prop_id"]
+        id_str = prop_id.split(".")[0]
+        id_dict = json.loads(id_str)
+        file_id = id_dict["index"]
+        
+        # Get project ID from URL
         project_id = pathname.split("/project/")[-1]
         
-        if project_manager and filenames:
-            from gui.utils.file_upload_utils import FileUploadManager
-            
-            upload_manager = FileUploadManager()
-            uploaded_count = 0
-            
-            # Handle both single and multiple files
-            contents_list = contents if isinstance(contents, list) else [contents]
-            filenames_list = filenames if isinstance(filenames, list) else [filenames]
-            
-            for content, filename in zip(contents_list, filenames_list):
-                try:
-                    # Save to temporary file using streaming with optimized chunk size
-                    temp_file_path, file_size, checksum = upload_manager.save_uploaded_content_to_temp_file(content, filename)
-                    
-                    # Add file to project using file path (not in-memory content)
-                    project_manager.add_file_to_project(
-                        project_id,
-                        filename,
-                        file_path=temp_file_path
-                    )
-                    uploaded_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error uploading file {filename}: {e}")
-                    # Clean up temporary file on error
-                    if 'temp_file_path' in locals():
-                        upload_manager.cleanup_temp_file(temp_file_path)
-            
-            return True, f"Загружено файлов: {uploaded_count}"
+        # Delete the file
+        success = project_manager.remove_file_from_project(project_id, file_id)
         
-        raise PreventUpdate
-    
-    # === Keep existing callbacks that still work ===
+        if success:
+            message = "File deleted successfully"
+        else:
+            message = "Error deleting file"
+        
+        # Refresh project detail page
+        project = project_manager.get_project(project_id)
+        page_content = no_update
+        if project:
+            page_content = create_project_detail(project.to_dict())
+        
+        return True, message, page_content
+
+
+    # Модальные окна
     
     # Модальные окна
     @app.callback(
@@ -420,65 +550,6 @@ def register_callbacks(
         elif start_btn or cancel_btn:
             return False
         return is_open
-    
-    # Загрузка файлов
-    @app.callback(
-        [Output('uploaded-files-list', 'children'),
-         Output('file-info', 'children'),
-         Output('start-processing-from-upload', 'disabled')],
-        [Input('file-upload', 'contents')],
-        [State('file-upload', 'filename'),
-         State('file-upload', 'last_modified')],
-        prevent_initial_call=True
-    )
-    def handle_file_upload_legacy(
-        contents: Optional[List[str]],
-        filenames: Optional[List[str]],
-        last_modified: Optional[List[float]]
-    ) -> Tuple[Union[str, List[html.Div]], Union[str, dbc.Alert], bool]:
-        """Handle file uploads with streaming (legacy implementation)."""
-        if not contents:
-            return "No files uploaded yet", "", True
-        
-        file_items = []
-        total_size = 0
-        
-        for i, (content, filename, modified) in enumerate(zip(contents, filenames, last_modified)):
-            try:
-                # Calculate file size using streaming
-                content_type, content_string = content.split(',')
-                
-                # Estimate file size from base64 content (approx 75% of encoded size)
-                file_size = int(len(content_string) * 0.75)
-                total_size += file_size
-                
-                # Format upload time
-                upload_time = datetime.fromtimestamp(modified / 1000).strftime('%H:%M:%S')
-                
-                file_items.append(
-                    html.Div([
-                        html.H6(filename, className="mb-1"),
-                        html.P(f"Size: {file_size:,} bytes | Time: {upload_time}",
-                               className="text-muted small"),
-                    ], className="border-bottom pb-2 mb-2")
-                )
-            except Exception as e:
-                logger.error(f"Error processing file {filename}: {e}")
-                file_items.append(
-                    html.Div([
-                        html.H6(filename, className="mb-1 text-danger"),
-                        html.P(f"Error processing file", className="text-danger small"),
-                    ], className="border-bottom pb-2 mb-2")
-                )
-        
-        file_info = dbc.Alert([
-            html.H6("Uploaded files information:", className="alert-heading"),
-            html.P(f"Total files: {len(filenames)}"),
-            html.P(f"Total size: {total_size:,} bytes ({total_size / (1024*1024):.2f} MB)"),
-        ], color="success")
-        
-        return file_items, file_info, False
-    
     
     # Прогресс обработки
     @app.callback(

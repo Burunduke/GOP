@@ -68,6 +68,7 @@ def create_app(config_name: str = 'default') -> dash.Dash:
         external_stylesheets=[
             dbc.themes.BOOTSTRAP,
             'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css',
+            'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
             '/static/css/main.css'
         ],
         external_scripts=[

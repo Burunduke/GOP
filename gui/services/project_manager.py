@@ -265,6 +265,87 @@ class ProjectManager:
         logger.info(f"Добавлен файл {filename} к проекту {project.name}")
         return project_file
     
+    def add_file_by_server_path(
+        self,
+        project_id: str,
+        source_path: str,
+        file_type: str = "hyperspectral",
+        copy: bool = True,
+    ) -> Optional[ProjectFile]:
+        """
+        Add a file to the project by copying/moving it from a server-side path.
+
+        This method avoids reading the file into memory entirely. It uses
+        shutil.copy2 (or shutil.move) to transfer the file at the filesystem
+        level, which consumes constant memory regardless of file size.
+
+        This is the recommended way to add large files (> 500 MB) to a project
+        instead of uploading through the browser (which encodes the file as
+        base64 and loads it entirely into memory).
+
+        Args:
+            project_id: Project ID.
+            source_path: Absolute or relative path to the source file on the server.
+            file_type: File type label (e.g. 'hyperspectral', 'geotiff').
+            copy: If True, copy the file; if False, move it.
+
+        Returns:
+            ProjectFile object, or None if the project was not found.
+
+        Raises:
+            FileNotFoundError: If source_path does not exist.
+            ValueError: If source_path is not a file.
+        """
+        project = self.get_project(project_id)
+        if project is None:
+            return None
+
+        source = Path(source_path)
+        if not source.exists():
+            raise FileNotFoundError(f"Source file not found: {source_path}")
+        if not source.is_file():
+            raise ValueError(f"Source path is not a file: {source_path}")
+
+        filename = source.name
+        file_size = source.stat().st_size
+        checksum = self._calculate_file_checksum(str(source))
+
+        project_file = ProjectFile(
+            filename=filename,
+            original_name=filename,
+            file_type=file_type,
+            file_size=file_size,
+            checksum=checksum,
+        )
+
+        # Prepare destination directory
+        files_dir = self.projects_dir / project_id / "files"
+        files_dir.mkdir(parents=True, exist_ok=True)
+        final_file_path = files_dir / f"{project_file.id}_{filename}"
+
+        # Copy or move at filesystem level — constant memory usage
+        if copy:
+            shutil.copy2(str(source), str(final_file_path))
+        else:
+            shutil.move(str(source), str(final_file_path))
+
+        project_file.file_path = str(final_file_path)
+
+        # Update project
+        project.files.append(project_file.to_dict())
+
+        if project.status == ProjectStatus.NEW.value and len(project.files) > 0:
+            project.status = ProjectStatus.READY.value
+
+        project.updated_at = datetime.now().isoformat()
+        self._save_project(project)
+
+        logger.info(
+            f"Added server file {filename} ({file_size:,} bytes) "
+            f"to project {project.name} via filesystem {'copy' if copy else 'move'}"
+        )
+        return project_file
+
     def _calculate_file_checksum(self, file_path: str) -> str:
         """Calculate MD5 checksum of a file using streaming."""
         app_config = config['default']
