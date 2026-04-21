@@ -75,20 +75,6 @@ cascade_psp:
 ```
 
 ### Vegetation Indices
-```yaml
-indices:
-  sensor_types: ["RGB", "Multispectral", "Hyperspectral"]
-  
-  # Scientific index classification
-  index_groups:
-    greenness: ["GNDVI", "MCARI", "MNLI", "OSAVI", "TVI", "NDVI"]
-    stress: ["SIPI2", "mARI", "PRI", "CRI"]
-    water: ["NDWI", "MSI", "WI", "NDII"]
-    pigment: ["CARI", "PSRI", "SIPI"]
-    structure: ["MSR", "MSAVI", "TVI"]
-  
-  default_indices: ["GNDVI", "MCARI", "MNLI", "OSAVI", "TVI", "SIPI2", "mARI", "NDWI", "MSI"]
-```
 
 ### Scientific Analysis
 ```yaml

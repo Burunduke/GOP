@@ -19,7 +19,6 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
     
     Args:
         project: Project data dictionary
-        
     Returns:
         Project detail layout component
     """
@@ -57,6 +56,16 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
             size_bytes /= 1024.0
             i += 1
         return f"{size_bytes:.1f} {size_names[i]}"
+    
+    # Format stage name for display
+    def get_stage_display_name(stage_key: str) -> str:
+        """Convert stage key to user-friendly display name."""
+        stage_names = {
+            "preprocessing": "Preprocessing",
+            "orthophoto": "Orthophoto Generation",
+            "Not started": "Not started"
+        }
+        return stage_names.get(stage_key, stage_key)
     
     # Заголовок проекта
     project_header = html.Div([
@@ -141,12 +150,39 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                 ], className="mb-3"),
                                 html.Div([
                                     html.Strong("Current Stage:"),
-                                    html.P(project.get("current_stage", "Not started"),
-                                           className="text-muted"),
+                                    html.Div([
+                                        html.Span(
+                                            get_stage_display_name(project.get("current_stage", "Not started") or "Not started"),
+                                            id="current-stage-display",
+                                            className="fw-bold me-2"
+                                        ),
+                                        html.Span(
+                                            f" ({project.get('progress', 0):.1f}%)" if project.get("current_stage") else "",
+                                            id="current-stage-progress",
+                                            className="text-muted"
+                                        ),
+                                        dbc.Badge(
+                                            "Done" if project.get("progress", 0) == 100 and project.get("current_stage")
+                                            else "Run" if project.get("current_stage") and project.get("status") == "run"
+                                            else "Pending" if not project.get("current_stage") and project.get("status") in ["ready", "new"]
+                                            else "Error" if project.get("status") == "error"
+                                            else "Cancelled" if project.get("status") == "cancelled"
+                                            else "Pending",
+                                            color="success" if project.get("progress", 0) == 100 and project.get("current_stage")
+                                            else "warning" if project.get("current_stage") and project.get("status") == "run"
+                                            else "secondary" if not project.get("current_stage") and project.get("status") in ["ready", "new"]
+                                            else "danger" if project.get("status") == "error"
+                                            else "dark" if project.get("status") == "cancelled"
+                                            else "secondary",
+                                            className="ms-2",
+                                            id="current-stage-badge"
+                                        )
+                                    ], className="d-flex align-items-center"),
                                 ], className="mb-3"),
                                 html.Div([
                                     html.Strong("Progress:"),
                                     dbc.Progress(
+                                        id="overview-progress-bar",
                                         value=project.get("progress", 0),
                                         max=100,
                                         label=f"{project.get('progress', 0)}%",
@@ -278,45 +314,49 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                 dbc.Card([
                     dbc.CardHeader("Processing History"),
                     dbc.CardBody([
-                        dbc.ListGroup([
-                            *[
-                                dbc.ListGroupItem([
-                                    html.Div([
+                        dbc.ListGroup(
+                            id="processing-history-list",
+                            children=[
+                                *[
+                                    dbc.ListGroupItem([
                                         html.Div([
-                                            html.H6(f"Run {i+1}", className="mb-1"),
-                                            html.P(f"Start: {format_date(run.get('start_time', ''))} | "
-                                                   f"Status: {run.get('status', 'unknown')}",
-                                                   className="mb-1 text-muted small"),
                                             html.Div([
-                                                dbc.Badge(
-                                                    "Completed" if run.get("status") == "completed"
-                                                    else "Running" if run.get("status") == "running"
-                                                    else "Error" if run.get("status") == "error"
-                                                    else "Cancelled",
-                                                    color="success" if run.get("status") == "completed"
-                                                    else "warning" if run.get("status") == "running"
-                                                    else "danger" if run.get("status") == "error"
-                                                    else "secondary",
-                                                    className="me-2"
+                                                html.H6(f"Run {i+1}", className="mb-1"),
+                                                html.P(f"Start: {format_date(run.get('start_time', ''))} | "
+                                                       f"Status: {run.get('status', 'unknown')}",
+                                                       className="mb-1 text-muted small"),
+                                                html.Div([
+                                                    dbc.Badge(
+                                                        "Done" if run.get("status") == "completed"
+                                                        else "Run" if run.get("status") == "running"
+                                                        else "Error" if run.get("status") == "error"
+                                                        else "Cancelled",
+                                                        color="success" if run.get("status") == "completed"
+                                                        else "warning" if run.get("status") == "running"
+                                                        else "danger" if run.get("status") == "error"
+                                                        else "secondary",
+                                                        className="me-2"
+                                                    ),
+                                                    html.Small(f"Duration: {run.get('total_duration_seconds', 0):.1f} sec",
+                                                              className="text-muted"),
+                                                ]),
+                                            ], className="flex-grow-1"),
+                                            html.Div([
+                                                dbc.Button(
+                                                    "View",
+                                                    id={"type": "view-run-results",
+                                                         "index": run.get("run_id", "")},
+                                                    color="outline-primary",
+                                                    size="sm"
                                                 ),
-                                                html.Small(f"Duration: {run.get('total_duration_seconds', 0):.1f} sec",
-                                                          className="text-muted"),
-                                            ]),
-                                        ], className="flex-grow-1"),
-                                        html.Div([
-                                            dbc.Button(
-                                                "View",
-                                                id={"type": "view-run-results",
-                                                     "index": run.get("run_id", "")},
-                                                color="outline-primary",
-                                                size="sm"
-                                            ),
-                                        ], className="ms-3"),
-                                    ], className="d-flex align-items-center")
-                                ])
-                                for i, run in enumerate(project.get("processing_history", []))
-                            ]
-                        ], flush=True),
+                                            ], className="ms-3"),
+                                        ], className="d-flex align-items-center")
+                                    ])
+                                    for i, run in enumerate(project.get("processing_history", []))
+                                ]
+                            ],
+                            flush=True
+                        ),
                         
                         html.Div(id="run-results-details", className="mt-4"),
                     ])

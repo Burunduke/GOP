@@ -96,7 +96,6 @@ class GOPAdapter:
                 input_path=config['input_path'],
                 output_dir=config['output_dir'],
                 sensor_type=config.get('sensor_type', 'hyperspectral'),
-                selected_indices=config.get('selected_indices', ['NDVI']),
                 use_refinement=config.get('use_refinement', True)
             )
             return result

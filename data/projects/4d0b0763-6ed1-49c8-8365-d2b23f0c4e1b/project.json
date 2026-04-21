@@ -4,7 +4,7 @@
   "description": "",
   "status": "completed",
   "created_at": "2026-04-14T05:14:51.836882",
-  "updated_at": "2026-04-14T13:06:19.579980",
+  "updated_at": "2026-04-14T14:35:15.542981",
   "files": [
     {
       "id": "1ddafff1-83c6-4fbc-bcbb-8cc82a9acf4b",
@@ -401,6 +401,119 @@
         }
       ],
       "total_duration_seconds": 13.184977,
+      "error_message": null
+    },
+    {
+      "run_id": "6e1ab5ed-ed40-4de0-a4b4-e7b0dd785e7f",
+      "start_time": "2026-04-14T14:35:04.143959",
+      "end_time": "2026-04-14T14:35:15.542981",
+      "status": "completed",
+      "config": {
+        "stages": [
+          "preprocessing",
+          "orthophoto",
+          "segmentation",
+          "indices",
+          "assessment",
+          "analysis"
+        ],
+        "preprocessing": {
+          "radiometric_correction": true,
+          "atmospheric_correction": true,
+          "denoising_method": "pca",
+          "denoising_components": 10
+        },
+        "orthophoto": {
+          "resolution": 0.1,
+          "crs": "EPSG:4326"
+        },
+        "segmentation": {
+          "model": "deeplabv3",
+          "refinement": true,
+          "min_area": 100
+        },
+        "indices": {
+          "selected_indices": [
+            "NDVI",
+            "GNDVI",
+            "MCARI",
+            "RENDVI"
+          ],
+          "custom_indices": []
+        }
+      },
+      "results": [
+        {
+          "stage": "preprocessing",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:04.147074",
+          "end_time": "2026-04-14T14:35:06.784523",
+          "duration_seconds": 2.637449,
+          "output_files": [],
+          "metrics": {
+            "snr_improvement": 11.67,
+            "bands_processed": 174,
+            "correction_applied": "radiometric + atmospheric"
+          },
+          "error_message": null
+        },
+        {
+          "stage": "orthophoto",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:06.785897",
+          "end_time": "2026-04-14T14:35:09.327527",
+          "duration_seconds": 2.54163,
+          "output_files": [],
+          "metrics": {
+            "resolution_m": 0.1,
+            "coverage_area_ha": 16.29,
+            "crs": "EPSG:4326",
+            "tiles_generated": 6
+          },
+          "error_message": null
+        },
+        {
+          "stage": "segmentation",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:09.327975",
+          "end_time": "2026-04-14T14:35:10.990926",
+          "duration_seconds": 1.662951,
+          "output_files": [],
+          "metrics": {},
+          "error_message": null
+        },
+        {
+          "stage": "indices",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:10.992030",
+          "end_time": "2026-04-14T14:35:12.691636",
+          "duration_seconds": 1.699606,
+          "output_files": [],
+          "metrics": {},
+          "error_message": null
+        },
+        {
+          "stage": "assessment",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:12.693028",
+          "end_time": "2026-04-14T14:35:14.285170",
+          "duration_seconds": 1.592142,
+          "output_files": [],
+          "metrics": {},
+          "error_message": null
+        },
+        {
+          "stage": "analysis",
+          "status": "completed",
+          "start_time": "2026-04-14T14:35:14.286835",
+          "end_time": "2026-04-14T14:35:15.541071",
+          "duration_seconds": 1.254236,
+          "output_files": [],
+          "metrics": {},
+          "error_message": null
+        }
+      ],
+      "total_duration_seconds": 11.399022,
       "error_message": null
     }
   ],

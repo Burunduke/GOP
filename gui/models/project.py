@@ -12,8 +12,8 @@ class ProjectStatus(str, Enum):
     """Project status enumeration."""
     NEW = "new"                  # New project, no files uploaded
     READY = "ready"              # Files uploaded, ready for processing
-    PROCESSING = "processing"    # Processing in progress
-    COMPLETED = "completed"      # Processing completed
+    RUN = "run"                  # Processing in progress (replaces PROCESSING)
+    DONE = "done"                # Processing completed (replaces COMPLETED)
     ERROR = "error"              # Processing error
     CANCELLED = "cancelled"      # Processing cancelled
 
@@ -238,8 +238,8 @@ class Project:
         status_names = {
             ProjectStatus.NEW.value: "New",
             ProjectStatus.READY.value: "Ready for processing",
-            ProjectStatus.PROCESSING.value: "Processing",
-            ProjectStatus.COMPLETED.value: "Completed",
+            ProjectStatus.RUN.value: "Run",
+            ProjectStatus.DONE.value: "Done",
             ProjectStatus.ERROR.value: "Error",
             ProjectStatus.CANCELLED.value: "Cancelled",
         }
@@ -254,8 +254,8 @@ class Project:
         status_colors = {
             ProjectStatus.NEW.value: "secondary",
             ProjectStatus.READY.value: "info",
-            ProjectStatus.PROCESSING.value: "warning",
-            ProjectStatus.COMPLETED.value: "success",
+            ProjectStatus.RUN.value: "warning",
+            ProjectStatus.DONE.value: "success",
             ProjectStatus.ERROR.value: "danger",
             ProjectStatus.CANCELLED.value: "dark",
         }

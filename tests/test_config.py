@@ -34,10 +34,6 @@ class TestConfig(unittest.TestCase):
                 "preliminary_model": "deeplabv3plus",
                 "refinement_model": "cascade_psp",
             },
-            "indices": {
-                "default_indices": ["GNDVI", "NDWI", "MCARI"],
-                "normalization_method": "minmax",
-            },
             "output": {"save_intermediate": False, "create_visualizations": True},
         }
 
@@ -62,9 +58,6 @@ class TestConfig(unittest.TestCase):
             config.config["processing"]["hyperspectral"]["radiometric_correction"], True
         )
         self.assertEqual(config.config["segmentation"]["compression_ratio"], 0.125)
-        self.assertEqual(
-            config.config["indices"]["default_indices"], ["GNDVI", "NDWI", "MCARI"]
-        )
 
     def test_config_initialization_without_path(self) -> None:
         """Test configuration initialization without path (uses default configuration)"""
@@ -73,7 +66,6 @@ class TestConfig(unittest.TestCase):
         # Check presence of main sections
         self.assertIn("processing", config.config)
         self.assertIn("segmentation", config.config)
-        self.assertIn("indices", config.config)
         self.assertIn("output", config.config)
 
     def test_get_config_function(self) -> None:

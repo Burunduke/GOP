@@ -1,6 +1,6 @@
 # Руководство пользователя GOP
 
-Это руководство поможет вам начать работу с GOP для обработки гиперспектральных данных и анализа растительности.
+Это руководство поможет вам начать работу с GOP для обработки гиперспектральных данных.
 
 ## 🚀 Быстрый старт
 
@@ -26,7 +26,6 @@ python examples/basic_processing.py
 #### Гиперспектральные данные
 - **BIL/HDR** - Band Interleaved by Line с заголовком ENVI
 - **TIFF** - Многоканальные TIFF файлы
-- **DAT** - Сырые бинарные данные
 
 #### Мультиспектральные данные
 - **GeoTIFF** - Геопривязанные TIFF файлы
@@ -59,8 +58,7 @@ pipeline = Pipeline()
 results = pipeline.process(
     input_path="data/hyperspectral/image.bil",
     output_dir="results",
-    sensor_type="Hyperspectral",
-    indices=["NDVI", "GNDVI", "NDWI"]
+    sensor_type="Hyperspectral"
 )
 ```
 
@@ -68,18 +66,15 @@ results = pipeline.process(
 
 ```python
 config = {
-    "preprocessing": {
-        "radiometric_correction": True,
-        "atmospheric_correction": True,
-        "denoising": "wavelet"
+    "processing": {
+        "max_image_size": 15000,
+        "batch_size": 32
     },
-    "orthophoto": {
-        "method": "opendronemap",
-        "resolution": 0.1
-    },
-    "segmentation": {
-        "model": "deeplabv3+",
-        "refinement": True
+    "performance": {
+        "cache": {
+            "enabled": True,
+            "max_cache_size": "1GB"
+        }
     }
 }
 
@@ -90,48 +85,28 @@ results = pipeline.process(
 )
 ```
 
-## 🌱 Вегетационные индексы
-
-GOP поддерживает более 20 вегетационных индексов:
-
-### Индексы озеленения
-- **NDVI** - Нормализованный разностный вегетационный индекс
-- **GNDVI** - Зеленый нормализованный разностный индекс
-- **OSAVI** - Оптимизированный почвенный индекс
-
-### Индексы водного режима
-- **NDWI** - Нормализованный разностный водный индекс
-- **MSI** - Индекс влажности почвы
-
-### Индексы стресса
-- **PRI** - Фотохимический индекс отражения
-- **CRI** - Индекс каротиноидов
-
 ## 📈 Анализ результатов
 
 ### Визуализация
 
 ```python
-from src.utils.visualization import plot_vegetation_indices
+from src.utils.visualization import create_comparison_plot
 
-# Визуализация индексов
-plot_vegetation_indices(
-    results['indices'],
-    output_path="results/indices_plot.png"
+# Визуализация данных
+create_comparison_plot(
+    data=results['processed_data'],
+    output_path="results/comparison_plot.png"
 )
 ```
 
-### Статистический анализ
+### Сохранение результатов
 
 ```python
-from src.utils.analysis import StatisticalAnalyzer
+# Сохранение результатов в JSON
+pipeline.save_results(results, "results/processing_results.json")
 
-analyzer = StatisticalAnalyzer(results['indices'])
-stats = analyzer.calculate_statistics()
-
-print("Статистика индексов:")
-for index, values in stats.items():
-    print(f"{index}: mean={values['mean']:.3f}, std={values['std']:.3f}")
+# Загрузка сохраненных результатов
+loaded_results = pipeline.load_results("results/processing_results.json")
 ```
 
 ## 🌐 Веб-интерфейс
@@ -144,33 +119,14 @@ for index, values in stats.items():
 python main.py
 ```
 
-Или напрямую:
-
-```bash
-python gui.py
-```
-
 После запуска откройте браузер и перейдите по адресу `http://localhost:8050`
 
 ### Основные возможности веб-интерфейса
 
 - **Загрузка данных**: Поддержка различных форматов гиперспектральных данных
-- **Обработка**: Автоматическая обработка и коррекция данных
-- **Расчет индексов**: Интерактивный выбор вегетационных индексов
+- **Обработка**: Загрузка данных и создание ортофотопланов
 - **Визуализация**: Графическое представление результатов
 - **Экспорт**: Сохранение результатов в различных форматах
-
-```bash
-# Показать справку
-python cli.py --help
-
-# Обработка с настройками
-python cli.py process \
-    --input data.hdr \
-    --output results/ \
-    --indices ndvi,gndvi,ndwi \
-    --config config.yaml
-```
 
 ## 🎯 Примеры использования
 
@@ -226,10 +182,10 @@ for filename in os.listdir(input_dir):
 #### Ошибки загрузки данных
 
 ```python
-from src.utils.file_utils import validate_hyperspectral_file
+from src.utils.file_utils import validate_file_path
 
 try:
-    validate_hyperspectral_file("data/image.bil")
+    validate_file_path("data/image.bil")
     print("Файл валиден")
 except Exception as e:
     print(f"Ошибка: {e}")
@@ -243,17 +199,6 @@ results = pipeline.process(
     input_path="large_image.bil",
     output_dir="results",
     chunk_size=1024  # Обработка по частям 1024x1024
-)
-```
-
-#### Медленная обработка
-
-```python
-# Использование GPU ускорения
-results = pipeline.process(
-    input_path="data/image.bil",
-    output_dir="results",
-    use_gpu=True
 )
 ```
 
@@ -284,7 +229,7 @@ logger.info("Обработка завершена")
 A: BIL/HDR для гиперспектральных данных, GeoTIFF для мультиспектральных.
 
 **Q: Можно ли обрабатывать данные без GPU?**
-A: Да, но обработка больших данных будет медленнее.
+A: Да, обработка данных не требует GPU.
 
 **Q: Как настроить параметры обработки?**
 A: Используйте конфигурационный файл или передавайте параметры в метод process().

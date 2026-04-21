@@ -85,7 +85,6 @@ class Pipeline:
             output_dir: Directory for saving results
             sensor_type: Sensor type ('RGB', 'Multispectral', 'Hyperspectral')
             segmentation_mask: Path to segmentation mask (if None, will be created)
-            selected_indices: List of indices to calculate
             use_refinement: Use boundary refinement for segmentation
             compression_ratio: Compression ratio for segmentation
 

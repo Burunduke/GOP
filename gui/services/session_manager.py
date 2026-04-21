@@ -53,7 +53,6 @@ class SessionManager:
             'preferences': {
                 'theme': 'light',
                 'language': 'ru',
-                'default_indices': ['NDVI', 'EVI']
             },
             'uploaded_files': [],
             'processing_history': []

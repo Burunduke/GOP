@@ -440,7 +440,7 @@ class ProjectManager:
         if project is None:
             return None
         
-        if project.status == ProjectStatus.PROCESSING.value:
+        if project.status == ProjectStatus.RUN.value:
             logger.warning(f"Проект {project.name} уже обрабатывается")
             return None
         
@@ -454,7 +454,7 @@ class ProjectManager:
         results_dir.mkdir(parents=True, exist_ok=True)
         
         # Обновляем проект
-        project.status = ProjectStatus.PROCESSING.value
+        project.status = ProjectStatus.RUN.value
         project.progress = 0.0
         project.current_stage = PipelineStage.PREPROCESSING.value
         project.processing_history.append(history.to_dict())
@@ -533,7 +533,7 @@ class ProjectManager:
         now = datetime.now().isoformat()
         
         if success:
-            project.status = ProjectStatus.COMPLETED.value
+            project.status = ProjectStatus.DONE.value
             project.progress = 100.0
         else:
             project.status = ProjectStatus.ERROR.value
@@ -576,7 +576,7 @@ class ProjectManager:
         if project is None:
             return None
         
-        if project.status != ProjectStatus.PROCESSING.value:
+        if project.status != ProjectStatus.RUN.value:
             return project
         
         now = datetime.now().isoformat()

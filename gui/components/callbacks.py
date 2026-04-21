@@ -24,6 +24,16 @@ from gui.models.project import Project, ProjectStatus, PipelineStage
 logger = logging.getLogger(__name__)
 
 
+def get_stage_display_name(stage_key: str) -> str:
+    """Convert stage key to user-friendly display name."""
+    stage_names = {
+        "preprocessing": "Preprocessing",
+        "orthophoto": "Orthophoto Generation",
+        "Not started": "Not started"
+    }
+    return stage_names.get(stage_key, stage_key)
+
+
 def register_callbacks(
     app: dash.Dash,
     project_manager: Optional[Any] = None,
@@ -245,7 +255,13 @@ def register_callbacks(
     @app.callback(
         [Output("project-processing-progress", "value"),
          Output("project-processing-progress", "label"),
-         Output("project-processing-progress", "style")],
+         Output("project-processing-progress", "style"),
+         Output("overview-progress-bar", "value"),
+         Output("overview-progress-bar", "label"),
+         Output("current-stage-display", "children"),
+         Output("current-stage-progress", "children"),
+         Output("current-stage-badge", "children"),
+         Output("current-stage-badge", "color")],
         Input("project-start-processing-btn", "n_clicks"),
         State("url", "pathname"),
         prevent_initial_call=True,
@@ -258,7 +274,7 @@ def register_callbacks(
         project_id = pathname.split("/project/")[-1]
         if project_id:
             pipeline_executor.execute_project(project_id)
-            return 0, "Запуск...", {"display": "block"}
+            return 0, "Запуск...", {"display": "block"}, 0, "Запуск...", "Initializing...", "", "Run", "warning"
         
         raise PreventUpdate
     
@@ -283,20 +299,69 @@ def register_callbacks(
     
     # === 11. Processing progress polling ===
     @app.callback(
-        Output("page-content", "children", allow_duplicate=True),
+        [Output("overview-progress-bar", "value"),
+         Output("overview-progress-bar", "label"),
+         Output("project-processing-progress", "value"),
+         Output("project-processing-progress", "label"),
+         Output("current-stage-display", "children"),
+         Output("current-stage-progress", "children"),
+         Output("current-stage-badge", "children"),
+         Output("current-stage-badge", "color"),
+         Output("progress-interval", "disabled")],
         Input("progress-interval", "n_intervals"),
         State("url", "pathname"),
         prevent_initial_call=True,
     )
     def update_processing_progress(n_intervals, pathname):
-        """Poll for processing progress updates."""
+        """Poll for processing progress updates and synchronize progress bars."""
         if not pathname or not pathname.startswith("/project/") or not project_manager:
             raise PreventUpdate
         
         project_id = pathname.split("/project/")[-1]
         project = project_manager.get_project(project_id)
-        if project and project.status == ProjectStatus.PROCESSING.value:
-            return create_project_detail(project.to_dict())
+        if project:
+            progress_value = project.progress
+            progress_label = f"{progress_value:.1f}%"
+            
+            # Get current stage information
+            current_stage = get_stage_display_name(project.current_stage or "Not started")
+            stage_progress = f" ({progress_value:.1f}%)" if project.current_stage else ""
+            
+            # Determine badge text and color
+            if progress_value == 100 and project.current_stage:
+                badge_text = "Done"
+                badge_color = "success"
+            elif project.current_stage and project.status == "run":
+                badge_text = "Run"
+                badge_color = "warning"
+            elif not project.current_stage and project.status in ["ready", "new"]:
+                badge_text = "Pending"
+                badge_color = "secondary"
+            elif project.status == "error":
+                badge_text = "Error"
+                badge_color = "danger"
+            elif project.status == "cancelled":
+                badge_text = "Cancelled"
+                badge_color = "dark"
+            else:
+                badge_text = "Pending"
+                badge_color = "secondary"
+            
+            # Check if processing is complete to disable interval
+            from gui.models.project import ProjectStatus
+            interval_disabled = project.status != ProjectStatus.RUN.value
+            
+            return (
+                progress_value,      # overview progress value
+                progress_label,      # overview progress label
+                progress_value,      # processing progress value
+                progress_label,      # processing progress label
+                current_stage,       # current stage display
+                stage_progress,      # current stage progress
+                badge_text,          # badge text
+                badge_color,         # badge color
+                interval_disabled    # disable interval when processing is complete
+            )
         
         raise PreventUpdate
     
@@ -554,12 +619,79 @@ def register_callbacks(
     # Прогресс обработки
     @app.callback(
         Output('progress-interval', 'disabled'),
-        [Input('start-processing-btn', 'n_clicks')],
+        [Input('start-processing-btn', 'n_clicks'),
+         Input('project-start-processing-btn', 'n_clicks')],
         prevent_initial_call=True
     )
-    def toggle_progress_interval(start_click: Optional[int]) -> bool:
+    def toggle_progress_interval(modal_start_click: Optional[int],
+                                  project_start_click: Optional[int]) -> bool:
         """Enable/disable progress interval."""
-        if start_click:
+        if modal_start_click or project_start_click:
             return False  # Enable interval
         return True  # Disable interval
 
+    # === Dynamic results history updates ===
+    @app.callback(
+        Output("processing-history-list", "children"),
+        Input("progress-interval", "n_intervals"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def update_results_history(n_intervals, pathname):
+        """Update results history dynamically without page refresh."""
+        if not pathname or not pathname.startswith("/project/") or not project_manager:
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        project = project_manager.get_project(project_id)
+        if project:
+            # Format date helper function
+            def format_date(date_str: str) -> str:
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    return dt.strftime("%Y-%m-%d %H:%M")
+                except:
+                    return date_str
+            
+            # Create history items
+            history_items = []
+            for i, run in enumerate(project.processing_history):
+                item = dbc.ListGroupItem([
+                    html.Div([
+                        html.Div([
+                            html.H6(f"Run {i+1}", className="mb-1"),
+                            html.P(f"Start: {format_date(run.get('start_time', ''))} | "
+                                   f"Status: {run.get('status', 'unknown')}",
+                                   className="mb-1 text-muted small"),
+                            html.Div([
+                                dbc.Badge(
+                                    "Completed" if run.get("status") == "completed"
+                                    else "Running" if run.get("status") == "running"
+                                    else "Error" if run.get("status") == "error"
+                                    else "Cancelled",
+                                    color="success" if run.get("status") == "completed"
+                                    else "warning" if run.get("status") == "running"
+                                    else "danger" if run.get("status") == "error"
+                                    else "secondary",
+                                    className="me-2"
+                                ),
+                                html.Small(f"Duration: {run.get('total_duration_seconds', 0):.1f} sec",
+                                          className="text-muted"),
+                            ]),
+                        ], className="flex-grow-1"),
+                        html.Div([
+                            dbc.Button(
+                                "View",
+                                id={"type": "view-run-results",
+                                     "index": run.get("run_id", "")},
+                                color="outline-primary",
+                                size="sm"
+                            ),
+                        ], className="ms-3"),
+                    ], className="d-flex align-items-center")
+                ])
+                history_items.append(item)
+            
+            return history_items
+        
+        raise PreventUpdate

@@ -8,13 +8,11 @@ This directory contains comprehensive examples demonstrating the functionality o
 
 1. **[`basic_processing.py`](basic_processing.py)** - Basic hyperspectral data processing workflow
    - Demonstration of the main processing pipeline
-   - Vegetation index calculation
    - Scientific analysis of results
    - Data quality assessment
 
 2. **[`scientific_analysis.py`](scientific_analysis.py)** - Scientific analysis pipeline
    - Detailed statistical analysis
-   - Correlation analysis between indices
    - Spatial pattern analysis
    - Scientific report generation
 
@@ -23,13 +21,12 @@ This directory contains comprehensive examples demonstrating the functionality o
 3. **[`hyperspectral_real_data.py`](hyperspectral_real_data.py)** - Advanced hyperspectral data processing
    - Comparison of data correction methods
    - Spectral analysis and visualization
-   - Specialized hyperspectral index calculation
    - RGB composite creation
 
-4. **[`orthophoto_analysis.py`](orthophoto_analysis.py)** - Orthophoto analysis and vegetation indices
+4. **[`orthophoto_analysis.py`](orthophoto_analysis.py)** - Orthophoto analysis
    - Orthophoto validation and processing
    - Image segmentation
-   - Spatial index analysis
+   - Spatial analysis
    - Plant condition classification
 
 5. **[`integration_examples.py`](integration_examples.py)** - Integration with other scientific libraries
@@ -42,7 +39,6 @@ This directory contains comprehensive examples demonstrating the functionality o
 
 6. **[`interactive_analysis.ipynb`](interactive_analysis.ipynb)** - Jupyter notebook with interactive examples
    - Interactive spectral analysis
-   - Vegetation index visualization
    - Interactive plots and widgets
    - Analysis result export
 
@@ -75,7 +71,6 @@ Examples demonstrate:
 - Efficient thread-safe processing
 - Parallel processing capabilities
 - Caching mechanisms for repeated operations
-- Optimized vegetation index calculations
 
 ## Getting Started
 

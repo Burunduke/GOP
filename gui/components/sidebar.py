@@ -46,7 +46,12 @@ def create_sidebar(
         
         # Control panel header
         html.Div([
-            html.H4("Control Panel", className="mb-3 text-center"),
+            dbc.NavLink(
+                html.H4("Control Panel", className="mb-3 text-center text-decoration-none text-dark"),
+                href="/dashboard",
+                className="text-decoration-none",
+                id="sidebar-dashboard"
+            ),
             dbc.Button(
                 [html.I(className="fas fa-plus me-2"), "New Project"],
                 id="new-project-btn",

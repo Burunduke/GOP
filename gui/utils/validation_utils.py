@@ -84,18 +84,6 @@ def validate_processing_config(config: Dict[str, Any]) -> Dict[str, Any]:
         if config['sensor_type'] not in valid_sensor_types:
             result['errors'].append(f'Invalid sensor type. Valid: {", ".join(valid_sensor_types)}')
             result['valid'] = False
-    
-    # Validate vegetation indices
-    if 'selected_indices' in config:
-        if not isinstance(config['selected_indices'], list):
-            result['errors'].append('Indices must be provided as a list')
-            result['valid'] = False
-        else:
-            valid_indices = ['NDVI', 'EVI', 'SAVI', 'MSAVI', 'GNDVI', 'NDRE']
-            for index in config['selected_indices']:
-                if index not in valid_indices:
-                    result['warnings'].append(f'Index {index} may not be supported by the selected sensor type')
-    
     # Validate processing options
     if 'processing_options' in config:
         valid_options = ['atmospheric_correction', 'geometric_correction']
@@ -113,12 +101,6 @@ def validate_processing_config(config: Dict[str, Any]) -> Dict[str, Any]:
                 result['errors'].append('Cloud threshold must be a number between 0 and 1')
                 result['valid'] = False
         
-        if 'min_vegetation_coverage' in quality_params:
-            coverage = quality_params['min_vegetation_coverage']
-            if not isinstance(coverage, (int, float)) or not (0 <= coverage <= 1):
-                result['errors'].append('Minimum vegetation coverage must be a number between 0 and 1')
-                result['valid'] = False
-    
     return result
 
 

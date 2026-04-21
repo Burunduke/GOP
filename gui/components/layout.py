@@ -152,21 +152,6 @@ def _create_modals() -> html.Div:
                     ]),
                     dbc.Row([
                         dbc.Col([
-                            dbc.Label("Vegetation Indices", html_for="indices-select"),
-                            dcc.Dropdown(
-                                id="indices-select",
-                                options=[
-                                    {"label": "NDVI", "value": "NDVI"},
-                                    {"label": "EVI", "value": "EVI"},
-                                    {"label": "SAVI", "value": "SAVI"},
-                                ],
-                                value=["NDVI", "EVI"],
-                                multi=True
-                            ),
-                        ]),
-                    ], className="mt-3"),
-                    dbc.Row([
-                        dbc.Col([
                             dbc.Checklist(
                                 id="processing-options",
                                 options=[

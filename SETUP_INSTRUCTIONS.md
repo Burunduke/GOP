@@ -8,7 +8,6 @@
 - Complete scientific library architecture with modular design
 - Hyperspectral data processing pipeline with radiometric and atmospheric correction
 - Advanced noise reduction algorithms (PCA, MNF, wavelets)
-- Vegetation index calculation (NDVI, GNDVI, MCARI, MNLI, OSAVI, TVI, SIPI2, mARI, PRI, CRI, NDWI, MSI, WI, NDII)
 - Image segmentation framework with model stubs
 - Orthophoto processing with OpenDroneMap integration
 - Web interface based on Dash/Flask
@@ -292,7 +291,6 @@ pytest --cov=src tests/
 
 # Run specific test categories
 pytest tests/test_processing.py
-pytest tests/test_indices.py
 pytest tests/test_segmentation.py
 ```
 

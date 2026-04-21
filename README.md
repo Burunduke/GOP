@@ -3,16 +3,13 @@
 [![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/indykovdm/GOP/actions)
-[![Test Coverage](https://img.shields.io/badge/coverage-85%25-yellow.svg)](https://github.com/indykovdm/GOP/actions)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Scientific](https://img.shields.io/badge/purpose-scientific-orange.svg)](https://github.com/indykovdm/GOP)
 [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](docs/api/_build/html/index.html)
-[![Performance](https://img.shields.io/badge/performance-optimized-success.svg)](PHASE_3_COMPLETION_REPORT.md)
-[![Security](https://img.shields.io/badge/security-audited-success.svg)](analysis/dependency_security_analysis.md)
 
-**Version 2.0.0 - Clean Scientific Architecture with Performance Optimization**
+**Version 2.0.0 - Scientific Data Processing Foundation**
 
-Scientific library for hyperspectral data processing and plant condition analysis using vegetation indices. Developed based on modern scientific methods and remote sensing data processing algorithms.
+Scientific library for hyperspectral data processing with a focus on data loading and orthophoto creation. Provides the foundation for geospatial data processing workflows.
 
 ## 🚀 Quick Start
 
@@ -50,61 +47,41 @@ python examples/basic_processing.py
 - **[Technical Notes](docs/research/TECHNICAL_NOTES.md)** - Technical research documentation
 - **[API Reference](docs/api/_build/html/index.html)** - Complete API documentation
 
-## ✨ Key Features
+## ✨ Current Features
 
-### 🎯 Scientific Processing
-- **Hyperspectral data processing** - Advanced spectral analysis and correction
-- **Vegetation indices** - 20+ scientific indices for plant analysis
-- **Orthophoto analysis** - Geospatial processing and segmentation
-- **Scientific validation** - Data quality assessment and validation
+### 🎯 Data Processing Foundation
+- **Hyperspectral data loading** - Support for BIL/HDR and TIFF formats
+- **Orthophoto creation** - Integration with OpenDroneMap and GDAL
+- **Data validation** - Comprehensive input validation and error handling
+- **Configuration system** - Flexible YAML-based configuration
 
-### 🚀 Performance Optimization
-- **Memory efficiency** - Stream processing of large datasets
-- **Parallel processing** - Multi-threading support for fast computations
-- **Intelligent caching** - Automatic caching of intermediate results
-- **Optimized algorithms** - Vectorized operations and efficient data structures
-
-### 🔒 Security and Quality
+### 🔒 Code Quality
 - **Type safety** - Full type annotations throughout codebase
 - **Error handling** - Robust exception hierarchy for stable operation
 - **Input validation** - Strict data validation and sanitization
-- **Security audit** - Dependency security analysis and vulnerability scanning
+- **Modular architecture** - Clean separation of concerns
 
-### 📊 Scientific Analysis
-- **Statistical analysis** - Descriptive statistics and correlation analysis
-- **Spatial analysis** - Moran's I, hotspot analysis, fragmentation indices
-- **Quality metrics** - Signal-to-noise ratio, outlier detection
-- **Scientific reports** - Report generation in JSON/CSV/Excel formats
+### 📊 Core Infrastructure
+- **Pipeline architecture** - Extensible processing pipeline design
+- **Caching system** - Basic caching for performance optimization
+- **Logging system** - Comprehensive logging for debugging
+- **Utility functions** - Mathematical and file operation utilities
 
 ## 🏗️ Architecture
 
 ### Core Modules
 - **`src/core/`** - Main processing pipeline and configuration
-- **`src/processing/`** - Data processing algorithms and corrections
-- **`src/indices/`** - Vegetation index calculations
-- **`src/segmentation/`** - Image segmentation algorithms
+- **`src/processing/`** - Data processing algorithms
+  - **`hyperspectral/`** - Hyperspectral data loading and validation
+  - **`orthophoto/`** - Orthophoto creation utilities
 - **`src/utils/`** - Helper functions and utilities
 
-### Enhanced Utilities (Refactoring)
+### Enhanced Utilities
 - **`math_utils`** - Safe mathematical operations with error handling
 - **`validators`** - Comprehensive data validation system
 - **`gdal_utils`** - GDAL integration utilities
 - **`image_utils`** - Image processing utilities
 - **`exceptions`** - Hierarchical exception system
-
-## 📈 Performance Improvements
-
-### Phase 3 Refactoring Results
-- **Processing speed**: 40-60% faster execution
-- **Memory usage**: 30-50% reduction in peak memory consumption
-- **Caching efficiency**: 70% hit rate for repeated operations
-- **Parallel scaling**: Linear scaling up to 8 cores
-
-### Quality Improvements
-- **Test coverage**: 85%+ code coverage
-- **Type coverage**: 95%+ type annotation coverage
-- **Code quality**: Improved maintainability and readability
-- **Documentation**: Complete API and usage documentation
 
 ## 🔧 Configuration
 
@@ -135,60 +112,19 @@ from src.core.pipeline import Pipeline
 pipeline = Pipeline()
 results = pipeline.process(
     input_path="data/sample.bil",
-    sensor_type='Hyperspectral',
-    selected_indices=['GNDVI', 'MCARI', 'NDWI']
+    output_dir="results"
 )
 ```
 
-### Scientific Analysis
+### Data Loading
 ```python
 from src.processing.hyperspectral import HyperspectralProcessor
 
 processor = HyperspectralProcessor()
-analysis = processor.analyze_spectral_properties(data)
+data = processor.load_data("data/sample.bil")
 ```
 
 See [Examples Directory](examples/README.md) for comprehensive examples.
-
-## 📊 Scientific Applications
-
-### Agriculture
-- Crop health monitoring
-- Precision agriculture
-- Yield prediction
-- Stress detection
-
-### Environmental Research
-- Vegetation mapping
-- Biodiversity assessment
-- Climate change studies
-- Ecosystem monitoring
-
-### Forestry
-- Forest health assessment
-- Species classification
-- Biomass estimation
-- Deforestation monitoring
-
-## 🔬 Research Capabilities
-
-### Spectral Analysis
-- Atmospheric correction methods
-- Radiometric calibration
-- Noise reduction algorithms
-- Spectral resampling
-
-### Spatial Analysis
-- Geostatistical methods
-- Pattern recognition
-- Hotspot detection
-- Fragmentation analysis
-
-### Machine Learning Integration
-- scikit-learn compatibility
-- Feature engineering
-- Model training pipelines
-- Prediction workflows
 
 ## 🛠️ Development
 
@@ -199,9 +135,6 @@ pytest tests/
 
 # Run with coverage
 pytest --cov=src tests/
-
-# Run performance benchmarks
-pytest tests/benchmarks/
 ```
 
 ### Code Quality
@@ -220,30 +153,23 @@ flake8 src/ tests/
 ```bash
 # Generate API documentation
 cd docs/api && make html
-
-# Check documentation
-cd docs && python check_docs.py
 ```
 
 ## 📋 Requirements
 
 ### Core Dependencies
 All dependencies included in [`requirements.txt`](requirements.txt):
-- **Scientific libraries**: NumPy, SciPy, pandas, matplotlib
-- **Image processing**: OpenCV, scikit-image, scikit-learn, PyTorch
-- **Geodata**: GDAL, rasterio, GeoPandas, Fiona
-- **Hyperspectral processing**: spectral
-- **Visualization**: seaborn, plotly
-- **GUI**: Dash, Flask, Dash Bootstrap Components
-- **Databases**: SQLAlchemy, Redis, psycopg2-binary
-- **Utilities**: PyYAML, tqdm, python-dotenv
+- **Scientific libraries**: NumPy, SciPy
+- **Image processing**: OpenCV, scikit-image
+- **Geodata**: GDAL, rasterio
+- **GUI**: Dash, Flask
+- **Utilities**: PyYAML, tqdm
 
 ### Development Dependencies
-- **Testing**: pytest, pytest-cov, pytest-mock
-- **Formatting**: black, flake8, isort, pylint
-- **Typing**: mypy, types-PyYAML
-- **Documentation**: sphinx, sphinx-rtd-theme
-- **Security**: bandit, safety, pip-audit
+- **Testing**: pytest, pytest-cov
+- **Formatting**: black, flake8
+- **Typing**: mypy
+- **Documentation**: sphinx
 
 ### System Requirements
 - **Python**: 3.9+
@@ -256,7 +182,6 @@ All dependencies included in [`requirements.txt`](requirements.txt):
 We welcome contributions! Please review:
 - [Contributing Guide](docs/api/contributing.rst)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Issue Templates](.github/ISSUE_TEMPLATE/)
 
 ### Development Environment Setup
 ```bash
@@ -284,8 +209,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Scientific References
 - Mitrofanov E.P., Petrushin A.F. "Use of aerial photography data for precision agricultural technologies"
-- Chen L. et al. "Rethinking Atrous Convolution for Semantic Image Segmentation"
-- "CascadePSP: Toward Class-Agnostic and Very High-Resolution Segmentation via Global and Local Refinement"
 
 ### Technical Acknowledgments
 - OpenDroneMap community
@@ -301,4 +224,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**GOP v2.0.0** - Refactored for performance, security, and scientific excellence.
+**GOP v2.0.0** - Foundation for scientific geospatial data processing.

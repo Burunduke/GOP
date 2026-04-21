@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument(
         "--module",
         "-m",
-        help="Run specific test module (e.g., test_indices)",
+        help="Run specific test module",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument(

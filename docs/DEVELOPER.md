@@ -37,8 +37,6 @@ pytest tests/test_config.py
 
 - **`src.core`** - Основные классы и конвейеры
 - **`src.processing`** - Обработка гиперспектральных данных и ортофотопланов
-- **`src.indices`** - Расчет вегетационных индексов
-- **`src.segmentation`** - Сегментация изображений
 - **`src.utils`** - Вспомогательные функции
 
 ### Ключевые классы
@@ -52,29 +50,25 @@ from src.core.pipeline import Pipeline
 # Создать экземпляр конвейера
 pipeline = Pipeline()
 
-# Обработать данные с научным анализом
+# Обработать данные
 results = pipeline.process(
     input_path="data/sample.bil",
     output_dir="results",
-    sensor_type='Hyperspectral',
-    selected_indices=['GNDVI', 'MCARI', 'NDWI']
+    sensor_type='Hyperspectral'
 )
 ```
 
 #### HyperspectralProcessor
-Продвинутый процессор для гиперспектральных данных с научными коррекциями.
+Процессор для загрузки гиперспектральных данных.
 
 ```python
 from src.processing.hyperspectral import HyperspectralProcessor
 
 processor = HyperspectralProcessor()
-processed_data = processor.process_data(
-    data=hyperspectral_data,
-    config=processing_config
-)
+data = processor.load_data("data/sample.bil")
 ```
 
-#### Улучшенные утилитарные модули (Рефакторинг)
+#### Улучшенные утилитарные модули
 
 ##### Математические утилиты
 ```python
@@ -87,11 +81,11 @@ normalized = safe_normalize(values, value_range=(0, 100))
 
 ##### Фреймворк валидации
 ```python
-from src.utils.validators import validate_data_range, validate_spectral_data
+from src.utils.validators import validate_data_range, validate_file_path
 
 # Комплексная валидация данных
 validate_data_range(data, min_value=0, max_value=10000)
-validate_spectral_data(spectral_data, expected_bands=224)
+validate_file_path("data/sample.bil")
 ```
 
 ##### Иерархия исключений
@@ -112,27 +106,25 @@ except ValidationError as e:
 Весь новый код должен включать полные аннотации типов:
 
 ```python
-from typing import List, Dict, Optional, Union
+from typing import Dict, Optional, Union
 import numpy as np
 
-def calculate_indices(
+def process_data(
     data: np.ndarray,
-    indices: List[str],
-    sensor_type: str = "Hyperspectral"
-) -> Dict[str, np.ndarray]:
-    """Рассчитать вегетационные индексы с типобезопасностью.
+    config: Optional[Dict] = None
+) -> Dict[str, Union[str, np.ndarray]]:
+    """Обработать данные с типобезопасностью.
     
     Args:
-        data: Входной массив спектральных данных
-        indices: Список названий индексов для расчета
-        sensor_type: Тип данных сенсора
+        data: Входной массив данных
+        config: Опциональная конфигурация
         
     Returns:
-        Словарь, сопоставляющий названия индексов с рассчитанными значениями
+        Словарь с результатами обработки
         
     Raises:
         ValidationError: Если входные данные недействительны
-        ProcessingError: Если расчет не удался
+        ProcessingError: Если обработка не удалась
     """
     # Реализация
     pass
@@ -177,7 +169,6 @@ def process_large_dataset(
 #### Кэширование
 ```python
 from functools import lru_cache
-from src.processing.hyperspectral.cache import ProcessingCache
 
 @lru_cache(maxsize=100)
 def calculate_expensive_operation(
@@ -226,9 +217,9 @@ class TestPipelineIntegration:
             output_dir="/tmp/results"
         )
         
-        assert 'orthophoto_path' in results
-        assert 'segmentation_mask' in results
-        assert 'vegetation_indices' in results
+        assert 'input_path' in results
+        assert 'output_dir' in results
+        assert 'processed_data' in results
 ```
 
 ## 🔧 Стандарты качества кода
@@ -254,13 +245,6 @@ mypy src/
 flake8 src/ tests/
 ```
 
-### Сканирование безопасности
-
-Используйте Safety для безопасности зависимостей:
-```bash
-safety check
-```
-
 ## 📊 Разработка производительности
 
 ### Бенчмаркинг
@@ -271,14 +255,13 @@ import pytest
 import numpy as np
 
 @pytest.mark.benchmark
-def test_index_calculation_performance(benchmark):
-    """Бенчмарк расчета вегетационных индексов."""
-    data = np.random.random((1000, 1000, 10))
+def test_data_loading_performance(benchmark):
+    """Бенчмарк загрузки данных."""
+    def load_data():
+        processor = HyperspectralProcessor()
+        return processor.load_data("data/sample.bil")
     
-    def calculate():
-        return calculate_indices(data, ['NDVI', 'GNDVI'])
-    
-    benchmark(calculate)
+    benchmark(load_data)
 ```
 
 ### Профилирование памяти
@@ -346,11 +329,6 @@ def safe_operation():
 - Валидировать поток данных между компонентами
 - Тестировать с образцами реальных данных
 
-#### Тесты производительности
-- Бенчмаркировать критические операции
-- Мониторить использование памяти
-- Тестировать масштабируемость
-
 ### Управление тестовыми данными
 
 #### Синтетические данные
@@ -363,42 +341,34 @@ def synthetic_hyperspectral_data():
     return np.random.random((100, 100, 10))
 ```
 
-#### Образцы реальных данных
-```python
-@pytest.fixture
-def real_hyperspectral_sample():
-    """Загрузить образец реальных гиперспектральных данных для тестирования."""
-    return load_sample_data('data/samples/sample_001.bil')
-```
-
 ## 📚 Стандарты документации
 
 ### Документация кода
 
 Используйте Google-style docstrings:
 ```python
-def calculate_vegetation_index(
-    red_band: np.ndarray,
-    nir_band: np.ndarray
-) -> np.ndarray:
-    """Рассчитать вегетационный индекс из красного и ближнего инфракрасного каналов.
+def process_hyperspectral_data(
+    file_path: str,
+    config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Обработать гиперспектральные данные из файла.
     
     Args:
-        red_band: Данные красного спектрального канала
-        nir_band: Данные ближнего инфракрасного спектрального канала
+        file_path: Путь к файлу с гиперспектральными данными
+        config: Конфигурация обработки
         
     Returns:
-        Рассчитанный массив вегетационного индекса
+        Словарь с результатами обработки
         
     Raises:
-        ValidationError: Если входные каналы недействительны
-        ProcessingError: Если расчет не удался
+        ValidationError: Если входные данные недействительны
+        ProcessingError: Если обработка не удалась
         
     Examples:
-        >>> red = np.array([0.1, 0.2, 0.3])
-        >>> nir = np.array([0.4, 0.5, 0.6])
-        >>> calculate_vegetation_index(red, nir)
-        array([0.6, 0.428..., 0.333...])
+        >>> config = {"processing": {"max_image_size": 15000}}
+        >>> results = process_hyperspectral_data("data.bil", config)
+        >>> 'processed_data' in results
+        True
     """
     # Реализация
     pass
@@ -434,8 +404,6 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run tests
         run: pytest tests/ --cov=src --cov-report=xml
-      - name: Upload coverage
-        uses: codecov/codecov-action@v2
 ```
 
 ## 🚀 Рекомендации по развертыванию
@@ -453,9 +421,6 @@ jobs:
 ```bash
 # Обновить зависимости
 pip install --upgrade -r requirements.txt
-
-# Проверить на уязвимости безопасности
-safety check
 ```
 
 ## 🤝 Участие в разработке

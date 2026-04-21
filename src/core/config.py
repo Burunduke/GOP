@@ -78,20 +78,6 @@ class Config:
                 "device": "auto",
                 "confidence_threshold": 0.5,
             },
-            "indices": {
-                "sensor_types": ["RGB", "Multispectral", "Hyperspectral"],
-                "default_indices": [
-                    "GNDVI",
-                    "MCARI",
-                    "MNLI",
-                    "OSAVI",
-                    "TVI",
-                    "SIPI2",
-                    "mARI",
-                    "NDWI",
-                    "MSI",
-                ],
-            },
             "output": {
                 "results_dir": "results",
                 "save_intermediate": True,
