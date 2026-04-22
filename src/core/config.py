@@ -36,7 +36,7 @@ class Config:
     def _get_default_config_path(self) -> str:
         """Get default configuration file path"""
         project_root = Path(__file__).parent.parent.parent
-        config_file = project_root / "config" / "config.yaml"
+        config_file = project_root / "config.yaml"
         return str(config_file)
 
     def _load_config(self) -> Dict[str, Any]:

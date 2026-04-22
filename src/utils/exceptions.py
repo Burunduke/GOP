@@ -208,6 +208,4 @@ __all__ = [
     "ConfigurationError",
     "FileError",
     "GDALError",
-    "IndexCalculationError",
-    "SegmentationError",
 ]

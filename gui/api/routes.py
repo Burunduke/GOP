@@ -5,7 +5,8 @@ Main API routes for GOP GUI application
 import uuid
 import os
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any
+import shutil
 from flask import Blueprint, jsonify, request, current_app
 from werkzeug.utils import secure_filename
 
