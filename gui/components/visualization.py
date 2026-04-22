@@ -20,7 +20,7 @@ def create_visualization_component() -> html.Div:
                 html.H5("Data Visualization", className="mb-0"),
             ]),
             dbc.CardBody([
-                # Панель управления визуализацией
+                # Visualization control panel
                 dbc.Row([
                     dbc.Col([
                         html.Label("Visualization Type:"),
@@ -53,8 +53,8 @@ def create_visualization_component() -> html.Div:
                     
                 ], className="mb-4"),
                 
-                # Область визуализации
-                html.Div([
+                                # Visualization area
+                                html.Div([
                     dcc.Graph(
                         id='main-visualization',
                         figure=create_empty_figure(),
@@ -62,8 +62,8 @@ def create_visualization_component() -> html.Div:
                     )
                 ], className="mb-4"),
                 
-                # Панель инструментов
-                dbc.Row([
+                                # Toolbar
+                                dbc.Row([
                     dbc.Col([
                         dbc.ButtonGroup([
                             dbc.Button(
@@ -109,8 +109,8 @@ def create_visualization_component() -> html.Div:
                     ], width=6),
                 ], className="mb-4"),
                 
-                # Информационная панель
-                dbc.Row([
+                                # Information panel
+                                dbc.Row([
                     dbc.Col([
                         dbc.Card([
                             dbc.CardBody([

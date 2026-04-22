@@ -7,6 +7,7 @@ import dash_bootstrap_components as dbc
 from dash import html
 from datetime import datetime
 
+from gui.utils.format_utils import format_date
 
 def create_sidebar(
     projects: Optional[List[Dict[str, Any]]] = None,
@@ -25,22 +26,6 @@ def create_sidebar(
         projects = []
     if statistics is None:
         statistics = {"total_projects": 0, "status_counts": {}, "total_files": 0}
-    
-    # Date formatting function
-    def format_date(date_str: str) -> str:
-        """Format date string to international format
-        
-        Args:
-            date_str: Date string in ISO format
-            
-        Returns:
-            str: Formatted date string or original if formatting fails
-        """
-        try:
-            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%Y-%m-%d %H:%M")
-        except (ValueError, AttributeError):
-            return date_str
     
     return html.Div([
         

@@ -189,7 +189,7 @@ class ProjectManager:
             if query_lower in p.name.lower() or query_lower in p.description.lower()
         ]
     
-    # === Управление файлами ===
+    # === File management ===
     
     def add_file_to_project(
         self,
@@ -200,17 +200,17 @@ class ProjectManager:
         file_type: str = "hyperspectral"
     ) -> Optional[ProjectFile]:
         """
-        Добавление файла к проекту.
+        Add file to project.
         
         Args:
-            project_id: ID проекта
-            filename: Имя файла
-            file_content: Содержимое файла (bytes) - для small files
-            file_path: Путь к временному файлу - для large files
-            file_type: Тип файла
+            project_id: Project ID
+            filename: File name
+            file_content: File content (bytes) - for small files
+            file_path: Path to temporary file - for large files
+            file_type: File type
             
         Returns:
-            Объект ProjectFile или None
+            ProjectFile object or None
         """
         project = self.get_project(project_id)
         if project is None:
@@ -237,7 +237,7 @@ class ProjectManager:
             checksum=checksum,
         )
         
-        # Сохраняем файл на диск
+        # Save file to disk
         files_dir = self.projects_dir / project_id / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
         final_file_path = files_dir / f"{project_file.id}_{filename}"
@@ -252,17 +252,17 @@ class ProjectManager:
         
         project_file.file_path = str(final_file_path)
         
-        # Обновляем проект
+        # Update project
         project.files.append(project_file.to_dict())
         
-        # Обновляем статус если были файлы
+        # Update status if there were files
         if project.status == ProjectStatus.NEW.value and len(project.files) > 0:
             project.status = ProjectStatus.READY.value
         
         project.updated_at = datetime.now().isoformat()
         self._save_project(project)
         
-        logger.info(f"Добавлен файл {filename} к проекту {project.name}")
+        logger.info(f"Added file {filename} to project {project.name}")
         return project_file
     
     def add_file_by_server_path(
@@ -359,14 +359,14 @@ class ProjectManager:
     
     def remove_file_from_project(self, project_id: str, file_id: str) -> bool:
         """
-        Удаление файла из проекта.
+        Remove file from project.
         
         Args:
-            project_id: ID проекта
-            file_id: ID файла
+            project_id: Project ID
+            file_id: File ID
             
         Returns:
-            True если файл удалён
+            True if file was removed
         """
         project = self.get_project(project_id)
         if project is None:
@@ -381,44 +381,44 @@ class ProjectManager:
         if file_data is None:
             return False
         
-        # Удаляем файл с диска
-        file_path = file_data.get("file_path", "")
+                # Remove file from disk
+                file_path = file_data.get("file_path", "")
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
         
-        # Удаляем из списка
+        # Remove from list
         project.files = [f for f in project.files if f.get("id") != file_id]
         
-        # Обновляем статус
+        # Update status
         if len(project.files) == 0 and project.status == ProjectStatus.READY.value:
             project.status = ProjectStatus.NEW.value
         
         project.updated_at = datetime.now().isoformat()
         self._save_project(project)
         
-        logger.info(f"Удалён файл {file_id} из проекта {project.name}")
+        logger.info(f"Removed file {file_id} from project {project.name}")
         return True
     
-    # === Управление обработкой ===
+    # === Processing management ===
     
     def update_processing_config(
         self, project_id: str, config: dict
     ) -> Optional[Project]:
         """
-        Обновление конфигурации обработки проекта.
+        Update project processing configuration.
         
         Args:
-            project_id: ID проекта
-            config: Новая конфигурация
+            project_id: Project ID
+            config: New configuration
             
         Returns:
-            Обновлённый проект или None
+            Updated project or None
         """
         project = self.get_project(project_id)
         if project is None:
             return None
         
-        # Мержим с существующей конфигурацией
+        # Merge with existing configuration
         current_config = project.processing_config
         current_config.update(config)
         project.processing_config = current_config
@@ -428,32 +428,32 @@ class ProjectManager:
     
     def start_processing(self, project_id: str) -> Optional[ProcessingHistory]:
         """
-        Начало обработки проекта.
+        Start project processing.
         
         Args:
-            project_id: ID проекта
+            project_id: Project ID
             
         Returns:
-            Запись истории обработки или None
+            Processing history record or None
         """
         project = self.get_project(project_id)
         if project is None:
             return None
         
         if project.status == ProjectStatus.RUN.value:
-            logger.warning(f"Проект {project.name} уже обрабатывается")
+            logger.warning(f"Project {project.name} is already being processed")
             return None
         
-        # Создаём запись истории
+        # Create history record
         history = ProcessingHistory(
             config=project.processing_config,
         )
         
-        # Создаём директорию для результатов
-        results_dir = self.projects_dir / project_id / "results" / history.run_id
-        results_dir.mkdir(parents=True, exist_ok=True)
+                # Create directory for results
+                results_dir = self.projects_dir / project_id / "results" / history.run_id
+                results_dir.mkdir(parents=True, exist_ok=True)
         
-        # Обновляем проект
+        # Update project
         project.status = ProjectStatus.RUN.value
         project.progress = 0.0
         project.current_stage = PipelineStage.PREPROCESSING.value
@@ -461,7 +461,7 @@ class ProjectManager:
         project.updated_at = datetime.now().isoformat()
         self._save_project(project)
         
-        logger.info(f"Начата обработка проекта {project.name} (run: {history.run_id})")
+        logger.info(f"Started processing project {project.name} (run: {history.run_id})")
         return history
     
     def update_processing_progress(
@@ -472,16 +472,16 @@ class ProjectManager:
         stage_result: Optional[dict] = None
     ) -> Optional[Project]:
         """
-        Обновление прогресса обработки.
+        Update processing progress.
         
         Args:
-            project_id: ID проекта
-            stage: Текущий этап
-            progress: Прогресс (0-100)
-            stage_result: Результат этапа
+            project_id: Project ID
+            stage: Current stage
+            progress: Progress (0-100)
+            stage_result: Stage result
             
         Returns:
-            Обновлённый проект или None
+            Updated project or None
         """
         project = self.get_project(project_id)
         if project is None:
@@ -490,12 +490,12 @@ class ProjectManager:
         project.current_stage = stage
         project.progress = progress
         
-        # Обновляем результат этапа в последней записи истории
+        # Update stage result in the last history record
         if stage_result and project.processing_history:
             last_history = project.processing_history[-1]
             last_history.setdefault("results", [])
             
-            # Обновляем или добавляем результат этапа
+            # Update or add stage result
             updated = False
             for i, r in enumerate(last_history["results"]):
                 if r.get("stage") == stage:
@@ -516,15 +516,15 @@ class ProjectManager:
         error_message: Optional[str] = None
     ) -> Optional[Project]:
         """
-        Завершение обработки проекта.
+        Complete project processing.
         
         Args:
-            project_id: ID проекта
-            success: Успешно ли завершена обработка
-            error_message: Сообщение об ошибке
+            project_id: Project ID
+            success: Whether processing completed successfully
+            error_message: Error message
             
         Returns:
-            Обновлённый проект или None
+            Updated project or None
         """
         project = self.get_project(project_id)
         if project is None:
@@ -540,14 +540,14 @@ class ProjectManager:
         
         project.current_stage = None
         
-        # Обновляем последнюю запись истории
+        # Update the last history record
         if project.processing_history:
             last_history = project.processing_history[-1]
             last_history["end_time"] = now
             last_history["status"] = "completed" if success else "error"
             last_history["error_message"] = error_message
             
-            # Вычисляем длительность
+            # Calculate duration
             try:
                 start = datetime.fromisoformat(last_history["start_time"])
                 end = datetime.fromisoformat(now)
@@ -558,19 +558,19 @@ class ProjectManager:
         project.updated_at = now
         self._save_project(project)
         
-        status_text = "успешно" if success else f"с ошибкой: {error_message}"
-        logger.info(f"Обработка проекта {project.name} завершена {status_text}")
+        status_text = "successfully" if success else f"with error: {error_message}"
+        logger.info(f"Processing of project {project.name} completed {status_text}")
         return project
     
     def cancel_processing(self, project_id: str) -> Optional[Project]:
         """
-        Отмена обработки проекта.
+        Cancel project processing.
         
         Args:
-            project_id: ID проекта
+            project_id: Project ID
             
         Returns:
-            Обновлённый проект или None
+            Updated project or None
         """
         project = self.get_project(project_id)
         if project is None:
@@ -591,17 +591,17 @@ class ProjectManager:
         project.updated_at = now
         self._save_project(project)
         
-        logger.info(f"Обработка проекта {project.name} отменена")
-        return project
+                logger.info(f"Processing of project {project.name} cancelled")
+                return project
     
-    # === Статистика ===
+    # === Statistics ===
     
     def get_statistics(self) -> dict:
         """
-        Получение общей статистики по проектам.
+        Get overall project statistics.
         
         Returns:
-            Словарь со статистикой
+            Dictionary with statistics
         """
         projects = list(self._cache.values())
         total = len(projects)
@@ -625,13 +625,13 @@ class ProjectManager:
     
     def get_recent_projects(self, limit: int = 5) -> list[Project]:
         """
-        Получение последних проектов.
+        Get recent projects.
         
         Args:
-            limit: Максимальное количество
+            limit: Maximum number
             
         Returns:
-            Список последних проектов
+            List of recent projects
         """
         projects = self.list_projects(sort_by="updated_at", reverse=True)
         return projects[:limit]

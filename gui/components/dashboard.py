@@ -9,6 +9,7 @@ import dash_bootstrap_components as dbc
 from dash import html
 from datetime import datetime
 
+from gui.utils.format_utils import format_date
 
 def create_dashboard(
     statistics: Optional[Dict[str, Any]] = None,
@@ -28,14 +29,6 @@ def create_dashboard(
         statistics = {"total_projects": 0, "status_counts": {}, "total_files": 0, "total_size_mb": 0}
     if all_projects is None:
         all_projects = []
-    
-    # Format date in international format
-    def format_date(date_str: str) -> str:
-        try:
-            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%Y-%m-%d %H:%M")
-        except:
-            return date_str
     
     # Sort projects by update date (newest first)
     sorted_projects = sorted(all_projects, key=lambda x: x.get('updated_at', ''), reverse=True)

@@ -106,7 +106,7 @@ def lru_cache(maxsize: int = 100, ttl: int = 3600) -> Callable:
             # Compute result
             result = func(*args, **kwargs)
 
-            # Сохранение в кэш
+            # Save to cache
             cache.set(key, result)
 
             return result

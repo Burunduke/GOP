@@ -89,10 +89,16 @@ def create_app(config_name: str = 'default') -> dash.Dash:
     from gui.services.project_manager import ProjectManager
     from gui.services.pipeline_executor import PipelineExecutor
     from gui.services.gop_adapter import GOPAdapter
+    from gui.services.cache_manager import CacheManager
 
     project_manager = ProjectManager(projects_dir=app_config.PROJECTS_FOLDER)
     gop_adapter = GOPAdapter()
     pipeline_executor = PipelineExecutor(project_manager=project_manager, gop_adapter=gop_adapter)
+    cache_manager = CacheManager(
+        redis_url=app_config.REDIS_URL,
+        cache_dir=app_config.CACHE_FOLDER
+    )
+    logger.info(f"Cache manager initialized in {cache_manager.cache_mode} mode")
 
     # Register callbacks with services
     register_callbacks(app, project_manager=project_manager, pipeline_executor=pipeline_executor)

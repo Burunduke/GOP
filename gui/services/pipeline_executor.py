@@ -201,10 +201,10 @@ class PipelineExecutor:
             
             # All stages completed
             self.project_manager.complete_processing(project_id, success=True)
-            logger.info(f"Обработка проекта {project_id} завершена успешно")
+            logger.info(f"Processing of project {project_id} completed successfully")
             
         except Exception as e:
-            logger.error(f"Критическая ошибка обработки проекта {project_id}: {e}")
+            logger.error(f"Critical error processing project {project_id}: {e}")
             self.project_manager.complete_processing(
                 project_id, success=False, error_message=str(e)
             )
@@ -219,18 +219,18 @@ class PipelineExecutor:
         cancel_event: threading.Event
     ) -> dict:
         """
-        Выполнение одного этапа пайплайна.
+        Execute one pipeline stage.
         
-        Если GOPAdapter доступен - использует реальную обработку.
-        Иначе - эмулирует обработку.
+        If GOPAdapter is available - uses real processing.
+        Otherwise - emulates processing.
         """
-        if self.gop_adapter and hasattr(self.gop_adapter, 'gop_available') and self.gop_adapter.gop_available:
+        if self.gop_adapter and self.gop_adapter.gop_mode == "full":
             return self._execute_real_stage(project_id, stage, config)
         else:
             return self._emulate_stage(project_id, stage, config, cancel_event)
     
     def _execute_real_stage(self, project_id: str, stage: str, config: dict) -> dict:
-        """Выполнение реального этапа через GOPAdapter."""
+        """Execute real stage through GOPAdapter."""
         # This will be fully implemented when GOP modules are available
         # For now, delegate to GOPAdapter
         try:
@@ -242,7 +242,7 @@ class PipelineExecutor:
                 )
                 return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}
         except Exception as e:
-            logger.warning(f"Ошибка реальной обработки, переключение на эмуляцию: {e}")
+            logger.warning(f"Error in real processing, switching to emulation: {e}")
         
         return self._emulate_stage(project_id, stage, config, threading.Event())
     
@@ -254,8 +254,8 @@ class PipelineExecutor:
         cancel_event: threading.Event
     ) -> dict:
         """
-        Эмуляция выполнения этапа пайплайна.
-        Используется когда GOP модули недоступны.
+        Emulate pipeline stage execution.
+        Used when GOP modules are unavailable.
         """
         import random
         
@@ -285,7 +285,7 @@ class PipelineExecutor:
         }
     
     def _generate_emulated_metrics(self, stage: str) -> dict:
-        """Генерация эмулированных метрик для этапа."""
+        """Generate emulated metrics for stage."""
         import random
         
         metrics = {
@@ -305,7 +305,7 @@ class PipelineExecutor:
         return metrics.get(stage, {})
     
     def _cleanup_task(self, project_id: str):
-        """Очистка ресурсов задачи."""
+        """Clean up task resources."""
         self._running_tasks.pop(project_id, None)
         self._cancel_flags.pop(project_id, None)
         self._progress_callbacks.pop(project_id, None)

@@ -131,15 +131,6 @@ GUI config via [`gui/config.py`](gui/config.py) — env vars for host/port, DB U
 
 ## Issues & Observations
 
-### Bugs
-
-| # | File | Issue |
-|---|------|-------|
-| 2 | [`routes.py:138`](gui/api/routes.py:138) | `logger` is used but never defined in this module |
-| 3 | [`callbacks.py:182`](gui/components/callbacks.py:182) | Dead code: `return not is_open` after unconditional `return no_update` on line 180 |
-| 4 | [`callbacks.py:300-310`](gui/components/callbacks.py:300) | Duplicate callback output IDs — `update_processing_progress` (line 301) outputs same IDs as `start_project_processing` (line 256). Will cause Dash runtime error |
-| 6 | [`pipeline.py:162`](src/core/pipeline.py:162) | `processing_date` is set to `str(Path.cwd())` — should be a timestamp |
-
 ### Incomplete / Stubs
 
 | # | File | What's missing |
@@ -149,15 +140,6 @@ GUI config via [`gui/config.py`](gui/config.py) — env vars for host/port, DB U
 | 3 | [`orthophoto.py:293`](src/processing/orthophoto.py:293) | GPS file creation is a TODO stub |
 | 4 | [`routes.py:196-211`](gui/api/routes.py:196) | `/api/process` endpoints are stubs returning hardcoded responses |
 
-### Code Quality
-
-| # | Observation |
-|---|-------------|
-| 1 | Mixed languages in comments/logs (English + Russian). Should be unified |
-| 2 | `format_date()` helper is duplicated in 4 files: `callbacks.py`, `dashboard.py`, `project_detail.py`, `sidebar.py` |
-| 3 | `_format_file_size()` duplicated in `server_file_picker.py` and `project_detail.py` |
-| 4 | `get_stage_display_name()` duplicated in `callbacks.py` and `project_detail.py` |
-| 5 | `gop_adapter.py` has `gop_available` check via `hasattr` in `pipeline_executor.py:227` but the actual attribute is `gop_mode` — the check will always fail 
 
 ### Architecture
 

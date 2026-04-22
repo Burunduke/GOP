@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from gui.utils.format_utils import get_stage_display_name
+
 from dash import Input, Output, State, callback_context, no_update, ALL, MATCH, html
 from dash.exceptions import PreventUpdate
 import dash
@@ -22,17 +24,6 @@ from gui.components.project_detail import create_project_detail
 from gui.models.project import Project, ProjectStatus, PipelineStage
 
 logger = logging.getLogger(__name__)
-
-
-def get_stage_display_name(stage_key: str) -> str:
-    """Convert stage key to user-friendly display name."""
-    stage_names = {
-        "preprocessing": "Preprocessing",
-        "orthophoto": "Orthophoto Generation",
-        "Not started": "Not started"
-    }
-    return stage_names.get(stage_key, stage_key)
-
 
 def register_callbacks(
     app: dash.Dash,
@@ -178,8 +169,6 @@ def register_callbacks(
         
         # If we get here, it's an unexpected trigger - don't change modal state
         return no_update
-        
-        return not is_open
     
     # === 7. Refresh projects store after creation ===
     @app.callback(
@@ -253,15 +242,7 @@ def register_callbacks(
     
     # === 11. Start processing callback ===
     @app.callback(
-        [Output("project-processing-progress", "value"),
-         Output("project-processing-progress", "label"),
-         Output("project-processing-progress", "style"),
-         Output("overview-progress-bar", "value"),
-         Output("overview-progress-bar", "label"),
-         Output("current-stage-display", "children"),
-         Output("current-stage-progress", "children"),
-         Output("current-stage-badge", "children"),
-         Output("current-stage-badge", "color")],
+        Output("project-processing-progress", "style"),
         Input("project-start-processing-btn", "n_clicks"),
         State("url", "pathname"),
         prevent_initial_call=True,
@@ -274,7 +255,7 @@ def register_callbacks(
         project_id = pathname.split("/project/")[-1]
         if project_id:
             pipeline_executor.execute_project(project_id)
-            return 0, "Запуск...", {"display": "block"}, 0, "Запуск...", "Initializing...", "", "Run", "warning"
+            return {"display": "block"}
         
         raise PreventUpdate
     
@@ -571,9 +552,9 @@ def register_callbacks(
         return True, message, page_content
 
 
-    # Модальные окна
+    # Modal windows
     
-    # Модальные окна
+    # Modal windows
     @app.callback(
         Output('upload-files-modal', 'is_open'),
         [Input('upload-files-btn', 'n_clicks'),
@@ -616,8 +597,8 @@ def register_callbacks(
             return False
         return is_open
     
-    # Прогресс обработки
-    @app.callback(
+        # Processing progress
+        @app.callback(
         Output('progress-interval', 'disabled'),
         [Input('start-processing-btn', 'n_clicks'),
          Input('project-start-processing-btn', 'n_clicks')],

@@ -309,7 +309,7 @@ class CacheManager:
             args_str = json.dumps(args, sort_keys=True, default=str)
             kwargs_str = json.dumps(kwargs, sort_keys=True, default=str)
         except (TypeError, ValueError):
-            # Если не удалось сериализовать, используем строковое представление
+            # If serialization failed, use string representation
             args_str = str(args)
             kwargs_str = str(kwargs)
         
@@ -318,14 +318,14 @@ class CacheManager:
     
     def cleanup_expired(self) -> int:
         """
-        Очистка просроченных записей кэша
+        Clean up expired cache entries
         
         Returns:
-            Количество удаленных записей
+            Number of deleted entries
         """
         deleted_count = 0
         
-        # Очистка локального кэша
+        # Clean up local cache
         expired_keys = []
         for key, cache_item in self.local_cache.items():
             if not self._is_valid(cache_item):
@@ -335,7 +335,7 @@ class CacheManager:
             del self.local_cache[key]
             deleted_count += 1
         
-        # Очистка файлового кэша
+        # Clean up file cache
         if self.cache_mode == "file":
             for cache_file in self.cache_dir.glob("*.cache"):
                 try:
@@ -346,7 +346,7 @@ class CacheManager:
                         cache_file.unlink()
                         deleted_count += 1
                 except (pickle.PickleError, ValueError):
-                    # Удаление поврежденных файлов
+                    # Remove corrupted files
                     try:
                         cache_file.unlink()
                         deleted_count += 1

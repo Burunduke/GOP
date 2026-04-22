@@ -6,6 +6,7 @@ Science-oriented architecture without GUI dependencies
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 
@@ -158,7 +159,7 @@ class Pipeline:
         """Get processing metadata"""
         return {
             "pipeline_version": "2.0.0",
-            "processing_date": str(Path.cwd()),
+            "processing_date": datetime.now().isoformat(),
             "config_used": self.config.config,
             "scientific_methods": [
                 "hyperspectral_data_loading",

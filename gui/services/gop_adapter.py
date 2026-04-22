@@ -153,19 +153,19 @@ class GOPAdapter:
             if file_size > max_size:
                 return {'valid': False, 'error': f'File too large (maximum {max_size / (1024**3):.1f}GB)'}
             
-            # Проверка формата файла
+            # Check file format
             supported_formats = ['.bil', '.hdr', '.tif', '.tiff', '.dat']
             file_ext = os.path.splitext(file_path)[1].lower()
             if file_ext not in supported_formats:
-                return {'valid': False, 'error': f'Неподдерживаемый формат: {file_ext}'}
+                return {'valid': False, 'error': f'Unsupported format: {file_ext}'}
             
-            # Дополнительная проверка в режиме полной функциональности
+            # Additional validation in full functionality mode
             if self.gop_mode == "full":
                 try:
-                    # Здесь можно добавить проверку через GOP валидаторы
+                    # Here we can add validation through GOP validators
                     pass
                 except Exception as e:
-                    return {'valid': False, 'error': f'Ошибка валидации GOP: {str(e)}'}
+                    return {'valid': False, 'error': f'GOP validation error: {str(e)}'}
             
             return {
                 'valid': True, 
@@ -178,8 +178,8 @@ class GOPAdapter:
             return {'valid': False, 'error': str(e)}
     
     def _estimate_processing_time(self, file_size: int) -> str:
-        """Оценка времени обработки файла"""
-        # Простая эвристика: ~1 секунда на МБ
+        """Estimate file processing time"""
+        # Simple heuristic: ~1 second per MB
         seconds = file_size / (1024 * 1024)
         minutes = int(seconds // 60)
         seconds = int(seconds % 60)
@@ -187,20 +187,20 @@ class GOPAdapter:
     
     def get_processing_status(self, task_id: str) -> Dict[str, Any]:
         """
-        Получение статуса обработки задачи
+        Get task processing status
         
         Args:
-            task_id: ID задачи
+            task_id: Task ID
             
         Returns:
-            Статус задачи
+            Task status
         """
-        # Временная реализация - в будущем будет интеграция с Celery
+        # Temporary implementation - will be integrated with Celery in the future
         return {
             'task_id': task_id,
             'status': 'completed',
             'progress': 100,
-            'message': 'Обработка завершена успешно',
+            'message': 'Processing completed successfully',
             'result': {
                 'output_path': f'data/results/{task_id}',
                 'files_generated': ['orthophoto.tif', 'preprocessed_data.hdr'],
@@ -210,21 +210,21 @@ class GOPAdapter:
     
     def cancel_processing(self, task_id: str) -> Dict[str, Any]:
         """
-        Отмена обработки задачи
+        Cancel task processing
         
         Args:
-            task_id: ID задачи
+            task_id: Task ID
             
         Returns:
-            Результат отмены
+            Cancellation result
         """
         return {
             'task_id': task_id,
             'status': 'cancelled',
-            'message': 'Задача отменена'
+            'message': 'Task cancelled'
         }
     
     def __del__(self):
-        """Очистка ресурсов при удалении"""
+        """Clean up resources when deleting"""
         if hasattr(self, 'executor'):
             self.executor.shutdown(wait=False)

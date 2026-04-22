@@ -10,6 +10,8 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc
 from datetime import datetime
 
+from gui.utils.format_utils import format_date, format_file_size, get_stage_display_name
+
 from gui.components.server_file_picker import create_server_file_picker
 
 
@@ -36,38 +38,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
             "progress": 0.0,
             "processing_history": [],
             "tags": []
-        }
-    
-    # Format date in international format
-    def format_date(date_str: str) -> str:
-        try:
-            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            return dt.strftime("%Y-%m-%d %H:%M")
-        except:
-            return date_str
-    
-    # Format file size
-    def format_file_size(size_bytes: int) -> str:
-        if size_bytes == 0:
-            return "0 B"
-        size_names = ["B", "KB", "MB", "GB", "TB"]
-        i = 0
-        while size_bytes >= 1024 and i < len(size_names) - 1:
-            size_bytes /= 1024.0
-            i += 1
-        return f"{size_bytes:.1f} {size_names[i]}"
-    
-    # Format stage name for display
-    def get_stage_display_name(stage_key: str) -> str:
-        """Convert stage key to user-friendly display name."""
-        stage_names = {
-            "preprocessing": "Preprocessing",
-            "orthophoto": "Orthophoto Generation",
-            "Not started": "Not started"
-        }
-        return stage_names.get(stage_key, stage_key)
-    
-    # Заголовок проекта
+    # Project header
     project_header = html.Div([
         dbc.Row([
             dbc.Col([

@@ -111,7 +111,7 @@ def apply_colormap(data: np.ndarray, colormap_name: str = 'viridis',
 def create_heatmap_figure(data: np.ndarray, x_coords: Optional[np.ndarray] = None,
                          y_coords: Optional[np.ndarray] = None, 
                          colorscale: str = 'viridis',
-                         title: str = "Тепловая карта") -> go.Figure:
+                         title: str = "Heatmap") -> go.Figure:
     """
     Create heatmap figure for Plotly
     
@@ -172,9 +172,9 @@ def create_heatmap_figure(data: np.ndarray, x_coords: Optional[np.ndarray] = Non
 
 
 def create_histogram_figure(data: np.ndarray, bins: int = 50, 
-                          title: str = "Гистограмма распределения",
-                          x_label: str = "Значение",
-                          y_label: str = "Частота") -> go.Figure:
+                          title: str = "Distribution Histogram",
+                          x_label: str = "Value",
+                          y_label: str = "Frequency") -> go.Figure:
     """
     Create histogram figure for Plotly
     
@@ -214,7 +214,7 @@ def create_histogram_figure(data: np.ndarray, bins: int = 50,
 
 
 def create_scatter_figure(x_data: np.ndarray, y_data: np.ndarray,
-                         title: str = "Диаграмма рассеяния",
+                         title: str = "Scatter Plot",
                          x_label: str = "X",
                          y_label: str = "Y") -> go.Figure:
     """
@@ -388,7 +388,7 @@ def normalize_data(data: np.ndarray, method: str = 'minmax') -> np.ndarray:
         return data
 
 
-def create_colorbar_config(colormap_name: str, title: str = "Значение") -> Dict[str, Any]:
+def create_colorbar_config(colormap_name: str, title: str = "Value") -> Dict[str, Any]:
     """
     Create color bar configuration for Plotly
     
