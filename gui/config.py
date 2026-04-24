@@ -52,6 +52,9 @@ class GUIConfig:
     # GOP integration settings
     GOP_CONFIG_PATH: str = os.getenv('GOP_CONFIG_PATH', 'config/config.yaml')
     
+    # Pipeline executor settings
+    PIPELINE_MAX_WORKERS: int = int(os.getenv('PIPELINE_MAX_WORKERS', 2))
+    
     @classmethod
     def init_app(cls, app: Flask) -> None:
         """Initialize application configuration

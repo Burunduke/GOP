@@ -57,8 +57,7 @@ def register_callbacks(
         if pathname == "/" or pathname == "/dashboard":
             if project_manager:
                 stats = project_manager.get_statistics()
-                all_projects = project_manager.list_projects()
-                all_projects_dicts = [p.to_dict() for p in all_projects]
+                all_projects_dicts = project_manager.list_projects_dicts()
                 return create_dashboard(statistics=stats, all_projects=all_projects_dicts)
             return create_dashboard()
         
@@ -78,8 +77,7 @@ def register_callbacks(
         # Default - always show project management panel
         if project_manager:
             stats = project_manager.get_statistics()
-            all_projects = project_manager.list_projects()
-            all_projects_dicts = [p.to_dict() for p in all_projects]
+            all_projects_dicts = project_manager.list_projects_dicts()
             return create_dashboard(statistics=stats, all_projects=all_projects_dicts)
         return create_dashboard()
     
@@ -115,8 +113,7 @@ def register_callbacks(
     def update_sidebar(projects_data):
         """Update sidebar with current project data."""
         if project_manager:
-            projects = project_manager.list_projects()
-            projects_dicts = [p.to_dict() for p in projects]
+            projects_dicts = project_manager.list_projects_dicts()
             stats = project_manager.get_statistics()
             return create_sidebar(projects=projects_dicts, statistics=stats)
         return create_sidebar()
@@ -161,7 +158,7 @@ def register_callbacks(
         
         if trigger_id == "create-project-btn":
             if name and project_manager:
-                project_manager.create_project(name=name, description=description or "")
+                project_manager.create_project_safe(name=name, description=description or "")
             return False
 
         if trigger_id == "cancel-create-project":
@@ -181,8 +178,7 @@ def register_callbacks(
     def refresh_projects_store(create_modal_open, delete_modal_open, pathname):
         """Refresh projects store when modals close or navigation happens."""
         if project_manager:
-            projects = project_manager.list_projects()
-            return [p.to_dict() for p in projects]
+            return project_manager.list_projects_dicts()
         return []
     
     # === 8. New project button click -> navigate to projects page ===
@@ -254,7 +250,7 @@ def register_callbacks(
         
         project_id = pathname.split("/project/")[-1]
         if project_id:
-            pipeline_executor.execute_project(project_id)
+            pipeline_executor.start_project_safe(project_id)
             return {"display": "block"}
         
         raise PreventUpdate
@@ -298,52 +294,98 @@ def register_callbacks(
         if not pathname or not pathname.startswith("/project/") or not project_manager:
             raise PreventUpdate
         
-        project_id = pathname.split("/project/")[-1]
-        project = project_manager.get_project(project_id)
-        if project:
-            progress_value = project.progress
-            progress_label = f"{progress_value:.1f}%"
-            
-            # Get current stage information
-            current_stage = get_stage_display_name(project.current_stage or "Not started")
-            stage_progress = f" ({progress_value:.1f}%)" if project.current_stage else ""
-            
-            # Determine badge text and color
-            if progress_value == 100 and project.current_stage:
-                badge_text = "Done"
-                badge_color = "success"
-            elif project.current_stage and project.status == "run":
-                badge_text = "Run"
-                badge_color = "warning"
-            elif not project.current_stage and project.status in ["ready", "new"]:
-                badge_text = "Pending"
-                badge_color = "secondary"
-            elif project.status == "error":
-                badge_text = "Error"
-                badge_color = "danger"
-            elif project.status == "cancelled":
-                badge_text = "Cancelled"
-                badge_color = "dark"
-            else:
-                badge_text = "Pending"
-                badge_color = "secondary"
-            
-            # Check if processing is complete to disable interval
-            from gui.models.project import ProjectStatus
-            interval_disabled = project.status != ProjectStatus.RUN.value
-            
-            return (
-                progress_value,      # overview progress value
-                progress_label,      # overview progress label
-                progress_value,      # processing progress value
-                progress_label,      # processing progress label
-                current_stage,       # current stage display
-                stage_progress,      # current stage progress
-                badge_text,          # badge text
-                badge_color,         # badge color
-                interval_disabled    # disable interval when processing is complete
-            )
         
+        project_id = pathname.split("/project/")[-1]
+        if pipeline_executor and project_manager:
+            status_dict = pipeline_executor.get_status_dict(project_id)
+            if "error" not in status_dict and "status" in status_dict:
+                progress_value = status_dict["progress"]
+                progress_label = f"{progress_value:.1f}%"
+                
+                # Get current stage information
+                current_stage = get_stage_display_name(status_dict["stage"] or "Not started")
+                stage_progress = f" ({progress_value:.1f}%)" if status_dict["stage"] else ""
+                
+                # Determine badge text and color
+                if progress_value == 100 and status_dict["stage"]:
+                    badge_text = "Done"
+                    badge_color = "success"
+                elif status_dict["stage"] and status_dict["status"] == "run":
+                    badge_text = "Run"
+                    badge_color = "warning"
+                elif not status_dict["stage"] and status_dict["status"] in ["ready", "new"]:
+                    badge_text = "Pending"
+                    badge_color = "secondary"
+                elif status_dict["status"] == "error":
+                    badge_text = "Error"
+                    badge_color = "danger"
+                elif status_dict["status"] == "cancelled":
+                    badge_text = "Cancelled"
+                    badge_color = "dark"
+                else:
+                    badge_text = "Pending"
+                    badge_color = "secondary"
+                
+                # Check if processing is complete to disable interval
+                from gui.models.project import ProjectStatus
+                interval_disabled = status_dict["status"] != ProjectStatus.RUN.value
+                
+                return (
+                    progress_value,      # overview progress value
+                    progress_label,      # overview progress label
+                    progress_value,      # processing progress value
+                    progress_label,      # processing progress label
+                    current_stage,       # current stage display
+                    stage_progress,      # current stage progress
+                    badge_text,          # badge text
+                    badge_color,         # badge color
+                    interval_disabled    # disable interval when processing is complete
+                )
+        elif project_manager:
+            project = project_manager.get_project(project_id)
+            if project:
+                progress_value = project.progress
+                progress_label = f"{progress_value:.1f}%"
+                
+                # Get current stage information
+                current_stage = get_stage_display_name(project.current_stage or "Not started")
+                stage_progress = f" ({progress_value:.1f}%)" if project.current_stage else ""
+                
+                # Determine badge text and color
+                if progress_value == 100 and project.current_stage:
+                    badge_text = "Done"
+                    badge_color = "success"
+                elif project.current_stage and project.status == "run":
+                    badge_text = "Run"
+                    badge_color = "warning"
+                elif not project.current_stage and project.status in ["ready", "new"]:
+                    badge_text = "Pending"
+                    badge_color = "secondary"
+                elif project.status == "error":
+                    badge_text = "Error"
+                    badge_color = "danger"
+                elif project.status == "cancelled":
+                    badge_text = "Cancelled"
+                    badge_color = "dark"
+                else:
+                    badge_text = "Pending"
+                    badge_color = "secondary"
+                
+                # Check if processing is complete to disable interval
+                from gui.models.project import ProjectStatus
+                interval_disabled = project.status != ProjectStatus.RUN.value
+                
+                return (
+                    progress_value,      # overview progress value
+                    progress_label,      # overview progress label
+                    progress_value,      # processing progress value
+                    progress_label,      # processing progress label
+                    current_stage,       # current stage display
+                    stage_progress,      # current stage progress
+                    badge_text,          # badge text
+                    badge_color,         # badge color
+                    interval_disabled    # disable interval when processing is complete
+                )
         raise PreventUpdate
     
     # === 12. Delete project callbacks ===
@@ -597,20 +639,6 @@ def register_callbacks(
             return False
         return is_open
     
-        # Processing progress
-        @app.callback(
-        Output('progress-interval', 'disabled'),
-        [Input('start-processing-btn', 'n_clicks'),
-         Input('project-start-processing-btn', 'n_clicks')],
-        prevent_initial_call=True
-    )
-    def toggle_progress_interval(modal_start_click: Optional[int],
-                                  project_start_click: Optional[int]) -> bool:
-        """Enable/disable progress interval."""
-        if modal_start_click or project_start_click:
-            return False  # Enable interval
-        return True  # Disable interval
-
     # === Dynamic results history updates ===
     @app.callback(
         Output("processing-history-list", "children"),

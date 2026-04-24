@@ -173,6 +173,36 @@ class ProjectManager:
         projects.sort(key=lambda p: getattr(p, sort_by, ""), reverse=reverse)
         return projects
     
+    def list_projects_dicts(self) -> List[dict]:
+        """
+        Get list of projects as dictionaries.
+        
+        Returns:
+            List of project dictionaries
+        """
+        return [p.to_dict() for p in self.list_projects()]
+    
+    def create_project_safe(self, name: str, description: str = "") -> dict:
+        """
+        Create a new project with validation and error handling.
+        
+        Args:
+            name: Project name
+            description: Project description
+            
+        Returns:
+            Dictionary with project data on success or error information
+        """
+        if not name or not name.strip():
+            return {"error": "Field 'name' is required"}
+        
+        try:
+            project = self.create_project(name=name.strip(), description=description)
+            return project.to_dict()
+        except Exception as e:
+            logger.error(f"Error creating project: {e}")
+            return {"error": str(e)}
+    
     def search_projects(self, query: str) -> List[Project]:
         """
         Search projects by name and description.
@@ -381,8 +411,8 @@ class ProjectManager:
         if file_data is None:
             return False
         
-                # Remove file from disk
-                file_path = file_data.get("file_path", "")
+        # Remove file from disk
+        file_path = file_data.get("file_path", "")
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
         
@@ -449,9 +479,9 @@ class ProjectManager:
             config=project.processing_config,
         )
         
-                # Create directory for results
-                results_dir = self.projects_dir / project_id / "results" / history.run_id
-                results_dir.mkdir(parents=True, exist_ok=True)
+        # Create directory for results
+        results_dir = self.projects_dir / project_id / "results" / history.run_id
+        results_dir.mkdir(parents=True, exist_ok=True)
         
         # Update project
         project.status = ProjectStatus.RUN.value
@@ -591,8 +621,8 @@ class ProjectManager:
         project.updated_at = now
         self._save_project(project)
         
-                logger.info(f"Processing of project {project.name} cancelled")
-                return project
+        logger.info(f"Processing of project {project.name} cancelled")
+        return project
     
     # === Statistics ===
     

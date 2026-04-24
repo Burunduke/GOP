@@ -89,16 +89,14 @@ def create_app(config_name: str = 'default') -> dash.Dash:
     from gui.services.project_manager import ProjectManager
     from gui.services.pipeline_executor import PipelineExecutor
     from gui.services.gop_adapter import GOPAdapter
-    from gui.services.cache_manager import CacheManager
 
     project_manager = ProjectManager(projects_dir=app_config.PROJECTS_FOLDER)
     gop_adapter = GOPAdapter()
-    pipeline_executor = PipelineExecutor(project_manager=project_manager, gop_adapter=gop_adapter)
-    cache_manager = CacheManager(
-        redis_url=app_config.REDIS_URL,
-        cache_dir=app_config.CACHE_FOLDER
-    )
-    logger.info(f"Cache manager initialized in {cache_manager.cache_mode} mode")
+    pipeline_executor = PipelineExecutor(project_manager=project_manager, gop_adapter=gop_adapter, max_workers=app_config.PIPELINE_MAX_WORKERS)
+
+    # Attach services to Flask server so routes can access them via current_app
+    server.project_manager = project_manager
+    server.pipeline_executor = pipeline_executor
 
     # Register callbacks with services
     register_callbacks(app, project_manager=project_manager, pipeline_executor=pipeline_executor)
@@ -155,14 +153,19 @@ def main() -> None:
     # Set environment variable to prevent browser opening
     os.environ['DASH_OPEN_BROWSER'] = 'False'
     
-    # Run application using Flask server directly to prevent browser opening
-    app.server.run(
-        host=app_config.HOST,
-        port=app_config.PORT,
-        debug=app_config.DEBUG,
-        threaded=True,
-        use_reloader=False  # Disable reloader to prevent double initialization
-    )
+    try:
+        # Run application using Flask server directly to prevent browser opening
+        app.server.run(
+            host=app_config.HOST,
+            port=app_config.PORT,
+            debug=app_config.DEBUG,
+            threaded=True,
+            use_reloader=False  # Disable reloader to prevent double initialization
+        )
+    finally:
+        # Shutdown pipeline executor to clean up threads
+        if hasattr(app.server, 'pipeline_executor'):
+            app.server.pipeline_executor.shutdown(wait=True)
 
 
 if __name__ == '__main__':

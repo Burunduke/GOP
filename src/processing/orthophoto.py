@@ -289,10 +289,48 @@ class OrthophotoProcessor:
 
             gps_file = os.path.join(project_dir, "gps.txt")
 
-            # TODO: Implement GPS data extraction from metadata
-            # and save in ODM-compatible format
+            # Try to extract GPS data from metadata using known key structures
+            lat = None
+            lon = None
+            alt = None
 
-            return gps_file if os.path.exists(gps_file) else None
+            # Try nested dicts first: "gps", "geolocation", "coordinates"
+            for key in ("gps", "geolocation", "coordinates"):
+                gps_dict = metadata.get(key)
+                if isinstance(gps_dict, dict):
+                    lat = gps_dict.get("latitude")
+                    lon = gps_dict.get("longitude")
+                    alt = gps_dict.get("altitude", 0.0)
+                    if lat is not None and lon is not None:
+                        break
+
+            # Fall back to flat top-level keys
+            if lat is None or lon is None:
+                lat = metadata.get("lat")
+                lon = metadata.get("lon")
+                alt = metadata.get("alt", 0.0)
+
+            # No GPS data found — do not create the file
+            if lat is None or lon is None:
+                return None
+
+            # Default altitude to 0.0 if still missing
+            if alt is None:
+                alt = 0.0
+
+            # Collect image filenames from tiff_paths
+            tiff_paths = processed_data.get("tiff_paths", [])
+            if tiff_paths:
+                filenames = [os.path.basename(p) for p in tiff_paths]
+            else:
+                filenames = ["image.tif"]
+
+            # Write ODM-compatible GPS file: filename lat lon alt per line
+            with open(gps_file, "w") as f:
+                for filename in filenames:
+                    f.write(f"{filename} {float(lat):.6f} {float(lon):.6f} {float(alt):.6f}\n")
+
+            return gps_file
 
         except Exception as e:
             self.logger.warning(f"Error creating GPS file: {e}")

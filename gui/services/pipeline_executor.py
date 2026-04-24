@@ -5,6 +5,7 @@ import threading
 import time
 from datetime import datetime
 from typing import Optional, Callable, Dict
+from concurrent.futures import ThreadPoolExecutor, Future
 
 from gui.models.project import PipelineStage, ProjectStatus, ProcessingResult
 from gui.services.project_manager import ProjectManager
@@ -26,17 +27,73 @@ class PipelineExecutor:
         PipelineStage.ORTHOPHOTO.value: "Orthophoto creation",
     }
     
-    def __init__(self, project_manager: ProjectManager, gop_adapter=None) -> None:
+    def __init__(self, project_manager: ProjectManager, gop_adapter=None, max_workers: int = 2) -> None:
         """
         Args:
             project_manager: Project manager
             gop_adapter: GOP adapter (optional, for real processing)
+            max_workers: Maximum number of concurrent workers (default: 2)
         """
         self.project_manager = project_manager
         self.gop_adapter = gop_adapter
-        self._running_tasks: Dict[str, threading.Thread] = {}
+        self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="pipeline")
+        self._running_tasks: Dict[str, Future] = {}
         self._cancel_flags: Dict[str, threading.Event] = {}
         self._progress_callbacks: Dict[str, Callable] = {}
+    
+    def start_project_safe(self, project_id: str) -> dict:
+        """
+        Start project processing with validation and error handling.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            Dictionary with status information
+        """
+        try:
+            project = self.project_manager.get_project(project_id)
+            if project is None:
+                return {"error": "Project not found"}
+            
+            # Guard: already running
+            if self.is_running(project_id):
+                return {"error": "Project is already being processed"}
+            
+            started = self.execute_project(project_id)
+            if not started:
+                return {"error": "Could not start processing — check project status or files"}
+            
+            return {"status": "started", "project_id": project_id}
+        except Exception as e:
+            logger.error(f"Error starting processing for project {project_id}: {e}")
+            return {"error": str(e)}
+    
+    def get_status_dict(self, project_id: str) -> dict:
+        """
+        Get processing status as a dictionary.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            Dictionary with status information
+        """
+        try:
+            project = self.project_manager.get_project(project_id)
+            if project is None:
+                return {"error": "Project not found"}
+            
+            return {
+                'project_id': project_id,
+                'status': project.status,
+                'progress': project.progress,
+                'stage': project.current_stage,
+                'is_running': self.is_running(project_id),
+            }
+        except Exception as e:
+            logger.error(f"Error getting status for project {project_id}: {e}")
+            return {"error": str(e)}
     
     def execute_project(
         self,
@@ -75,14 +132,8 @@ class PipelineExecutor:
             self._progress_callbacks[project_id] = on_progress
         
         # Run in background thread
-        thread = threading.Thread(
-            target=self._run_pipeline,
-            args=(project_id, history.run_id, cancel_event),
-            daemon=True,
-            name=f"pipeline-{project_id[:8]}"
-        )
-        self._running_tasks[project_id] = thread
-        thread.start()
+        future = self._pool.submit(self._run_pipeline, project_id, history.run_id, cancel_event)
+        self._running_tasks[project_id] = future
         
         logger.info(f"Started processing project {project_id}")
         return True
@@ -91,6 +142,11 @@ class PipelineExecutor:
         """Cancel project processing."""
         if project_id not in self._cancel_flags:
             return False
+        
+        # Cancel the future if it exists
+        if project_id in self._running_tasks:
+            future = self._running_tasks[project_id]
+            future.cancel()
         
         self._cancel_flags[project_id].set()
         self.project_manager.cancel_processing(project_id)
@@ -102,11 +158,14 @@ class PipelineExecutor:
     
     def is_running(self, project_id: str) -> bool:
         """Check if project processing is running."""
-        return project_id in self._running_tasks and self._running_tasks[project_id].is_alive()
+        if project_id not in self._running_tasks:
+            return False
+        future = self._running_tasks[project_id]
+        return not future.done()
     
     def get_running_projects(self) -> list[str]:
         """Get list of project IDs being processed."""
-        return [pid for pid, t in self._running_tasks.items() if t.is_alive()]
+        return [pid for pid, future in self._running_tasks.items() if not future.done()]
     
     def _run_pipeline(self, project_id: str, run_id: str, cancel_event: threading.Event) -> None:
         """
@@ -309,3 +368,12 @@ class PipelineExecutor:
         self._running_tasks.pop(project_id, None)
         self._cancel_flags.pop(project_id, None)
         self._progress_callbacks.pop(project_id, None)
+    
+    def shutdown(self, wait: bool = False) -> None:
+        """
+        Shutdown the thread pool executor.
+        
+        Args:
+            wait: Whether to wait for running tasks to complete
+        """
+        self._pool.shutdown(wait=wait)

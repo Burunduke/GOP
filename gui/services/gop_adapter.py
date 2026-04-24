@@ -49,6 +49,38 @@ class GOPAdapter:
         else:
             self.gop_mode = "emulation"
     
+    def process_data(self, data_path: str, processing_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process data through GOP pipeline
+        
+        Args:
+            data_path: Path to input data
+            processing_type: Type of processing
+            parameters: Additional processing parameters
+            
+        Returns:
+            Processing result
+        """
+        if self.gop_mode != "full":
+            # Emulate processing if GOP is not available
+            config = {
+                'input_path': data_path,
+                'output_dir': parameters.get('output_dir', 'results'),
+                'sensor_type': processing_type
+            }
+            return self._emulate_processing_result(config)['result']
+        
+        try:
+            # Call the real pipeline process method
+            result = self.pipeline.process(
+                input_path=data_path,
+                output_dir=parameters.get('output_dir'),
+                sensor_type=processing_type
+            )
+            return result
+        except Exception as e:
+            raise Exception(f"GOP processing error: {str(e)}")
+    
     async def process_data_async(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Asynchronous data processing through GOP
