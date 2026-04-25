@@ -5,6 +5,7 @@ Main Dash application for GOP GUI
 import os
 import logging
 import sys
+import traceback
 from pathlib import Path
 
 import dash
@@ -100,6 +101,9 @@ def create_app(config_name: str = 'default') -> dash.Dash:
     # Configure static files
     _setup_static_files(server)
     
+    # Add error handlers for better logging
+    _setup_error_handlers(server)
+    
     logger.info(f"GUI application created with config: {config_name}")
     return app
 
@@ -129,6 +133,36 @@ def _setup_static_files(server: Flask) -> None:
     def serve_docs(filename: str):
         docs_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'docs')
         return send_from_directory(docs_dir, filename)
+    
+    # Test route for error handling (remove in production)
+    @server.route('/test-error')
+    def test_error():
+        raise Exception("Test error for logging verification")
+
+
+def _setup_error_handlers(server: Flask) -> None:
+    """Configure error handlers for the Flask application
+    
+    Args:
+        server: Flask server instance
+    """
+    
+    @server.errorhandler(404)
+    def not_found_error(error):
+        logger.warning(f"404 error: {error}")
+        return "Page not found", 404
+    
+    @server.errorhandler(500)
+    def internal_error(error):
+        logger.error(f"500 error: {error}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return "Internal server error", 500
+    
+    @server.errorhandler(Exception)
+    def unhandled_exception(error):
+        logger.error(f"Unhandled exception: {error}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return "Internal server error", 500
 
 
 def main() -> None:

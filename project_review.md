@@ -274,9 +274,19 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 
 - **HyperspectralValidator fixed** in [`src/processing/hyperspectral/validators.py`](src/processing/hyperspectral/validators.py:197) by adding the missing `validate_data` method that was causing the "HyperspectralValidator object has no attribute 'validate_data'" error during preprocessing.
 
----
+### Additional fixes - 2026-04-25
+
+- **TypeError fixed** in [`gui/components/project_detail.py`](gui/components/project_detail.py:310) by adding proper handling for `None` values in `total_duration_seconds` when formatting processing history duration display. This resolves the "TypeError: unsupported format string passed to NoneType.__format__" error that occurred when viewing project details.
+
+- **TypeError fixed** in [`gui/components/callbacks.py`](gui/components/callbacks.py:556) by adding proper handling for `None` values in `total_duration_seconds` when formatting processing history duration display in the callback function. This prevents the same error from occurring in the dynamic updates.
+
+### Additional fixes - 2026-04-25
+
+- **Flask error logging improved** in [`gui/app/app.py`](gui/app/app.py:135) by adding error handlers for common HTTP error codes (404, 500) and unhandled exceptions. This ensures that all Flask app errors are properly logged to both console and file, addressing the issue where errors were not being logged.
+- **Test route added** in [`gui/app/app.py`](gui/app/app.py:138) to verify error handling functionality. A `/test-error` route was added that raises an exception to test the error logging mechanism.
 
 ## Review Log
 
 - `2026-04-24` — Senior code review performed; identified 3 critical runtime bugs (duplicate Dash callbacks, missing `process_data` method, broken hyperspectral→orthophoto data contract), architectural duplication (REST API vs Dash callbacks), and complexity (dual-mode adapter, unimplemented Redis caching) that can be simplified for junior maintainability.
 - `2026-04-25` — All 9 issues resolved; see [Change Log — 2026-04-25](#change-log--2026-04-25) above.
+- `2026-04-25` — Added Flask error handlers to log exceptions that occur during request processing, ensuring that all errors are properly logged to both console and file. This addresses the issue where Flask app errors were not being logged.

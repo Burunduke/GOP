@@ -307,7 +307,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                                         else "secondary",
                                                         className="me-2"
                                                     ),
-                                                    html.Small(f"Duration: {run.get('total_duration_seconds', 0):.1f} sec",
+                                                    html.Small(f"Duration: {run.get('total_duration_seconds', 0) if run.get('total_duration_seconds') is not None else 0:.1f} sec",
                                                               className="text-muted"),
                                                 ]),
                                             ], className="flex-grow-1"),
