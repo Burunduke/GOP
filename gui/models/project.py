@@ -135,6 +135,7 @@ class ProcessingHistory:
     results: List[Dict[str, Any]] = field(default_factory=list)
     total_duration_seconds: Optional[float] = None
     error_message: Optional[str] = None
+    run_folder_name: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation.
@@ -172,6 +173,7 @@ class Project:
     progress: float = 0.0  # 0.0 to 100.0
     processing_history: List[Dict[str, Any]] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
+    folder_name: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation.

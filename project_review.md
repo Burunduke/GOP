@@ -327,3 +327,20 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 - **Files touched:** [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1)
 - **Expected memory impact:** ~−5 GiB peak from steps 1+2; +safety from step 4.
 - **Verification:** Syntax check passed with `python3 -m py_compile src/processing/hyperspectral/processor.py`.
+
+### Project and Run Folder Naming Rules — 2026-04-25
+
+- **What changed:** Project folders now use sanitized GUI names instead of UUIDs; run folders now use `run_N` numbering per project instead of UUIDs.
+- **Naming rules:**
+  - **Project folders:** Sanitized from GUI project name using `sanitize_project_name()` which replaces path-unsafe characters (\\/:*?"<>| and control characters 0-31) with underscores, strips leading/trailing whitespace and dots. Empty names are rejected.
+  - **Run folders:** Numbered as `run_1`, `run_2`, ... per project, computed as `max(existing run_N for this project) + 1`. Legacy hashed run folders are preserved.
+- **Duplicate handling:** Project name duplicates are rejected with a clear error in the GUI during creation.
+- **Backward compatibility:** Legacy UUID-named project folders and legacy hashed run folders still load without migration.
+- **Affected files:**
+  - [`gui/utils/file_utils.py`](gui/utils/file_utils.py:366) — `sanitize_project_name()` helper
+  - [`gui/services/project_manager.py`](gui/services/project_manager.py:80) — project folder creation and run folder management
+  - [`gui/models/project.py`](gui/models/project.py:176) — `folder_name` attribute on Project model
+  - [`gui/components/layout.py`](gui/components/layout.py:87) — error display area for creation errors
+  - [`gui/components/callbacks.py`](gui/components/callbacks.py:187) — error handling and display for project creation
+  - [`gui/components/project_detail.py`](gui/components/project_detail.py:17) — run display name formatting
+- **Caveat:** If a project has only legacy runs, the next new run is `run_1`.

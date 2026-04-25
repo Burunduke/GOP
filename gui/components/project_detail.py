@@ -14,6 +14,27 @@ from gui.utils.format_utils import format_date, format_file_size, get_stage_disp
 from gui.components.enhanced_file_picker import create_enhanced_file_picker
 
 
+def _get_run_display_name(run_data: dict) -> str:
+    """
+    Get display name for a run based on run_folder_name or fallback to index.
+    
+    Args:
+        run_data: Run data dictionary
+        
+    Returns:
+        Display name for the run
+    """
+    run_folder_name = run_data.get("run_folder_name")
+    if run_folder_name and run_folder_name.startswith("run_"):
+        try:
+            run_number = int(run_folder_name.split("_")[1])
+            return f"Run {run_number}"
+        except (ValueError, IndexError):
+            # Invalid format, fall back to default
+            pass
+    # Fallback to generic naming for legacy runs or if no folder name
+    return f"Run (Legacy)"
+
 def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
     """
     Create project detail page.
@@ -291,7 +312,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                     dbc.ListGroupItem([
                                         html.Div([
                                             html.Div([
-                                                html.H6(f"Run {i+1}", className="mb-1"),
+                                                html.H6(_get_run_display_name(run), className="mb-1"),
                                                 html.P(f"Start: {format_date(run.get('start_time', ''))} | "
                                                        f"Status: {run.get('status', 'unknown')}",
                                                        className="mb-1 text-muted small"),

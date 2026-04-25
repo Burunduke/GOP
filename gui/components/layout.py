@@ -25,6 +25,7 @@ def create_main_layout() -> html.Div:
         dcc.Store(id='processing-store'),
         dcc.Store(id='projects-store'),
         dcc.Store(id='current-project-store'),
+        dcc.Store(id='project-creation-error-store', data=None),
         
         # URL routing
         dcc.Location(id='url', refresh=False),
@@ -82,6 +83,8 @@ def _create_modals() -> html.Div:
                             ),
                         ]),
                     ], className="mt-3"),
+                    # Error display area
+                    html.Div(id="project-creation-error-display", className="mt-3 text-danger"),
                 ])
             ]),
             dbc.ModalFooter([

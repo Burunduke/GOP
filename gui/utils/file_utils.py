@@ -361,3 +361,33 @@ def cleanup_old_files(directory: str, max_age_days: int = 30) -> int:
         pass
     
     return deleted_count
+
+
+def sanitize_project_name(name: str) -> str:
+    """
+    Sanitize project name to create a safe folder name.
+    
+    Replaces path-unsafe characters with underscores, strips leading/trailing
+    whitespace and dots, and ensures the name is not empty.
+    
+    Args:
+        name: Original project name from GUI
+        
+    Returns:
+        Sanitized project name safe for use as a folder name
+    """
+    import re
+    import string
+    
+    # Strip leading/trailing whitespace and dots
+    sanitized = name.strip().strip('.')
+    
+    # Replace path-unsafe characters with underscores
+    # Characters: \ / : * ? " < > | and control characters (0-31)
+    unsafe_chars = r'[\\/:*?"<>|' + ''.join(chr(i) for i in range(32)) + ']'
+    sanitized = re.sub(unsafe_chars, '_', sanitized)
+    
+    # Also replace multiple consecutive dots with single underscore
+    sanitized = re.sub(r'\.\.+', '_', sanitized)
+    
+    return sanitized

@@ -305,12 +305,29 @@ class PipelineExecutor:
             # Get the files directory
             files_dir = self.project_manager.projects_dir / project_id / "files"
             
+            # Get the current run folder from project manager
+            project = self.project_manager.get_project(project_id)
+            run_folder = None
+            if project and project.processing_history:
+                # Get the last run (current run)
+                last_history = project.processing_history[-1]
+                run_folder_name = last_history.get("run_folder_name")
+                run_id = last_history.get("run_id")
+                if run_folder_name:
+                    # For new runs, we have the folder name directly
+                    project_folder = getattr(project, 'folder_name', None) or project_id
+                    run_folder = str(self.project_manager.projects_dir / project_folder / "results" / run_folder_name)
+                elif run_id:
+                    # For legacy runs, use the run_id as folder name
+                    project_folder = getattr(project, 'folder_name', None) or project_id
+                    run_folder = str(self.project_manager.projects_dir / project_folder / "results" / run_id)
+            
             # For hyperspectral processing, we need to pass the directory containing files
             # The processor should handle multiple files in the directory
             result = self.gop_adapter.process_data(
                 data_path=str(files_dir),
                 processing_type=stage,
-                parameters=config.get(stage, {})
+                parameters={**config.get(stage, {}), "output_dir": run_folder}
             )
             return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}
         else:

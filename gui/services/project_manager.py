@@ -15,6 +15,7 @@ from gui.models.project import (
     PipelineStage
 )
 from gui.config import config
+from gui.utils.file_utils import sanitize_project_name
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +49,20 @@ class ProjectManager:
                         with open(project_file, "r", encoding="utf-8") as f:
                             data = json.load(f)
                         project = Project.from_dict(data)
+                        # Store the folder name for legacy projects (hashed) and new projects (named)
+                        project.folder_name = project_dir.name
                         self._cache[project.id] = project
                     except (json.JSONDecodeError, Exception) as e:
                         logger.error(f"Error loading project from {project_file}: {e}")
     
     def _save_project(self, project: Project) -> None:
         """Save project to filesystem."""
-        project_dir = self.projects_dir / project.id
+        # Use sanitized project name for folder if available, otherwise use ID
+        folder_name = getattr(project, 'folder_name', None)
+        if not folder_name:
+            # For new projects, use sanitized name; for existing projects, keep using ID
+            folder_name = project.id
+        project_dir = self.projects_dir / folder_name
         project_dir.mkdir(parents=True, exist_ok=True)
         
         # Create subdirectories
@@ -80,14 +88,33 @@ class ProjectManager:
             
         Returns:
             Created project
+            
+        Raises:
+            ValueError: If project with sanitized name already exists or name is invalid
         """
+        # Sanitize the project name
+        sanitized_name = sanitize_project_name(name)
+        
+        # Check if name is empty after sanitization
+        if not sanitized_name:
+            raise ValueError("Project name is invalid or empty after sanitization")
+        
+        # Check if a project with this sanitized name already exists
+        project_path = self.projects_dir / sanitized_name
+        if project_path.exists():
+            raise ValueError("A project with this name already exists. Please choose a different name.")
+        
         project = Project(
             name=name,
             description=description,
             tags=tags or [],
         )
+        
+        # Store the sanitized folder name
+        project.folder_name = sanitized_name
+        
         self._save_project(project)
-        logger.info(f"Created project: {project.name} (ID: {project.id})")
+        logger.info(f"Created project: {project.name} (ID: {project.id}, Folder: {sanitized_name})")
         return project
     
     def get_project(self, project_id: str) -> Optional[Project]:
@@ -141,7 +168,9 @@ class ProjectManager:
         if project is None:
             return False
         
-        project_dir = self.projects_dir / project_id
+        # Use folder_name if available, otherwise use project ID
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        project_dir = self.projects_dir / folder_name
         if project_dir.exists():
             shutil.rmtree(project_dir)
         
@@ -200,6 +229,10 @@ class ProjectManager:
         try:
             project = self.create_project(name=name.strip(), description=description)
             return project.to_dict()
+        except ValueError as e:
+            # Handle specific validation errors (e.g., duplicate name)
+            logger.warning(f"Validation error creating project: {e}")
+            return {"error": str(e)}
         except Exception as e:
             logger.error(f"Error creating project: {e}")
             return {"error": str(e)}
@@ -269,7 +302,9 @@ class ProjectManager:
         )
         
         # Save file to disk
-        files_dir = self.projects_dir / project_id / "files"
+        # Use folder_name if available, otherwise use project ID
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        files_dir = self.projects_dir / folder_name / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
         final_file_path = files_dir / f"{project_file.id}_{filename}"
         
@@ -350,7 +385,9 @@ class ProjectManager:
         )
 
         # Prepare destination directory
-        files_dir = self.projects_dir / project_id / "files"
+        # Use folder_name if available, otherwise use project ID
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        files_dir = self.projects_dir / folder_name / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
         final_file_path = files_dir / f"{project_file.id}_{filename}"
 
@@ -485,9 +522,17 @@ class ProjectManager:
             config=project.processing_config,
         )
         
-        # Create directory for results
-        results_dir = self.projects_dir / project_id / "results" / history.run_id
+        # Determine run number and create directory for results
+        run_number = self._next_run_number(project_id)
+        run_folder_name = f"run_{run_number}"
+        
+        # Use folder_name if available, otherwise use project ID
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        results_dir = self.projects_dir / folder_name / "results" / run_folder_name
         results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Store the run folder name in the history for later reference
+        history.run_folder_name = run_folder_name
         
         # Update project
         project.status = ProjectStatus.RUN.value
@@ -499,6 +544,43 @@ class ProjectManager:
         
         logger.info(f"Started processing project {project.name} (run: {history.run_id})")
         return history
+    
+    def _next_run_number(self, project_id: str) -> int:
+        """
+        Get the next run number for a project.
+        
+        Scans existing run_N directories for this project and returns max+1.
+        If there are no run_N folders yet, returns 1.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            Next run number (1-based)
+        """
+        # Use folder_name if available, otherwise use project ID
+        project = self.get_project(project_id)
+        if project is None:
+            return 1
+        
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        results_dir = self.projects_dir / folder_name / "results"
+        
+        if not results_dir.exists():
+            return 1
+        
+        max_run_number = 0
+        for item in results_dir.iterdir():
+            if item.is_dir() and item.name.startswith("run_"):
+                try:
+                    # Extract number from run_N format
+                    run_number = int(item.name.split("_")[1])
+                    max_run_number = max(max_run_number, run_number)
+                except (ValueError, IndexError):
+                    # Not a valid run_N directory, skip it
+                    continue
+        
+        return max_run_number + 1
     
     def update_processing_progress(
         self, 
@@ -671,3 +753,59 @@ class ProjectManager:
         """
         projects = self.list_projects(sort_by="updated_at", reverse=True)
         return projects[:limit]
+    
+    def get_run_folders(self, project_id: str) -> list:
+        """
+        Get all run folders for a project, supporting both legacy and new formats.
+        
+        Args:
+            project_id: Project ID
+            
+        Returns:
+            List of run folder information sorted by run number/name
+        """
+        project = self.get_project(project_id)
+        if project is None:
+            return []
+        
+        folder_name = getattr(project, 'folder_name', None) or project_id
+        results_dir = self.projects_dir / folder_name / "results"
+        
+        if not results_dir.exists():
+            return []
+        
+        run_folders = []
+        
+        # Scan for both legacy (UUID) and new (run_N) folders
+        for item in results_dir.iterdir():
+            if item.is_dir():
+                if item.name.startswith("run_"):
+                    # New format: run_N
+                    try:
+                        run_number = int(item.name.split("_")[1])
+                        run_folders.append({
+                            "name": item.name,
+                            "path": str(item),
+                            "run_number": run_number,
+                            "is_legacy": False
+                        })
+                    except (ValueError, IndexError):
+                        # Invalid run_N format, treat as legacy
+                        run_folders.append({
+                            "name": item.name,
+                            "path": str(item),
+                            "run_number": None,
+                            "is_legacy": True
+                        })
+                else:
+                    # Legacy format: UUID or other
+                    run_folders.append({
+                        "name": item.name,
+                        "path": str(item),
+                        "run_number": None,
+                        "is_legacy": True
+                    })
+        
+        # Sort by run number for new folders, legacy folders at the end
+        run_folders.sort(key=lambda x: (x["is_legacy"], x["run_number"] or 0))
+        return run_folders

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Optional, Union
 from pathlib import Path
 
-from gui.utils.format_utils import get_stage_display_name
+from gui.utils.format_utils import get_stage_display_name, format_date, format_file_size, format_duration
 
 from dash import Input, Output, State, callback_context, no_update, ALL, html
 from dash.exceptions import PreventUpdate
@@ -25,6 +25,28 @@ from gui.components.documentation import create_documentation_component
 from gui.components.project_detail import create_project_detail
 
 logger = logging.getLogger(__name__)
+
+
+def _get_run_display_name(run_data: dict) -> str:
+    """
+    Get display name for a run based on run_folder_name or fallback to index.
+    
+    Args:
+        run_data: Run data dictionary
+        
+    Returns:
+        Display name for the run
+    """
+    run_folder_name = run_data.get("run_folder_name")
+    if run_folder_name and run_folder_name.startswith("run_"):
+        try:
+            run_number = int(run_folder_name.split("_")[1])
+            return f"Run {run_number}"
+        except (ValueError, IndexError):
+            # Invalid format, fall back to default
+            pass
+    # Fallback to generic naming for legacy runs or if no folder name
+    return "Run (Legacy)"
 
 def register_callbacks(
     app: dash.Dash,
@@ -123,7 +145,8 @@ def register_callbacks(
     
     # === 5. Create project modal ===
     @app.callback(
-        Output("create-project-modal", "is_open"),
+        [Output("create-project-modal", "is_open"),
+         Output("project-creation-error-store", "data")],
         [Input("new-project-btn", "n_clicks"),
          Input("create-project-btn", "n_clicks"),
          Input("cancel-create-project", "n_clicks")],
@@ -154,19 +177,26 @@ def register_callbacks(
         if trigger_id == "new-project-btn":
             # Only open if new-project-btn was actually clicked and we have a valid click count
             if new_btn is not None and new_btn > 0:
-                return True
-            return no_update
+                return True, None  # Clear any previous error when opening modal
+            return no_update, dash.no_update
         
         if trigger_id == "create-project-btn":
             if name and project_manager:
-                project_manager.create_project_safe(name=name, description=description or "")
-            return False
+                result = project_manager.create_project_safe(name=name, description=description or "")
+                # Check if there was an error
+                if "error" in result:
+                    # Return the error to be displayed
+                    return True, result["error"]  # Keep modal open and pass error
+                else:
+                    # Success - close modal and clear error
+                    return False, None
+            return False, dash.no_update
 
         if trigger_id == "cancel-create-project":
-            return False
+            return False, None
         
         # If we get here, it's an unexpected trigger - don't change modal state
-        return no_update
+        return no_update, dash.no_update
     
     # === 7. Refresh projects store after creation ===
     @app.callback(
@@ -416,6 +446,30 @@ def register_callbacks(
         
         return is_open
     
+    # === Display project creation errors ===
+    @app.callback(
+        [Output("notification-toast", "is_open", allow_duplicate=True),
+         Output("notification-toast", "children", allow_duplicate=True)],
+        Input("project-creation-error-store", "data"),
+        prevent_initial_call=True,
+    )
+    def display_project_creation_error(error_message):
+        """Display project creation error in notification toast."""
+        if error_message:
+            return True, error_message
+        return dash.no_update, dash.no_update
+
+    # === Display project creation errors in modal ===
+    @app.callback(
+        Output("project-creation-error-display", "children"),
+        Input("project-creation-error-store", "data"),
+    )
+    def display_project_creation_error_in_modal(error_message):
+        """Display project creation error in the create project modal."""
+        if error_message:
+            return dbc.Alert(error_message, color="danger", className="mb-0")
+        return ""
+
     # === Keep existing callbacks that still work ===
     
     # === 16. File deletion callback ===
@@ -537,7 +591,7 @@ def register_callbacks(
                 item = dbc.ListGroupItem([
                     html.Div([
                         html.Div([
-                            html.H6(f"Run {i+1}", className="mb-1"),
+                            html.H6(_get_run_display_name(run), className="mb-1"),
                             html.P(f"Start: {format_date(run.get('start_time', ''))} | "
                                    f"Status: {run.get('status', 'unknown')}",
                                    className="mb-1 text-muted small"),
