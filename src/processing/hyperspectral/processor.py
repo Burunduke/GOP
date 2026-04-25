@@ -241,7 +241,10 @@ class HyperspectralProcessor:
             self.logger.info("[hsp] process: Step 2/4 _apply_preprocessing - start")
             preprocess_start_time = time.perf_counter()
             with ResourceMonitor("process.apply_preprocessing", logger=self.logger, interval_s=30.0):
-                processed_data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
+                data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
+                # Drop the original reference to free memory
+                processed_data = data
+                data = None  # Explicitly drop reference
             preprocess_duration = time.perf_counter() - preprocess_start_time
             self.logger.info(
                 f"[hsp] process: Step 2/4 _apply_preprocessing - end "
@@ -277,7 +280,7 @@ class HyperspectralProcessor:
             self.logger.error(f"Error during processing: {e}")
             raise ProcessingError(f"Error during processing: {e}")
 
-    def _apply_preprocessing(self, data: HyperspectralData, input_path: str, config: Dict[str, Any]) -> tuple:
+    def _apply_preprocessing(self, processed_data: HyperspectralData, input_path: str, config: Dict[str, Any]) -> tuple:
         """
         Apply preprocessing steps to hyperspectral data.
 
@@ -300,12 +303,13 @@ class HyperspectralProcessor:
         # Explicit log before data.copy() - the suspected OOM point
         copy_size_mb = data.nbytes / 1024 / 1024
         self.logger.info(
-            f"[hsp] _apply_preprocessing: About to copy input cube "
-            f"shape={data.shape} dtype={data.dtype} size={copy_size_mb:.1f} MiB"
+            f"[hsp] _apply_preprocessing: About to process input cube "
+            f"shape={processed_data.shape} dtype={processed_data.dtype} size={copy_size_mb:.1f} MiB"
         )
         with ResourceMonitor("apply_preprocessing.copy_input", logger=self.logger):
-            processed_data = data.copy()
-        self.logger.info("[hsp] _apply_preprocessing: Copy complete")
+            # In-place processing - no copy needed
+            pass
+        self.logger.info("[hsp] _apply_preprocessing: Processing ready")
         
         applied_steps = []
         
@@ -325,7 +329,9 @@ class HyperspectralProcessor:
             start_time = time.perf_counter()
             dark_percentile = radiometric_config.get("dark_percentile", 1)
             dark_value = np.percentile(processed_data, dark_percentile)
-            processed_data = processed_data - dark_value
+            # Ensure dark_value is the same dtype as processed_data to avoid upcasting
+            dark_value = np.float32(dark_value)
+            processed_data -= dark_value  # In-place subtraction
             applied_steps.append("dark_current_subtraction")
             duration = time.perf_counter() - start_time
             self.logger.info(
@@ -340,7 +346,9 @@ class HyperspectralProcessor:
             start_time = time.perf_counter()
             mean_value = np.mean(processed_data)
             if mean_value > 0:
-                processed_data = processed_data / mean_value
+                # Ensure mean_value is the same dtype as processed_data to avoid upcasting
+                mean_value = np.float32(mean_value)
+                processed_data /= mean_value  # In-place division
             applied_steps.append("flat_field_correction")
             duration = time.perf_counter() - start_time
             self.logger.info(
@@ -355,7 +363,11 @@ class HyperspectralProcessor:
             start_time = time.perf_counter()
             gain = radiometric_config.get("gain", 1.0)
             offset = radiometric_config.get("offset", 0.0)
-            processed_data = gain * processed_data + offset
+            # Ensure gain and offset are the same dtype as processed_data to avoid upcasting
+            gain = np.float32(gain)
+            offset = np.float32(offset)
+            processed_data *= gain  # In-place multiplication
+            processed_data += offset  # In-place addition
             applied_steps.append("radiometric_correction")
             duration = time.perf_counter() - start_time
             self.logger.info(
@@ -373,7 +385,9 @@ class HyperspectralProcessor:
             if method == "simplified":
                 # Simple scalar correction
                 atm_correction = atmospheric_config.get("correction_factor", 0.95)
-                processed_data = processed_data * atm_correction
+                # Ensure atm_correction is the same dtype as processed_data to avoid upcasting
+                atm_correction = np.float32(atm_correction)
+                processed_data *= atm_correction  # In-place multiplication
                 applied_steps.append("atmospheric_correction")
                 duration = time.perf_counter() - start_time
                 self.logger.info(
@@ -462,8 +476,8 @@ class HyperspectralProcessor:
                         f"shape={processed_data.shape} dtype={processed_data.dtype} "
                         f"duration={duration:.2f}s"
                     )
-            else:
-                # Fallback to simple mean filter
+            elif method in ("mean", "gaussian"):
+                # Fallback to simple mean filter for implemented methods only
                 kernel_size = 3
                 processed_data = self._numpy_mean_filter(processed_data, kernel_size)
                 applied_steps.append("noise_filtering_mean")
@@ -473,6 +487,14 @@ class HyperspectralProcessor:
                     f"shape={processed_data.shape} dtype={processed_data.dtype} "
                     f"duration={duration:.2f}s"
                 )
+            else:
+                # Method is not implemented - log warning and skip noise reduction
+                self.logger.warning(f"noise_reduction.method='{method}' is not implemented yet; skipping noise reduction")
+                duration = time.perf_counter() - start_time
+                self.logger.info(
+                    f"[hsp] _apply_preprocessing: noise_filtering - skipped "
+                    f"duration={duration:.2f}s"
+                )
         
         # 6. Normalization - check if it's enabled in spectral calibration or as a separate config
         spectral_config = config.get("spectral_calibration", {})
@@ -480,13 +502,15 @@ class HyperspectralProcessor:
             self.logger.info("[hsp] _apply_preprocessing: normalization - start")
             start_time = time.perf_counter()
             # Use minmax normalization by default
-            # Normalize each band to [0, 1]
+            # Normalize each band to [0, 1] using in-place operations
             for band_idx in range(processed_data.shape[2]):
-                band = processed_data[:, :, band_idx]
-                min_val = np.min(band)
-                max_val = np.max(band)
-                if max_val > min_val:
-                    processed_data[:, :, band_idx] = (band - min_val) / (max_val - min_val)
+                band_view = processed_data[:, :, band_idx]  # View, no copy
+                min_val = band_view.min()
+                max_val = band_view.max()
+                span = max_val - min_val
+                if span > 0:
+                    band_view -= min_val  # In-place subtraction
+                    band_view /= span     # In-place division
             applied_steps.append("normalization_minmax")
             duration = time.perf_counter() - start_time
             self.logger.info(

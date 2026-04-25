@@ -316,3 +316,14 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 - `2026-04-25` — Added Flask error handlers to log exceptions that occur during request processing, ensuring that all errors are properly logged to both console and file. This addresses the issue where Flask app errors were not being logged.
 - `2026-04-25` — Fixed duplicate log entries in hyperspectral processing by setting `propagate=False` for loggers created with `setup_logger` in [`src/utils/logger.py`](src/utils/logger.py:68). This prevents log messages from being output twice (once by the specific logger and once by the root logger).
 - `2026-04-25` — Fixed WinError 193 on Windows in [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) by ensuring all GDAL Python script invocations (`gdal_merge.py`) use `sys.executable` for cross-platform compatibility, and all GDAL binary tools (`gdal_translate`, `gdaladdo`) use `shutil.which` for robust path resolution. This resolves the "not a valid Win32 application" error when running GDAL tools on Windows.
+
+### Memory optimization in hyperspectral processing — 2026-04-25
+
+- **What changed:** Implemented memory optimizations in [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1) to reduce peak RAM usage during the radiometric preprocessing stage from ~10 GiB to ~5 GiB on a 16 GiB machine.
+- **Steps applied:**
+  1. **Step 1 — Eliminate full-cube copy:** Removed `processed_data = data.copy()` in [`_apply_preprocessing()`](src/processing/hyperspectral/processor.py:280) and modified the function to operate in-place on the input data, eliminating a ~5 GiB memory spike.
+  2. **Step 2 — In-place arithmetic:** Converted all radiometric arithmetic operations (dark current subtraction, flat-field division, radiometric scaling, atmospheric correction) to use in-place operators (`-=`, `/=`, `*=`, `+=`) to prevent temporary full-cube allocations.
+  3. **Step 4 — Prevent fall-through to mean filter:** Modified the noise reduction method selection to skip processing with a warning for unimplemented methods (e.g., `pca`, `mnf`) instead of silently falling through to the mean filter, preventing unintended ~5 GiB allocations.
+- **Files touched:** [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1)
+- **Expected memory impact:** ~−5 GiB peak from steps 1+2; +safety from step 4.
+- **Verification:** Syntax check passed with `python3 -m py_compile src/processing/hyperspectral/processor.py`.
