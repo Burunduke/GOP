@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Optional, Union
 from pathlib import Path
 
-from gui.utils.format_utils import get_stage_display_name, format_date, format_file_size, format_duration
+from gui.utils.format_utils import get_stage_display_name, format_date, format_file_size
 
 from dash import Input, Output, State, callback_context, no_update, ALL, html
 from dash.exceptions import PreventUpdate

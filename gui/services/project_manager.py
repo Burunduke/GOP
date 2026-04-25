@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class ProjectManager:
     """Manager for GOP project management."""
     
-    def __init__(self, projects_dir: str = "projects") -> None:
+    def __init__(self, projects_dir: str = "data/projects") -> None:
         """
         Initialize project manager.
         
@@ -34,6 +34,24 @@ class ProjectManager:
         self.projects_dir.mkdir(parents=True, exist_ok=True)
         self._cache: Dict[str, Project] = {}
         self._load_all_projects()
+    
+    def get_project_dir(self, project: Project) -> Path:
+        """
+        Get the directory path for a project.
+        
+        Uses folder_name if available (new projects), otherwise falls back to project ID (legacy).
+        
+        Args:
+            project: Project instance
+            
+        Returns:
+            Path to project directory
+        """
+        folder_name = getattr(project, 'folder_name', None)
+        if folder_name:
+            return self.projects_dir / folder_name
+        else:
+            return self.projects_dir / project.id
     
     def _load_all_projects(self) -> None:
         """Load all projects from filesystem into cache."""
@@ -57,12 +75,8 @@ class ProjectManager:
     
     def _save_project(self, project: Project) -> None:
         """Save project to filesystem."""
-        # Use sanitized project name for folder if available, otherwise use ID
-        folder_name = getattr(project, 'folder_name', None)
-        if not folder_name:
-            # For new projects, use sanitized name; for existing projects, keep using ID
-            folder_name = project.id
-        project_dir = self.projects_dir / folder_name
+        # Use the centralized helper to get the correct project directory
+        project_dir = self.get_project_dir(project)
         project_dir.mkdir(parents=True, exist_ok=True)
         
         # Create subdirectories
@@ -168,9 +182,8 @@ class ProjectManager:
         if project is None:
             return False
         
-        # Use folder_name if available, otherwise use project ID
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        project_dir = self.projects_dir / folder_name
+        # Use the centralized helper to get the correct project directory
+        project_dir = self.get_project_dir(project)
         if project_dir.exists():
             shutil.rmtree(project_dir)
         
@@ -302,9 +315,9 @@ class ProjectManager:
         )
         
         # Save file to disk
-        # Use folder_name if available, otherwise use project ID
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        files_dir = self.projects_dir / folder_name / "files"
+        # Use the centralized helper to get the correct project directory
+        project_dir = self.get_project_dir(project)
+        files_dir = project_dir / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
         final_file_path = files_dir / f"{project_file.id}_{filename}"
         
@@ -385,9 +398,9 @@ class ProjectManager:
         )
 
         # Prepare destination directory
-        # Use folder_name if available, otherwise use project ID
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        files_dir = self.projects_dir / folder_name / "files"
+        # Use the centralized helper to get the correct project directory
+        project_dir = self.get_project_dir(project)
+        files_dir = project_dir / "files"
         files_dir.mkdir(parents=True, exist_ok=True)
         final_file_path = files_dir / f"{project_file.id}_{filename}"
 
@@ -526,9 +539,9 @@ class ProjectManager:
         run_number = self._next_run_number(project_id)
         run_folder_name = f"run_{run_number}"
         
-        # Use folder_name if available, otherwise use project ID
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        results_dir = self.projects_dir / folder_name / "results" / run_folder_name
+        # Use the centralized helper to get the correct project directory
+        project_dir = self.get_project_dir(project)
+        results_dir = project_dir / "results" / run_folder_name
         results_dir.mkdir(parents=True, exist_ok=True)
         
         # Store the run folder name in the history for later reference
@@ -563,8 +576,8 @@ class ProjectManager:
         if project is None:
             return 1
         
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        results_dir = self.projects_dir / folder_name / "results"
+        project_dir = self.get_project_dir(project)
+        results_dir = project_dir / "results"
         
         if not results_dir.exists():
             return 1
@@ -768,8 +781,8 @@ class ProjectManager:
         if project is None:
             return []
         
-        folder_name = getattr(project, 'folder_name', None) or project_id
-        results_dir = self.projects_dir / folder_name / "results"
+        project_dir = self.get_project_dir(project)
+        results_dir = project_dir / "results"
         
         if not results_dir.exists():
             return []

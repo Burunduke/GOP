@@ -302,8 +302,11 @@ class PipelineExecutor:
             if not project.files:
                 raise ValueError(f"Project {project_id} has no files to process")
             
-            # Get the files directory
-            files_dir = self.project_manager.projects_dir / project_id / "files"
+            # Get the files directory using the project manager's helper
+            project = self.project_manager.get_project(project_id)
+            if project is None:
+                raise ValueError(f"Project not found: {project_id}")
+            files_dir = self.project_manager.get_project_dir(project) / "files"
             
             # Get the current run folder from project manager
             project = self.project_manager.get_project(project_id)
@@ -315,12 +318,12 @@ class PipelineExecutor:
                 run_id = last_history.get("run_id")
                 if run_folder_name:
                     # For new runs, we have the folder name directly
-                    project_folder = getattr(project, 'folder_name', None) or project_id
-                    run_folder = str(self.project_manager.projects_dir / project_folder / "results" / run_folder_name)
+                    project_dir = self.project_manager.get_project_dir(project)
+                    run_folder = str(project_dir / "results" / run_folder_name)
                 elif run_id:
                     # For legacy runs, use the run_id as folder name
-                    project_folder = getattr(project, 'folder_name', None) or project_id
-                    run_folder = str(self.project_manager.projects_dir / project_folder / "results" / run_id)
+                    project_dir = self.project_manager.get_project_dir(project)
+                    run_folder = str(project_dir / "results" / run_id)
             
             # For hyperspectral processing, we need to pass the directory containing files
             # The processor should handle multiple files in the directory
