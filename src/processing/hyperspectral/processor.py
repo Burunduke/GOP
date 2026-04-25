@@ -240,7 +240,7 @@ class HyperspectralProcessor:
             # Step 3: Apply preprocessing steps
             self.logger.info("[hsp] process: Step 2/4 _apply_preprocessing - start")
             preprocess_start_time = time.perf_counter()
-            with ResourceMonitor("process.apply_preprocessing", logger=self.logger, interval_s=10.0):
+            with ResourceMonitor("process.apply_preprocessing", logger=self.logger, interval_s=30.0):
                 processed_data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
             preprocess_duration = time.perf_counter() - preprocess_start_time
             self.logger.info(
@@ -520,36 +520,20 @@ class HyperspectralProcessor:
         Returns:
             Filtered data
         """
-        total_pixels = data.shape[0] * data.shape[1] * data.shape[2]
-        self.logger.warning(
-            f"[hsp] _numpy_median_filter: start - "
-            f"WARNING: Using slow Python loop for {total_pixels:,} pixels"
+        start_time = time.perf_counter()
+        self.logger.info("[hsp] _numpy_median_filter: start - using scipy.ndimage.median_filter")
+        
+        from scipy.ndimage import median_filter
+        # size=(k, k, 1) → per-band 2-D median; bands NOT mixed.
+        # mode='nearest' → equivalent to np.pad(..., mode='edge').
+        filtered = median_filter(data, size=(kernel_size, kernel_size, 1), mode='nearest')
+        
+        duration = time.perf_counter() - start_time
+        self.logger.info(
+            f"[hsp] _numpy_median_filter: end "
+            f"shape={data.shape} dtype={data.dtype} duration={duration:.2f}s"
         )
-        
-        # For simplicity, we'll use a basic approach for 3D data
-        # This is a simplified implementation - in practice, you might want to use scipy
-        filtered_data = data.copy()
-        pad = kernel_size // 2
-        
-        # Apply filter to each band separately
-        bands = data.shape[2]
-        for band_idx in range(bands):
-            band_start_time = time.perf_counter()
-            band = data[:, :, band_idx]
-            padded = np.pad(band, pad, mode='edge')
-            for i in range(band.shape[0]):
-                for j in range(band.shape[1]):
-                    window = padded[i:i+kernel_size, j:j+kernel_size]
-                    filtered_data[i, j, band_idx] = np.median(window)
-            
-            # Log progress every band (or could do every N bands for less verbosity)
-            band_duration = time.perf_counter() - band_start_time
-            self.logger.info(
-                f"[hsp] _numpy_median_filter: band {band_idx}/{bands} filtered "
-                f"in {band_duration:.2f}s"
-            )
-        
-        return filtered_data
+        return filtered
     
     def _numpy_mean_filter(self, data: np.ndarray, kernel_size: int) -> np.ndarray:
         """
@@ -562,36 +546,23 @@ class HyperspectralProcessor:
         Returns:
             Filtered data
         """
-        total_pixels = data.shape[0] * data.shape[1] * data.shape[2]
-        self.logger.warning(
-            f"[hsp] _numpy_mean_filter: start - "
-            f"WARNING: Using slow Python loop for {total_pixels:,} pixels"
+        start_time = time.perf_counter()
+        self.logger.info("[hsp] _numpy_mean_filter: start - using scipy.ndimage.uniform_filter")
+        
+        from scipy.ndimage import uniform_filter
+        # data shape: (H, W, B), float32. kernel_size is an odd int (3 in practice).
+        # size=(k, k, 1) → average a k×k window per band; bands are NOT mixed.
+        # mode='nearest' → replicate edge values, equivalent to np.pad(..., mode='edge').
+        filtered = np.empty_like(data)
+        uniform_filter(data, size=(kernel_size, kernel_size, 1),
+                       mode='nearest', output=filtered)
+        
+        duration = time.perf_counter() - start_time
+        self.logger.info(
+            f"[hsp] _numpy_mean_filter: end "
+            f"shape={data.shape} dtype={data.dtype} duration={duration:.2f}s"
         )
-        
-        # For simplicity, we'll use a basic approach for 3D data
-        # This is a simplified implementation - in practice, you might want to use scipy
-        filtered_data = data.copy()
-        pad = kernel_size // 2
-        
-        # Apply filter to each band separately
-        bands = data.shape[2]
-        for band_idx in range(bands):
-            band_start_time = time.perf_counter()
-            band = data[:, :, band_idx]
-            padded = np.pad(band, pad, mode='edge')
-            for i in range(band.shape[0]):
-                for j in range(band.shape[1]):
-                    window = padded[i:i+kernel_size, j:j+kernel_size]
-                    filtered_data[i, j, band_idx] = np.mean(window)
-            
-            # Log progress every band (or could do every N bands for less verbosity)
-            band_duration = time.perf_counter() - band_start_time
-            self.logger.info(
-                f"[hsp] _numpy_mean_filter: band {band_idx}/{bands} filtered "
-                f"in {band_duration:.2f}s"
-            )
-        
-        return filtered_data
+        return filtered
     
     def _save_band_tiffs(self, data: HyperspectralData, input_path: str, output_dir: str, metadata: Dict[str, Any]) -> List[str]:
         """

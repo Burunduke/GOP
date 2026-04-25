@@ -300,6 +300,15 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 - **Policy compliance:** no tests were added (per project policy of personal-use, no production tests). No new third-party dependencies were introduced — `psutil` is already declared under [Deployment / Dependencies](project_review.md:204).
 - **VS Code monitoring (user question):** VS Code does offer Help → Process Explorer (live per-process CPU/RSS) and the Microsoft Python extension ships profilers, but for a long batch that runs ~18 minutes inside a background thread and then crashes, in-process timestamped logs (this work) are strictly more useful — each line is anchored to the exact pipeline step, survives the crash in the log file, and is reviewable after the fact.
 
+### Performance: vectorized noise-reduction filters — 2026-04-25
+
+- **What changed:** [`HyperspectralProcessor._numpy_mean_filter()`](src/processing/hyperspectral/processor.py:554) and [`HyperspectralProcessor._numpy_median_filter()`](src/processing/hyperspectral/processor.py:512) in [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1) were rewritten from nested Python `for` loops over every pixel to single calls of `scipy.ndimage.uniform_filter` (mean) and `scipy.ndimage.median_filter` (median).
+- **Why:** the mean filter took ~45 minutes per layer (one of three layers per cube). The bottleneck was pure-Python pixel loops plus per-pixel `np.mean` call overhead — exactly the kind of work that should be done at C level.
+- **How it works now:** one C-level scipy call per filter; `size=(k, k, 1)` so the window is 2-D per band and bands are not mixed; `mode='nearest'` preserves the previous edge behavior (equivalent to `np.pad(..., mode='edge')`); dtype and output shape are unchanged.
+- **What did NOT change:** function signatures, the sole caller [`_apply_preprocessing()`](src/processing/hyperspectral/processor.py:466), public API, dtype (`float32` for mean), output shape `(H, W, B)`, edge-handling semantics. No new third-party dependencies — `scipy` was already imported in this file.
+- **Expected impact:** orders-of-magnitude speedup; the slow step should drop from tens of minutes to seconds. Worth re-measuring on a real cube and recording the new timing in a follow-up entry.
+- **Codebase scan note:** `src/` and `gui/` were also scanned for similar nested-loop pixel patterns — no other instances were found.
+
 ## Review Log
 
 - `2026-04-24` — Senior code review performed; identified 3 critical runtime bugs (duplicate Dash callbacks, missing `process_data` method, broken hyperspectral→orthophoto data contract), architectural duplication (REST API vs Dash callbacks), and complexity (dual-mode adapter, unimplemented Redis caching) that can be simplified for junior maintainability.
