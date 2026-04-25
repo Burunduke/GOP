@@ -1,0 +1,27 @@
+{
+  "id": "37d71de4-ec6f-48a5-b24c-b4d47607303c",
+  "name": "1",
+  "description": "1",
+  "status": "new",
+  "created_at": "2026-04-25T17:08:48.588557",
+  "updated_at": "2026-04-25T17:08:48.588576",
+  "files": [],
+  "processing_config": {
+    "stages": [
+      "preprocessing",
+      "orthophoto"
+    ],
+    "preprocessing": {
+      "radiometric_correction": true,
+      "atmospheric_correction": true
+    },
+    "orthophoto": {
+      "resolution": 0.1,
+      "crs": "EPSG:4326"
+    }
+  },
+  "current_stage": null,
+  "progress": 0.0,
+  "processing_history": [],
+  "tags": []
+}

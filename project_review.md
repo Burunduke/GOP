@@ -94,7 +94,6 @@ flowchart LR
     PE -->|Update progress| PM
 ```
 
-> ⚠️ Note: in the current code the `HSP → ORP` edge is broken — `HyperspectralProcessor.process()` is a stub and does not produce the `tiff_paths` / `metadata` dict that `OrthophotoProcessor` consumes.
 
 ---
 

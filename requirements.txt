@@ -3,7 +3,7 @@ numpy>=1.21.0
 scipy>=1.7.0
 
 # Geospatial processing dependencies
-gdal>=3.4.0
+# gdal>=3.4.0
 pyproj>=3.3.0
 
 # Image processing dependencies
