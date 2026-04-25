@@ -285,7 +285,7 @@ class HyperspectralProcessor:
         Apply preprocessing steps to hyperspectral data.
 
         Args:
-            data: Input hyperspectral data
+            processed_data: Input hyperspectral data
             input_path: Path to input file
             config: Processing configuration
 
@@ -296,12 +296,12 @@ class HyperspectralProcessor:
         
         self.logger.info(
             f"[hsp] _apply_preprocessing: start "
-            f"shape={data.shape} dtype={data.dtype} "
-            f"size={data.nbytes / 1024 / 1024:.1f} MiB"
+            f"shape={processed_data.shape} dtype={processed_data.dtype} "
+            f"size={processed_data.nbytes / 1024 / 1024:.1f} MiB"
         )
         
         # Explicit log before data.copy() - the suspected OOM point
-        copy_size_mb = data.nbytes / 1024 / 1024
+        copy_size_mb = processed_data.nbytes / 1024 / 1024
         self.logger.info(
             f"[hsp] _apply_preprocessing: About to process input cube "
             f"shape={processed_data.shape} dtype={processed_data.dtype} size={copy_size_mb:.1f} MiB"
