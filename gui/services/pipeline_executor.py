@@ -2,19 +2,18 @@
 
 import logging
 import threading
-import time
 from datetime import datetime
 from typing import Optional, Callable, Dict
 from concurrent.futures import ThreadPoolExecutor, Future
 
-from gui.models.project import PipelineStage, ProjectStatus, ProcessingResult
+from gui.models.project import PipelineStage, ProcessingResult
 from gui.services.project_manager import ProjectManager
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineExecutor:
-    """Pipeline executor for project processing."""
+    """Pipeline executor for project processing. Uses real GOP processing only."""
     
     # Mapping of stages to their weights for progress calculation
     STAGE_WEIGHTS: Dict[str, int] = {
@@ -31,7 +30,7 @@ class PipelineExecutor:
         """
         Args:
             project_manager: Project manager
-            gop_adapter: GOP adapter (optional, for real processing)
+            gop_adapter: GOP adapter for real processing
             max_workers: Maximum number of concurrent workers (default: 2)
         """
         self.project_manager = project_manager
@@ -280,88 +279,25 @@ class PipelineExecutor:
         """
         Execute one pipeline stage.
         
-        If GOPAdapter is available - uses real processing.
-        Otherwise - emulates processing.
+        Uses real processing through GOPAdapter.
         """
-        if self.gop_adapter and self.gop_adapter.gop_mode == "full":
-            return self._execute_real_stage(project_id, stage, config)
-        else:
-            return self._emulate_stage(project_id, stage, config, cancel_event)
+        return self._execute_real_stage(project_id, stage, config)
     
     def _execute_real_stage(self, project_id: str, stage: str, config: dict) -> dict:
         """Execute real stage through GOPAdapter."""
         # This will be fully implemented when GOP modules are available
         # For now, delegate to GOPAdapter
-        try:
-            if self.gop_adapter:
-                result = self.gop_adapter.process_data(
-                    data_path=str(self.project_manager.projects_dir / project_id / "files"),
-                    processing_type=stage,
-                    parameters=config.get(stage, {})
-                )
-                return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}
-        except Exception as e:
-            logger.warning(f"Error in real processing, switching to emulation: {e}")
-        
-        return self._emulate_stage(project_id, stage, config, threading.Event())
+        if self.gop_adapter:
+            result = self.gop_adapter.process_data(
+                data_path=str(self.project_manager.projects_dir / project_id / "files"),
+                processing_type=stage,
+                parameters=config.get(stage, {})
+            )
+            return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}
+        else:
+            raise RuntimeError("GOPAdapter is not available for real processing")
     
-    def _emulate_stage(
-        self, 
-        project_id: str, 
-        stage: str, 
-        config: dict,
-        cancel_event: threading.Event
-    ) -> dict:
-        """
-        Emulate pipeline stage execution.
-        Used when GOP modules are unavailable.
-        """
-        import random
-        
-        stage_durations = {
-            PipelineStage.PREPROCESSING.value: (2, 4),
-            PipelineStage.ORTHOPHOTO.value: (2, 3),
-        }
-        
-        min_dur, max_dur = stage_durations.get(stage, (1, 2))
-        duration = random.uniform(min_dur, max_dur)
-        
-        # Simulate processing with interruptible sleep
-        steps = 10
-        step_duration = duration / steps
-        for i in range(steps):
-            if cancel_event.is_set():
-                return {"metrics": {}, "output_files": []}
-            time.sleep(step_duration)
-        
-        # Generate emulated results
-        emulated_metrics = self._generate_emulated_metrics(stage)
-        
-        return {
-            "metrics": emulated_metrics,
-            "output_files": [],
-            "emulated": True,
-        }
     
-    def _generate_emulated_metrics(self, stage: str) -> dict:
-        """Generate emulated metrics for stage."""
-        import random
-        
-        metrics = {
-            PipelineStage.PREPROCESSING.value: {
-                "snr_improvement": round(random.uniform(5, 15), 2),
-                "bands_processed": random.randint(100, 300),
-                "correction_applied": "radiometric + atmospheric",
-            },
-            PipelineStage.ORTHOPHOTO.value: {
-                "resolution_m": 0.1,
-                "coverage_area_ha": round(random.uniform(1, 50), 2),
-                "crs": "EPSG:4326",
-                "tiles_generated": random.randint(4, 16),
-            },
-        }
-        
-        return metrics.get(stage, {})
     
     def _cleanup_task(self, project_id: str):
         """Clean up task resources."""

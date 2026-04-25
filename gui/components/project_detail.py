@@ -7,8 +7,7 @@ processing, and results.
 
 from typing import Any, Dict, Optional
 import dash_bootstrap_components as dbc
-from dash import html, dcc
-from datetime import datetime
+from dash import html
 
 from gui.utils.format_utils import format_date, format_file_size, get_stage_display_name
 
@@ -38,6 +37,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
             "progress": 0.0,
             "processing_history": [],
             "tags": []
+}
     # Project header
     project_header = html.Div([
         dbc.Row([

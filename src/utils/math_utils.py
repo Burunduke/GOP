@@ -7,7 +7,6 @@ division by zero, NaN values, and infinite values gracefully.
 
 import numpy as np
 from typing import Union, Any
-import warnings
 
 
 def safe_divide(

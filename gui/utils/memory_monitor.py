@@ -5,7 +5,6 @@ Memory monitoring utilities for detecting and preventing out-of-memory errors.
 import psutil
 import logging
 import gc
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 

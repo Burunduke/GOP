@@ -5,7 +5,6 @@ Sidebar component for GOP GUI application
 from typing import Optional, List, Dict, Any
 import dash_bootstrap_components as dbc
 from dash import html
-from datetime import datetime
 
 from gui.utils.format_utils import format_date
 

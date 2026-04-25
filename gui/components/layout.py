@@ -5,15 +5,10 @@ This module provides the main application layout including data stores,
 URL routing, modals, and the overall page structure.
 """
 
-from typing import Any
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 
 from .sidebar import create_sidebar
-from .dashboard import create_dashboard
-from .data_upload import create_data_upload_component
-from .visualization import create_visualization_component
-from .documentation import create_documentation_component, create_documentation_layout
 
 
 def create_main_layout() -> html.Div:

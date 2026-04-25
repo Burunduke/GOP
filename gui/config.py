@@ -31,9 +31,6 @@ class GUIConfig:
     # Database settings
     DATABASE_URL: str = os.getenv('DATABASE_URL', 'sqlite:///gop_gui.db')
     
-    # Redis settings
-    REDIS_URL: str = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-    
     # File system settings
     UPLOAD_FOLDER: str = os.getenv('UPLOAD_FOLDER', 'data/uploads')
     PROJECTS_FOLDER: str = os.getenv('PROJECTS_FOLDER', 'data/projects')
@@ -44,10 +41,6 @@ class GUIConfig:
     MAX_UPLOAD_FILES: int = int(os.getenv('MAX_UPLOAD_FILES', 100))
     MAX_MEMORY_FILE_SIZE: int = int(os.getenv('MAX_MEMORY_FILE_SIZE', 100 * 1024 * 1024))  # 100MB
     STREAMING_CHUNK_SIZE: int = int(os.getenv('STREAMING_CHUNK_SIZE', 64 * 1024))  # 64KB for better performance
-    
-    # Processing settings
-    CELERY_BROKER_URL: str = REDIS_URL
-    CELERY_RESULT_BACKEND: str = REDIS_URL
     
     # GOP integration settings
     GOP_CONFIG_PATH: str = os.getenv('GOP_CONFIG_PATH', 'config/config.yaml')

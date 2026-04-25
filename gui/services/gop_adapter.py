@@ -7,25 +7,19 @@ import sys
 import asyncio
 import concurrent.futures
 import logging
-from typing import Dict, Any, List, Optional
-from pathlib import Path
+from typing import Dict, Any, Optional
 
 # Add path to GOP source code for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-try:
-    from src.core.pipeline import Pipeline
-    from src.processing.hyperspectral.processor import HyperspectralProcessor
-    GOP_AVAILABLE = True
-except ImportError:
-    GOP_AVAILABLE = False
-    logging.getLogger(__name__).warning("GOP modules not found. Using emulation mode.")
+# Unconditional import - if this fails, the adapter should raise a clear exception
+from src.core.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 
 
 class GOPAdapter:
-    """Adapter for working with GOP through GUI"""
+    """Adapter for working with GOP through GUI. Provides real processing capabilities only."""
     
     def __init__(self, config_path: Optional[str] = None) -> None:
         """
@@ -37,17 +31,14 @@ class GOPAdapter:
         self.config_path = config_path or 'config/config.yaml'
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
         
-        if GOP_AVAILABLE:
-            try:
-                self.pipeline = Pipeline(self.config_path)
-                # Use components from pipeline instead of creating separate instances
-                self.hyperspectral_processor = self.pipeline.hyperspectral_processor
-                self.gop_mode = "full"
-            except Exception as e:
-                logger.error(f"GOP initialization error: {e}")
-                self.gop_mode = "emulation"
-        else:
-            self.gop_mode = "emulation"
+        # Initialize the real pipeline - if this fails, raise a clear exception
+        try:
+            self.pipeline = Pipeline(self.config_path)
+            # Use components from pipeline instead of creating separate instances
+            self.hyperspectral_processor = self.pipeline.hyperspectral_processor
+        except Exception as e:
+            logger.error(f"GOP initialization error: {e}")
+            raise RuntimeError(f"GOP modules not available: {e}") from e
     
     def process_data(self, data_path: str, processing_type: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -61,15 +52,6 @@ class GOPAdapter:
         Returns:
             Processing result
         """
-        if self.gop_mode != "full":
-            # Emulate processing if GOP is not available
-            config = {
-                'input_path': data_path,
-                'output_dir': parameters.get('output_dir', 'results'),
-                'sensor_type': processing_type
-            }
-            return self._emulate_processing_result(config)['result']
-        
         try:
             # Call the real pipeline process method
             result = self.pipeline.process(
@@ -92,24 +74,19 @@ class GOPAdapter:
             Processing result
         """
         try:
-            if self.gop_mode == "full":
-                # Start processing in separate thread
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    self.executor,
-                    self._process_sync,
-                    config
-                )
-                
-                return {
-                    'status': 'completed',
-                    'result': result,
-                    'error': None
-                }
-            else:
-                # Emulate processing
-                await asyncio.sleep(2)  # Simulate processing time
-                return self._emulate_processing_result(config)
+            # Start processing in separate thread
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.executor,
+                self._process_sync,
+                config
+            )
+            
+            return {
+                'status': 'completed',
+                'result': result,
+                'error': None
+            }
                 
         except Exception as e:
             return {
@@ -120,48 +97,16 @@ class GOPAdapter:
     
     def _process_sync(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Synchronous data processing"""
-        if self.gop_mode != "full":
-            return self._emulate_processing_result(config)['result']
-        
         try:
             result = self.pipeline.process(
                 input_path=config['input_path'],
                 output_dir=config['output_dir'],
-                sensor_type=config.get('sensor_type', 'hyperspectral'),
-                use_refinement=config.get('use_refinement', True)
+                sensor_type=config.get('sensor_type', 'hyperspectral')
             )
             return result
         except Exception as e:
             raise Exception(f"GOP processing error: {str(e)}")
     
-    def _emulate_processing_result(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Emulate processing result"""
-        import uuid
-        from datetime import datetime
-        
-        task_id = str(uuid.uuid4())
-        
-        result = {
-            'task_id': task_id,
-            'input_path': config.get('input_path', 'unknown'),
-            'output_dir': config.get('output_dir', f'data/results/{task_id}'),
-            'processing_time': '00:02:15',
-            'status': 'completed',
-            'created_at': datetime.now().isoformat(),
-            'files_generated': ['orthophoto.tif', 'preprocessed_data.hdr'],
-            'statistics': {
-                'total_pixels': 1000000,
-                'processed_pixels': 950000,
-                'bands_processed': 224,
-                'resolution_m': 0.1
-            }
-        }
-        
-        return {
-            'status': 'completed',
-            'result': result,
-            'error': None
-        }
     
 
     def validate_input_file(self, file_path: str) -> Dict[str, Any]:
@@ -191,13 +136,6 @@ class GOPAdapter:
             if file_ext not in supported_formats:
                 return {'valid': False, 'error': f'Unsupported format: {file_ext}'}
             
-            # Additional validation in full functionality mode
-            if self.gop_mode == "full":
-                try:
-                    # Here we can add validation through GOP validators
-                    pass
-                except Exception as e:
-                    return {'valid': False, 'error': f'GOP validation error: {str(e)}'}
             
             return {
                 'valid': True, 
@@ -227,7 +165,6 @@ class GOPAdapter:
         Returns:
             Task status
         """
-        # Temporary implementation - will be integrated with Celery in the future
         return {
             'task_id': task_id,
             'status': 'completed',

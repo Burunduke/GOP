@@ -2,7 +2,6 @@
 Visualization component for GOP GUI application
 """
 
-from typing import Optional, Dict, Any, List
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 import plotly.graph_objs as go

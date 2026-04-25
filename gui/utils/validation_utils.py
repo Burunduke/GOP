@@ -3,8 +3,7 @@ Validation utilities for GOP GUI application
 """
 
 import re
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, Any
 
 
 def validate_project_data(project_data: Dict[str, Any]) -> Dict[str, Any]:

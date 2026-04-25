@@ -6,9 +6,7 @@ including user guides, API documentation, and FAQs.
 """
 
 import os
-from typing import Dict, Optional
 from dash import html, dcc
-import dash_bootstrap_components as dbc
 
 
 def create_documentation_component(doc_type: str = "user_guide") -> html.Div:

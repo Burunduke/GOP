@@ -6,10 +6,9 @@ This module provides visualization functions for orthophoto data and basic data 
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from typing import Dict, Optional, Tuple, Any, List, Union
+from typing import Dict, Optional, Tuple
 from numpy.typing import NDArray
-from .image_utils import apply_colormap, normalize_image
+from .image_utils import normalize_image
 
 # Type aliases for better type safety
 VisualizationData = Dict[str, NDArray[np.float32]]

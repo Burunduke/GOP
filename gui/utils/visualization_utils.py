@@ -6,7 +6,6 @@ import numpy as np
 import plotly.graph_objs as go
 from typing import Dict, Any, List, Tuple, Optional
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
 
 def create_colormap(name: str, n_colors: int = 256) -> List[Tuple[float, float, float]]:

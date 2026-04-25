@@ -8,11 +8,11 @@ for the GOP GUI application, including project management, file uploads, and pro
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 from gui.utils.format_utils import get_stage_display_name
 
-from dash import Input, Output, State, callback_context, no_update, ALL, MATCH, html
+from dash import Input, Output, State, callback_context, no_update, ALL, html
 from dash.exceptions import PreventUpdate
 import dash
 import dash_bootstrap_components as dbc
@@ -21,7 +21,6 @@ from gui.components.dashboard import create_dashboard
 from gui.components.sidebar import create_sidebar
 from gui.components.documentation import create_documentation_component
 from gui.components.project_detail import create_project_detail
-from gui.models.project import Project, ProjectStatus, PipelineStage
 
 logger = logging.getLogger(__name__)
 

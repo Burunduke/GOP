@@ -4,6 +4,8 @@
 
 **GOP** (v2.0.0) — web application for creating orthophotoplans from hyperspectral and regular images. User creates projects, uploads images, runs a processing pipeline, and gets an orthophoto as output. The project does not need tests or other things for a production solution. It is a simple but powerful program for personal use. ё
 
+**Status:** stabilized — critical issues resolved 2026-04-25
+
 **Stack:** Python 3.10, Dash + Flask, GDAL, OpenDroneMap  
 **Entry point:** [`main.py`](main.py:1) → launches Dash GUI on `127.0.0.1:8050`
 
@@ -144,15 +146,51 @@ GUI config via [`gui/config.py`](gui/config.py:1) — env vars for host/port, up
 
 | # | Severity | Area | Finding | Suggested fix |
 |---|---|---|---|---|
-| 1 | 🔴 | Runtime | Duplicate Dash callback registrations in [`callbacks.py`](gui/components/callbacks.py:597) (around lines 597–640) prevent Dash app startup | Remove the duplicated block; keep a single definition per output |
-| 2 | 🔴 | Runtime | [`pipeline_executor.py`](gui/services/pipeline_executor.py:1) and [`gop_adapter.py`](gui/services/gop_adapter.py:1) call a `process_data` method that does not exist on the target object | Either implement `process_data` on the adapter/core, or rename the call site to the method that actually exists |
-| 3 | 🔴 | Data contract | [`HyperspectralProcessor.process()`](src/processing/hyperspectral/processor.py:1) is a stub and does not return `tiff_paths` / `metadata`, but [`OrthophotoProcessor.create_orthophoto()`](src/processing/orthophoto.py:1) requires those keys — pipeline cannot complete | Finish `process()` so it emits the expected dict, or document a clear intermediate schema and adapt both sides |
-| 4 | 🟡 | Architecture | REST API in [`routes.py`](gui/api/routes.py:1) duplicates Dash-callback logic as stubs — two parallel systems | Pick one: either drive the UI purely via Dash callbacks, or move logic into the REST API and thin out callbacks |
-| 5 | 🟡 | Dead code | `SessionManager` and `CacheManager` are mentioned/implemented but never wired into [`app.py`](gui/app/app.py:1) | Either wire them in where they are needed, or delete to reduce surface area |
-| 6 | 🟡 | Complexity | [`GOPAdapter`](gui/services/gop_adapter.py:1) dual-mode (full + emulation) roughly doubles the code paths | Drop emulation mode for this personal-use project; rely on real processing only |
-| 7 | 🟡 | Docs vs reality | Multi-tier Redis cache is described in config/docs but not implemented | Remove Redis references, or implement a minimal real cache layer |
-| 8 | 🟢 | Cleanup | Several unused imports across [`gui/`](gui/__init__.py:1) and [`src/`](src/__init__.py:1) files | Run a linter (ruff/flake8) and remove dead imports |
-| 9 | 🟢 | Observability | Werkzeug request logging is disabled in [`app.py`](gui/app/app.py:1), which may hide useful debug info during development | Re-enable Werkzeug logs in debug mode, or expose a flag in config |
+| 1 | ✅ 🔴 | Runtime | Duplicate Dash callback registrations in [`callbacks.py`](gui/components/callbacks.py:597) (around lines 597–640) prevent Dash app startup | Remove the duplicated block; keep a single definition per output |
+| 2 | ✅ 🔴 | Runtime | [`pipeline_executor.py`](gui/services/pipeline_executor.py:1) and [`gop_adapter.py`](gui/services/gop_adapter.py:1) call a `process_data` method that does not exist on the target object | Either implement `process_data` on the adapter/core, or rename the call site to the method that actually exists |
+| 3 | ✅ 🔴 | Data contract | [`HyperspectralProcessor.process()`](src/processing/hyperspectral/processor.py:1) is a stub and does not return `tiff_paths` / `metadata`, but [`OrthophotoProcessor.create_orthophoto()`](src/processing/orthophoto.py:1) requires those keys — pipeline cannot complete | Finish `process()` so it emits the expected dict, or document a clear intermediate schema and adapt both sides |
+| 4 | ✅ 🟡 | Architecture | REST API in [`routes.py`](gui/api/routes.py:1) duplicates Dash-callback logic as stubs — two parallel systems | Pick one: either drive the UI purely via Dash callbacks, or move logic into the REST API and thin out callbacks |
+| 5 | ✅ 🟡 | Dead code | `SessionManager` and `CacheManager` are mentioned/implemented but never wired into [`app.py`](gui/app/app.py:1) | Either wire them in where they are needed, or delete to reduce surface area |
+| 6 | ✅ 🟡 | Complexity | [`GOPAdapter`](gui/services/gop_adapter.py:1) dual-mode (full + emulation) roughly doubles the code paths | Drop emulation mode for this personal-use project; rely on real processing only |
+| 7 | ✅ 🟡 | Docs vs reality | Multi-tier Redis cache is described in config/docs but not implemented | Remove Redis references, or implement a minimal real cache layer |
+| 8 | ✅ 🟢 | Cleanup | Several unused imports across [`gui/`](gui/__init__.py:1) and [`src/`](src/__init__.py:1) files | Run a linter (ruff/flake8) and remove dead imports |
+| 9 | ✅ 🟢 | Observability | Werkzeug request logging is disabled in [`app.py`](gui/app/app.py:1), which may hide useful debug info during development | Re-enable Werkzeug logs in debug mode, or expose a flag in config |
+
+### ✅ 🔴 Issue 1 — Duplicate Dash callbacks
+
+**Resolution (resolved 2026-04-25):** Removed the duplicate `toggle_progress_interval` callback (originally lines 642–655 of [`gui/components/callbacks.py`](gui/components/callbacks.py:1)); kept the more complete `update_processing_progress` callback that already owns `Output('progress-interval', 'disabled')`. Files changed: [`gui/components/callbacks.py`](gui/components/callbacks.py:1). See change log entry #1.
+
+### ✅ 🔴 Issue 2 — Missing `process_data` method
+
+**Resolution (resolved 2026-04-25):** Added a thin `process_data(data_path, processing_type, parameters)` wrapper on `GOPAdapter` that translates arguments and delegates to the real [`Pipeline.process()`](src/core/pipeline.py:75). No new stub was introduced; the call site in [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1) now succeeds. Files changed: [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1), [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1). See change log entry #2.
+
+### ✅ 🔴 Issue 3 — Broken hyperspectral → orthophoto data contract
+
+**Resolution (resolved 2026-04-25):** Implemented [`HyperspectralProcessor.process()`](src/processing/hyperspectral/processor.py:1) end-to-end. It reads enabled steps from [`config.yaml`](config.yaml:1) (dark-current subtraction, flat-field, radiometric gain/offset, simplified atmospheric correction, noise filtering with scipy or numpy fallback, min-max normalization), writes per-band GeoTIFFs via existing GDAL helpers, and returns `{"tiff_paths": [...], "metadata": {crs, transform, width, height, band_count, dtype, source_files, applied_steps}}` — exactly the shape consumed by `OrthophotoProcessor.create_orthophoto()`. Files changed: [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1). See change log entry #3.
+
+### ✅ 🟡 Issue 4 — REST API duplicating Dash callbacks
+
+**Resolution (resolved 2026-04-25):** Deleted the entire `gui/api/` package (`routes.py` and `__init__.py`) and removed the blueprint registration + import from [`gui/app/app.py`](gui/app/app.py:1). User confirmed nothing external consumed it. Dash callbacks are now the single source of truth. Files changed: `gui/api/` (deleted), [`gui/app/app.py`](gui/app/app.py:1). See change log entry #4.
+
+### ✅ 🟡 Issue 5 — Unused `SessionManager` / `CacheManager`
+
+**Resolution (resolved 2026-04-25):** Verified by grep that neither class actually exists in the current codebase; only this document mentioned them as planned-but-never-implemented. No code change needed. The legitimate in-memory cache in [`src/processing/hyperspectral/cache.py`](src/processing/hyperspectral/cache.py:1) was untouched. See change log entry #5.
+
+### ✅ 🟡 Issue 6 — Dual-mode `GOPAdapter` (full + emulation)
+
+**Resolution (resolved 2026-04-25):** Removed every emulation/fallback branch from [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1) and [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1): deleted `_emulate_processing_result`, `_emulate_stage`, `_generate_emulated_metrics`, the `GOP_AVAILABLE` flag, and the `gop_mode` attribute. Imports of `Pipeline` / `HyperspectralProcessor` are now unconditional; failure to import raises a clear `RuntimeError` at construction time. Files changed: [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1), [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1). See change log entry #6.
+
+### ✅ 🟡 Issue 7 — Redis / multi-tier cache documented but not implemented
+
+**Resolution (resolved 2026-04-25):** Removed `REDIS_URL`, `CELERY_BROKER_URL`, and `CELERY_RESULT_BACKEND` from [`gui/config.py`](gui/config.py:1) and a residual Celery comment from [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1). The only cache that exists now is the honest in-memory one in [`src/processing/hyperspectral/cache.py`](src/processing/hyperspectral/cache.py:1). Files changed: [`gui/config.py`](gui/config.py:1), [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1). See change log entry #7.
+
+### ✅ 🟢 Issue 8 — Unused imports
+
+**Resolution (resolved 2026-04-25):** Cleaned F401 warnings across [`gui/`](gui/__init__.py:1) and [`src/`](src/__init__.py:1) using flake8. Files touched include [`gui/components/documentation.py`](gui/components/documentation.py:1), [`gui/services/project_manager.py`](gui/services/project_manager.py:1), [`gui/utils/file_upload_utils.py`](gui/utils/file_upload_utils.py:1), [`gui/utils/memory_monitor.py`](gui/utils/memory_monitor.py:1), [`gui/utils/validation_utils.py`](gui/utils/validation_utils.py:1), [`src/utils/image_utils.py`](src/utils/image_utils.py:1), [`src/utils/visualization.py`](src/utils/visualization.py:1). Final flake8 `--select F401` returns zero issues. See change log entry #8.
+
+### ✅ 🟢 Issue 9 — Werkzeug request logging always silenced
+
+**Resolution (resolved 2026-04-25):** Replaced the unconditional `logging.getLogger('werkzeug').disabled = True` in [`gui/app/app.py`](gui/app/app.py:1) with `werkzeug_logger.setLevel(logging.INFO if debug else logging.ERROR)`, gated on the existing `DEBUG` env-var driven flag from [`gui/config.py`](gui/config.py:16). No new config keys introduced. Files changed: [`gui/app/app.py`](gui/app/app.py:1). See change log entry #9.
 
 ## Supported Formats
 
@@ -168,6 +206,45 @@ GUI config via [`gui/config.py`](gui/config.py:1) — env vars for host/port, up
 
 ---
 
+## Change Log — 2026-04-25
+
+The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, working through the issue list from 🔴 critical → 🟡 simplification → 🟢 polish. Every issue from the original "Issues & Observations" table now has a recorded resolution, and a smoke verification confirmed the static health of the codebase.
+
+1. Removed the duplicate `toggle_progress_interval` Dash callback from [`gui/components/callbacks.py`](gui/components/callbacks.py:1); kept `update_processing_progress` as the single owner of `progress-interval.disabled`.
+2. Added `GOPAdapter.process_data(...)` in [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1) that delegates to [`Pipeline.process()`](src/core/pipeline.py:75); [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1) no longer crashes on a missing method.
+3. Implemented [`HyperspectralProcessor.process()`](src/processing/hyperspectral/processor.py:1) end-to-end so it returns `{tiff_paths, metadata}` exactly as `OrthophotoProcessor.create_orthophoto()` expects.
+4. Deleted the `gui/api/` package and removed its blueprint registration from [`gui/app/app.py`](gui/app/app.py:1); Dash callbacks are now the single source of truth.
+5. Confirmed `SessionManager` / `CacheManager` never existed in code — only this document referenced them; no code change required.
+6. Stripped all emulation paths from [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1) and [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:1); imports are unconditional and failures raise `RuntimeError`.
+7. Removed Redis / Celery configuration keys from [`gui/config.py`](gui/config.py:1) and a stray Celery comment from [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1); only the in-memory cache in [`src/processing/hyperspectral/cache.py`](src/processing/hyperspectral/cache.py:1) remains.
+8. Cleared all F401 unused-import warnings across `gui/` and `src/`; flake8 now reports zero issues for that rule.
+9. Gated Werkzeug request logging in [`gui/app/app.py`](gui/app/app.py:1) on the existing `DEBUG` flag from [`gui/config.py`](gui/config.py:16) instead of disabling it unconditionally.
+
+### Follow-up fixes uncovered during execution
+
+- Pre-existing **syntax error** in [`gui/components/project_detail.py`](gui/components/project_detail.py:28): an unclosed `{` on line 28 was breaking parsing; fixed by adding the missing `}`.
+- **Leftover Celery comment** in [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1) was removed after the final smoke test, completing the Redis/Celery cleanup.
+
+### Smoke verification result
+
+| Check | Status |
+|---|---|
+| All `.py` files parse | ✅ |
+| Duplicate callback removed | ✅ |
+| `process_data` wired | ✅ |
+| `gui/api/` deleted | ✅ |
+| Emulation removed | ✅ |
+| Redis/Celery removed | ✅ |
+| Hyperspectral `process()` real | ✅ |
+| F401 zero | ✅ |
+| Werkzeug log gated | ✅ |
+| Data-flow trace `PipelineExecutor → GOPAdapter.process_data → Pipeline.process → HyperspectralProcessor.process → {tiff_paths, metadata} → OrthophotoProcessor.create_orthophoto` | ✅ |
+
+> Note: `from gui.app.app import create_app` was not exercised at runtime because the verification environment lacks `numpy`, `dash`, and GDAL. Static parsing and import structure are correct; full runtime startup should be re-checked on a machine with the production dependencies installed.
+
+---
+
 ## Review Log
 
 - `2026-04-24` — Senior code review performed; identified 3 critical runtime bugs (duplicate Dash callbacks, missing `process_data` method, broken hyperspectral→orthophoto data contract), architectural duplication (REST API vs Dash callbacks), and complexity (dual-mode adapter, unimplemented Redis caching) that can be simplified for junior maintainability.
+- `2026-04-25` — All 9 issues resolved; see [Change Log — 2026-04-25](#change-log--2026-04-25) above.

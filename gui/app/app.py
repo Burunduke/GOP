@@ -6,27 +6,26 @@ import os
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import dash
 from flask import Flask, redirect, send_from_directory
 import dash_bootstrap_components as dbc
 
 from ..config import config
-from ..api.routes import api_blueprint
 from ..components.layout import create_main_layout
 from ..components.callbacks import register_callbacks
 
 logger = logging.getLogger(__name__)
 
 
-def setup_logging() -> None:
+def setup_logging(debug: bool = False) -> None:
     """Configure logging for the application"""
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
     
-    # Completely disable Flask/Werkzeug request logging
-    logging.getLogger('werkzeug').disabled = True
+    # Set Werkzeug log level based on debug flag
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.setLevel(logging.INFO if debug else logging.ERROR)
     
     logging.basicConfig(
         level=logging.INFO,
@@ -47,11 +46,11 @@ def create_app(config_name: str = 'default') -> dash.Dash:
     Returns:
         Configured Dash application instance
     """
-    # Configure logging
-    setup_logging()
-    
     # Get configuration
     app_config = config[config_name]
+    
+    # Configure logging with debug flag
+    setup_logging(app_config.DEBUG)
     
     # Create Flask server
     server = Flask(__name__)
@@ -78,9 +77,6 @@ def create_app(config_name: str = 'default') -> dash.Dash:
         url_base_pathname='/',
         suppress_callback_exceptions=True
     )
-    
-    # Register API routes
-    server.register_blueprint(api_blueprint, url_prefix='/api')
     
     # Configure main layout
     app.layout = create_main_layout()

@@ -13,7 +13,6 @@ from numpy.typing import NDArray
 
 try:
     from osgeo import gdal
-    from osgeo import osr
 
     GDAL_AVAILABLE = True
 except ImportError:

@@ -4,7 +4,6 @@ Data upload component for GOP GUI application
 This module provides components for uploading hyperspectral data files.
 """
 
-from typing import Dict, Any
 import dash_bootstrap_components as dbc
 from dash import html, dcc
 

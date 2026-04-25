@@ -8,8 +8,7 @@ normalization, and various image enhancement operations.
 import numpy as np
 import cv2
 from PIL import Image
-import matplotlib.pyplot as plt
-from typing import Tuple, Union, Optional, List
+from typing import Tuple
 from numpy.typing import NDArray
 
 # Type aliases for better type safety

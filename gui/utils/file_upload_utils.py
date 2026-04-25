@@ -4,11 +4,8 @@ File upload utilities for handling large files with streaming to avoid memory is
 
 import os
 import tempfile
-import shutil
 import hashlib
 from pathlib import Path
-from typing import Optional, Tuple
-import base64
 import logging
 
 from .memory_monitor import MemoryMonitor

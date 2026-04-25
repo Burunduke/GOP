@@ -7,7 +7,7 @@ used in the GOP project, including arrays, file paths, and wavelength data.
 
 import os
 import numpy as np
-from typing import Union, List, Tuple, Any
+from typing import Union, Any
 from pathlib import Path
 
 from .exceptions import ValidationError, FileError, ConfigurationError

@@ -9,8 +9,6 @@ import numpy as np
 from typing import Any, List, Optional
 from src.utils.validators import (
     validate_file_path,
-    validate_array,
-    validate_wavelengths,
 )
 
 

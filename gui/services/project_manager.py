@@ -7,11 +7,11 @@ import hashlib
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, List
 
 from gui.models.project import (
-    Project, ProjectFile, ProcessingConfig,
-    ProcessingResult, ProcessingHistory, ProjectStatus, PipelineStage
+    Project, ProjectFile,
+    ProcessingHistory, ProjectStatus
 )
 from gui.config import config
 

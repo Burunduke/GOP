@@ -12,7 +12,7 @@ import time
 import logging
 import gzip
 import functools
-from typing import Any, Dict, Optional, Callable, List, Tuple
+from typing import Any, Dict, Optional, Callable
 from collections import OrderedDict
 
 

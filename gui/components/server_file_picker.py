@@ -7,9 +7,8 @@ filesystem level using shutil.copy2, which uses constant memory regardless
 of file size — solving the OOM issue with browser-based uploads.
 """
 
-import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 import dash_bootstrap_components as dbc
 from dash import html, dcc
