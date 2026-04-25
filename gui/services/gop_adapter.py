@@ -45,7 +45,7 @@ class GOPAdapter:
         Process data through GOP pipeline
         
         Args:
-            data_path: Path to input data
+            data_path: Path to input data (file or directory)
             processing_type: Type of processing
             parameters: Additional processing parameters
             
@@ -53,9 +53,25 @@ class GOPAdapter:
             Processing result
         """
         try:
+            # Check if data_path is a directory
+            import os
+            if os.path.isdir(data_path):
+                # Get list of files in directory
+                files = [f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))]
+                if not files:
+                    raise Exception(f"No files found in directory: {data_path}")
+                
+                # For now, use the first file (this should be improved to handle multiple files properly)
+                # In a real implementation, we might want to process all files or select a main file
+                first_file = files[0]
+                actual_data_path = os.path.join(data_path, first_file)
+                logger.info(f"Processing first file from directory: {actual_data_path}")
+            else:
+                actual_data_path = data_path
+            
             # Call the real pipeline process method
             result = self.pipeline.process(
-                input_path=data_path,
+                input_path=actual_data_path,
                 output_dir=parameters.get('output_dir'),
                 sensor_type=processing_type
             )

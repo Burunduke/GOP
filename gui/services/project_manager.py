@@ -471,6 +471,11 @@ class ProjectManager:
         if project is None:
             return None
         
+        # Check if project has files
+        if not project.files:
+            logger.error(f"Project {project.name} has no files to process")
+            return None
+        
         if project.status == ProjectStatus.RUN.value:
             logger.warning(f"Project {project.name} is already being processed")
             return None

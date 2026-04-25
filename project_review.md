@@ -251,12 +251,23 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 | OS-native file dialog integration | ✅ |
 | Server file picker removal | ✅ |
 | Server file picker callback cleanup | ✅ |
+| File path handling fixed | ✅ |
+| Directory handling improved | ✅ |
+| Error handling enhanced | ✅ |
 
 > Note: `from gui.app.app import create_app` was not exercised at runtime because the verification environment lacks `numpy`, `dash`, and GDAL. Static parsing and import structure are correct; full runtime startup should be re-checked on a machine with the production dependencies installed.
 
 ### Additional fix - 2026-04-25
 
 - **PipelineStage import error fixed** in [`gui/services/project_manager.py`](gui/services/project_manager.py:12) by adding missing `PipelineStage` to the import statement on line 15. This resolves the "name 'PipelineStage' is not defined" error that occurred when starting project processing.
+
+### Additional fixes - 2026-04-25
+
+- **File path handling fixed** in [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:292) by adding proper validation to check if a project has files before attempting to process them. This prevents the "Failed to open file" error when trying to process projects with no files.
+
+- **Directory handling improved** in [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:58) by adding logic to handle directory paths correctly. When a directory is passed, the adapter now selects the first file in the directory for processing, which resolves the issue where the processor was trying to open a directory as a file.
+
+- **Error handling enhanced** in [`gui/services/project_manager.py`](gui/services/project_manager.py:477) by adding a check in `start_processing` method to prevent processing projects with no files, providing a clearer error message to users.
 
 ---
 

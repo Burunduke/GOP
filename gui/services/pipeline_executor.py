@@ -205,6 +205,11 @@ class PipelineExecutor:
                 
                 # Execute stage
                 try:
+                    # Check if project has files before processing
+                    project = self.project_manager.get_project(project_id)
+                    if not project or not project.files:
+                        raise ValueError(f"Project {project_id} has no files to process. Please add files before starting processing.")
+                    
                     result_data = self._execute_stage(project_id, stage, config, cancel_event)
                     
                     if cancel_event.is_set():
@@ -288,8 +293,22 @@ class PipelineExecutor:
         # This will be fully implemented when GOP modules are available
         # For now, delegate to GOPAdapter
         if self.gop_adapter:
+            # Get project to check files
+            project = self.project_manager.get_project(project_id)
+            if project is None:
+                raise ValueError(f"Project not found: {project_id}")
+            
+            # Check if project has files
+            if not project.files:
+                raise ValueError(f"Project {project_id} has no files to process")
+            
+            # Get the files directory
+            files_dir = self.project_manager.projects_dir / project_id / "files"
+            
+            # For hyperspectral processing, we need to pass the directory containing files
+            # The processor should handle multiple files in the directory
             result = self.gop_adapter.process_data(
-                data_path=str(self.project_manager.projects_dir / project_id / "files"),
+                data_path=str(files_dir),
                 processing_type=stage,
                 parameters=config.get(stage, {})
             )
