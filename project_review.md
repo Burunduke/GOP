@@ -285,6 +285,10 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 - **Flask error logging improved** in [`gui/app/app.py`](gui/app/app.py:135) by adding error handlers for common HTTP error codes (404, 500) and unhandled exceptions. This ensures that all Flask app errors are properly logged to both console and file, addressing the issue where errors were not being logged.
 - **Test route added** in [`gui/app/app.py`](gui/app/app.py:138) to verify error handling functionality. A `/test-error` route was added that raises an exception to test the error logging mechanism.
 
+### Additional improvements - 2026-04-25
+
+- **Enhanced logging in processing modules** - Added filename information to log messages in [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1) and [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) to make it easier to identify which files are being processed and to resolve duplicate logging issues. Log messages now include the basename of the input file or the number of files being processed.
+
 ## Review Log
 
 - `2026-04-24` — Senior code review performed; identified 3 critical runtime bugs (duplicate Dash callbacks, missing `process_data` method, broken hyperspectral→orthophoto data contract), architectural duplication (REST API vs Dash callbacks), and complexity (dual-mode adapter, unimplemented Redis caching) that can be simplified for junior maintainability.

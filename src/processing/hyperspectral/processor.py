@@ -94,7 +94,7 @@ class HyperspectralProcessor:
             height = dataset.RasterYSize
 
             self.logger.info(
-                f"Loading data: {bands} channels, {width}x{height} pixels"
+                f"[{os.path.basename(file_path)}] Loading data: {bands} channels, {width}x{height} pixels"
             )
 
             # Read data
@@ -108,7 +108,7 @@ class HyperspectralProcessor:
             # Validate data
             self.validator.validate_data(data)
 
-            self.logger.info("Data successfully loaded and validated")
+            self.logger.info(f"[{os.path.basename(file_path)}] Data successfully loaded and validated")
             return data
 
         except Exception as e:
@@ -216,7 +216,7 @@ class HyperspectralProcessor:
             Dictionary with tiff_paths and metadata for orthophoto processor
         """
         try:
-            self.logger.info(f"Starting processing: {input_path}")
+            self.logger.info(f"[{os.path.basename(input_path)}] Starting processing")
 
             # Step 1: Load data from file
             data = self.load_data(input_path)
@@ -236,7 +236,7 @@ class HyperspectralProcessor:
                 "metadata": metadata
             }
 
-            self.logger.info(f"Processing completed. {len(tiff_paths)} GeoTIFFs created.")
+            self.logger.info(f"[{os.path.basename(input_path)}] Processing completed. {len(tiff_paths)} GeoTIFFs created.")
             return result
 
         except Exception as e:
@@ -499,7 +499,7 @@ class HyperspectralProcessor:
             )
             
             tiff_paths.append(tiff_path)
-            self.logger.info(f"Saved band {band_idx} to {tiff_path}")
+            self.logger.info(f"[{os.path.basename(input_path)}] Saved band {band_idx} to {tiff_path}")
         
         return tiff_paths
 

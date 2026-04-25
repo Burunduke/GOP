@@ -121,7 +121,7 @@ class OrthophotoProcessor:
                     allowed_extensions=[".tif", ".tiff"],
                 )
 
-            self.logger.info("Starting orthophoto creation")
+            self.logger.info(f"[{len(tiff_paths)} files] Starting orthophoto creation")
 
             # Create orthophoto
             if self.odm_path:
@@ -129,7 +129,7 @@ class OrthophotoProcessor:
             else:
                 orthophoto_path = self._create_with_gdal(tiff_paths, output_dir)
 
-            self.logger.info(f"Orthophoto created: {orthophoto_path}")
+            self.logger.info(f"[{len(tiff_paths)} files] Orthophoto created: {orthophoto_path}")
             return orthophoto_path
 
         except Exception as e:
@@ -190,7 +190,7 @@ class OrthophotoProcessor:
                     cmd.extend(["--gps-file", gps_file])
 
                 # Run ODM
-                self.logger.info("Running OpenDroneMap...")
+                self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap...")
                 result = subprocess.run(
                     cmd,
                     cwd=self.odm_path,
@@ -238,7 +238,7 @@ class OrthophotoProcessor:
             RuntimeError: If GDAL merge fails
         """
         try:
-            self.logger.info("Creating orthophoto using GDAL")
+            self.logger.info(f"[{len(tiff_paths)} files] Creating orthophoto using GDAL")
 
             # Use gdal_merge.py to create mosaic
             output_path = os.path.join(output_dir, "orthophoto.tif")
