@@ -11,7 +11,7 @@ from dash import html
 
 from gui.utils.format_utils import format_date, format_file_size, get_stage_display_name
 
-from gui.components.server_file_picker import create_server_file_picker
+from gui.components.enhanced_file_picker import create_enhanced_file_picker
 
 
 def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
@@ -203,14 +203,13 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                             ]
                         ], flush=True),
                         
-                        # Server-side file browser (copies files at filesystem level — no OOM)
-                        html.Hr(className="my-3"),
-                        create_server_file_picker(),
+                        
+                        # Enhanced file picker (OS-native file dialog)
+                        create_enhanced_file_picker(),
                     ])
                 ]),
             ])
         ], label="Files", tab_id="files-tab"),
-        
         # Processing tab
         dbc.Tab([
             html.Div([

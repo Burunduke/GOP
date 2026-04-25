@@ -219,10 +219,19 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 8. Cleared all F401 unused-import warnings across `gui/` and `src/`; flake8 now reports zero issues for that rule.
 9. Gated Werkzeug request logging in [`gui/app/app.py`](gui/app/app.py:1) on the existing `DEBUG` flag from [`gui/config.py`](gui/config.py:16) instead of disabling it unconditionally.
 
+10. Added enhanced file picker component with OS-native file dialog integration in [`gui/components/enhanced_file_picker.py`](gui/components/enhanced_file_picker.py), providing users with a familiar file selection experience.
+
+11. Removed legacy server-side file browser component to simplify the user interface and reduce code complexity.
+
+12. Removed unused server file picker callbacks from [`gui/components/callbacks.py`](gui/components/callbacks.py:419) to clean up the codebase and improve maintainability.
+
 ### Follow-up fixes uncovered during execution
 
 - Pre-existing **syntax error** in [`gui/components/project_detail.py`](gui/components/project_detail.py:28): an unclosed `{` on line 28 was breaking parsing; fixed by adding the missing `}`.
 - **Leftover Celery comment** in [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1) was removed after the final smoke test, completing the Redis/Celery cleanup.
+- **Enhanced file picker integration** in [`gui/components/project_detail.py`](gui/components/project_detail.py:14) by importing the new component and adding it to the Files tab, replacing the server-side file browser with a more user-friendly OS-native dialog.
+- **Server file picker removal** in [`gui/components/project_detail.py`](gui/components/project_detail.py:14) by removing the import and component usage, simplifying the file selection interface.
+- **Server file picker callback cleanup** in [`gui/components/callbacks.py`](gui/components/callbacks.py:419) by removing unused navigation, selection, and file addition callbacks, reducing code complexity.
 
 ### Smoke verification result
 
@@ -238,8 +247,16 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 | F401 zero | ✅ |
 | Werkzeug log gated | ✅ |
 | Data-flow trace `PipelineExecutor → GOPAdapter.process_data → Pipeline.process → HyperspectralProcessor.process → {tiff_paths, metadata} → OrthophotoProcessor.create_orthophoto` | ✅ |
+| Enhanced file picker component | ✅ |
+| OS-native file dialog integration | ✅ |
+| Server file picker removal | ✅ |
+| Server file picker callback cleanup | ✅ |
 
 > Note: `from gui.app.app import create_app` was not exercised at runtime because the verification environment lacks `numpy`, `dash`, and GDAL. Static parsing and import structure are correct; full runtime startup should be re-checked on a machine with the production dependencies installed.
+
+### Additional fix - 2026-04-25
+
+- **PipelineStage import error fixed** in [`gui/services/project_manager.py`](gui/services/project_manager.py:12) by adding missing `PipelineStage` to the import statement on line 15. This resolves the "name 'PipelineStage' is not defined" error that occurred when starting project processing.
 
 ---
 

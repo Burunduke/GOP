@@ -11,7 +11,8 @@ from typing import Optional, Dict, List
 
 from gui.models.project import (
     Project, ProjectFile,
-    ProcessingHistory, ProjectStatus
+    ProcessingHistory, ProjectStatus,
+    PipelineStage
 )
 from gui.config import config
 

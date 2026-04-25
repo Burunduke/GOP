@@ -7,8 +7,10 @@ for the GOP GUI application, including project management, file uploads, and pro
 
 import json
 import logging
+import base64
 from datetime import datetime
 from typing import Any, Optional, Union
+from pathlib import Path
 
 from gui.utils.format_utils import get_stage_display_name
 
@@ -414,138 +416,6 @@ def register_callbacks(
         
         return is_open
     
-    # === 13. File browser: navigate directory / refresh ===
-    @app.callback(
-        Output("file-browser-contents", "children"),
-        Output("file-browser-breadcrumb", "children"),
-        Output("file-browser-current-path", "data"),
-        Input("file-browser-refresh-btn", "n_clicks"),
-        Input("file-browser-go-up-btn", "n_clicks"),
-        Input("file-browser-go-root-btn", "n_clicks"),
-        Input({"type": "file-browser-folder", "index": ALL}, "n_clicks"),
-        State("file-browser-current-path", "data"),
-        prevent_initial_call=True,
-    )
-    def navigate_file_browser(refresh_clicks, up_clicks, root_clicks,
-                              folder_clicks, current_path):
-        """Handle file browser navigation: refresh, go up, go root, enter folder."""
-        from gui.components.server_file_picker import (
-            list_directory, render_directory_contents, render_breadcrumb,
-            get_default_browse_root,
-        )
-
-        ctx = callback_context
-        if not ctx.triggered:
-            raise PreventUpdate
-
-        trigger = ctx.triggered[0]["prop_id"]
-        target_path = current_path
-
-        if "file-browser-go-root-btn" in trigger:
-            target_path = get_default_browse_root()
-        elif "file-browser-go-up-btn" in trigger:
-            from pathlib import Path
-            parent = str(Path(current_path).parent)
-            target_path = parent
-        elif "file-browser-folder" in trigger:
-            # Extract folder path from pattern-matching trigger
-            if any(c for c in (folder_clicks or []) if c):
-                prop_id = trigger.split(".")[0]
-                id_dict = json.loads(prop_id)
-                target_path = id_dict["index"]
-            else:
-                raise PreventUpdate
-        elif "file-browser-refresh-btn" in trigger:
-            target_path = current_path
-        else:
-            raise PreventUpdate
-
-        try:
-            listing = list_directory(target_path)
-            contents = render_directory_contents(listing)
-            breadcrumb = render_breadcrumb(listing['path'], get_default_browse_root())
-            return contents, breadcrumb, listing['path']
-        except Exception as e:
-            logger.error(f"Error browsing directory {target_path}: {e}")
-            error_msg = dbc.Alert(
-                f"Error browsing directory: {e}",
-                color="danger", className="py-2 small",
-            )
-            return error_msg, html.Span(str(target_path)), current_path
-
-    # === 14. File browser: enable/disable add button ===
-    @app.callback(
-        Output("add-server-files-btn", "disabled"),
-        Input("server-files-checklist", "value"),
-        prevent_initial_call=True,
-    )
-    def toggle_add_server_files_btn(selected_files):
-        """Enable the 'Add' button when at least one file is selected."""
-        if selected_files and len(selected_files) > 0:
-            return False
-        return True
-
-    # === 15. File browser: add selected files to project ===
-    @app.callback(
-        Output("notification-toast", "is_open", allow_duplicate=True),
-        Output("notification-toast", "children", allow_duplicate=True),
-        Output("page-content", "children", allow_duplicate=True),
-        Input("add-server-files-btn", "n_clicks"),
-        State("server-files-checklist", "value"),
-        State("url", "pathname"),
-        prevent_initial_call=True,
-    )
-    def add_server_files_to_project(n_clicks, selected_paths, pathname):
-        """
-        Add server-side files to the current project using filesystem copy.
-
-        This is the key fix for the OOM issue: instead of reading file contents
-        into memory (as dcc.Upload does via base64), we use shutil.copy2 which
-        copies the file at the OS level with constant memory usage.
-        """
-        if not n_clicks or not selected_paths or not pathname:
-            raise PreventUpdate
-
-        if not pathname.startswith("/project/"):
-            raise PreventUpdate
-
-        project_id = pathname.split("/project/")[-1]
-
-        if not project_manager:
-            raise PreventUpdate
-
-        added_count = 0
-        errors = []
-
-        for file_path in selected_paths:
-            try:
-                project_manager.add_file_by_server_path(
-                    project_id=project_id,
-                    source_path=file_path,
-                    copy=True,  # Copy, don't move — keep original in uploads
-                )
-                added_count += 1
-            except FileNotFoundError as e:
-                errors.append(f"File not found: {file_path}")
-                logger.error(f"Server file not found: {e}")
-            except Exception as e:
-                errors.append(f"Error adding {file_path}: {e}")
-                logger.error(f"Error adding server file {file_path}: {e}")
-
-        # Build notification message
-        if errors:
-            msg = f"Added {added_count} file(s). Errors: {'; '.join(errors)}"
-        else:
-            msg = f"Successfully added {added_count} file(s)"
-
-        # Refresh project detail page
-        project = project_manager.get_project(project_id)
-        page_content = no_update
-        if project:
-            page_content = create_project_detail(project.to_dict())
-
-        return True, msg, page_content
-
     # === Keep existing callbacks that still work ===
     
     # === 16. File deletion callback ===
@@ -703,3 +573,169 @@ def register_callbacks(
             return history_items
         
         raise PreventUpdate
+
+    # === Enhanced file picker callbacks ===
+    @app.callback(
+        [Output('enhanced-file-picker-store', 'data'),
+         Output('enhanced-file-picker-selection-summary', 'children'),
+         Output('add-enhanced-files-btn', 'disabled')],
+        Input('enhanced-file-picker-upload', 'contents'),
+        [State('enhanced-file-picker-upload', 'filename'),
+         State('enhanced-file-picker-upload', 'last_modified'),
+         State('enhanced-file-picker-store', 'data')],
+        prevent_initial_call=True,
+    )
+    def update_enhanced_file_picker(contents_list, filenames_list, dates_list, current_files):
+        """
+        Update the enhanced file picker with selected files.
+        
+        Args:
+            contents_list: List of file contents (base64 encoded)
+            filenames_list: List of file names
+            dates_list: List of file modification dates
+            current_files: Current list of selected files in store
+            
+        Returns:
+            Updated file store data, summary component, and button disabled state
+        """
+        from gui.components.enhanced_file_picker import format_selected_files_summary, SUPPORTED_EXTENSIONS
+        
+        if contents_list is None or filenames_list is None:
+            raise PreventUpdate
+        
+        # Create list of new files
+        new_files = []
+        for i, (content, filename) in enumerate(zip(contents_list, filenames_list)):
+            # Check file extension
+            ext = Path(filename).suffix.lower()
+            if ext not in SUPPORTED_EXTENSIONS:
+                continue
+                
+            # Calculate size from base64 content
+            # Remove data URL prefix if present
+            if content.startswith('data:'):
+                content_data = content.split(',')[1]
+            else:
+                content_data = content
+                
+            # Approximate size (base64 is ~4/3 the size of binary data)
+            try:
+                size = len(base64.b64decode(content_data))
+            except Exception:
+                size = 0
+                
+            new_files.append({
+                'name': filename,
+                'content': content,
+                'size': size,
+                'last_modified': dates_list[i] if dates_list else None
+            })
+        
+        # Combine with existing files (avoiding duplicates)
+        updated_files = list(current_files)  # Start with existing files
+        existing_names = {f['name'] for f in current_files}
+        
+        # Add new files that aren't already selected
+        for new_file in new_files:
+            if new_file['name'] not in existing_names:
+                updated_files.append(new_file)
+        
+        # Create summary
+        summary = format_selected_files_summary(updated_files)
+        
+        # Button is disabled if no files selected
+        button_disabled = len(updated_files) == 0
+        
+        return updated_files, summary, button_disabled
+    
+    @app.callback(
+        [Output("notification-toast", "is_open", allow_duplicate=True),
+         Output("notification-toast", "children", allow_duplicate=True),
+         Output("page-content", "children", allow_duplicate=True)],
+        Input("add-enhanced-files-btn", "n_clicks"),
+        [State('enhanced-file-picker-store', 'data'),
+         State("url", "pathname")],
+        prevent_initial_call=True,
+    )
+    def add_enhanced_files_to_project(n_clicks, selected_files, pathname):
+        """
+        Add files selected through the enhanced file picker to the current project.
+        
+        Args:
+            n_clicks: Button click count
+            selected_files: List of selected files with content
+            pathname: Current URL pathname
+            
+        Returns:
+            Notification state, message, and updated page content
+        """
+        from gui.components.project_detail import create_project_detail
+        from dash import no_update
+        
+        if not n_clicks or not selected_files or not pathname:
+            raise PreventUpdate
+
+        if not pathname.startswith("/project/"):
+            raise PreventUpdate
+
+        project_id = pathname.split("/project/")[-1]
+
+        if not project_manager:
+            raise PreventUpdate
+
+        added_count = 0
+        errors = []
+
+        # Process each selected file
+        for file_info in selected_files:
+            try:
+                filename = file_info.get('name', 'unknown')
+                content = file_info.get('content', '')
+                
+                # Decode base64 content
+                if content.startswith('data:'):
+                    content_data = content.split(',')[1]
+                else:
+                    content_data = content
+                    
+                file_bytes = base64.b64decode(content_data)
+                
+                # Add file to project
+                project_manager.add_file_to_project(
+                    project_id=project_id,
+                    filename=filename,
+                    file_content=file_bytes,
+                    file_type="hyperspectral"  # Default type, could be enhanced
+                )
+                added_count += 1
+            except Exception as e:
+                errors.append(f"Error adding {file_info.get('name', 'Unknown')}: {str(e)}")
+                logger.error(f"Error adding enhanced file {file_info.get('name', 'Unknown')}: {e}")
+
+        # Build notification message
+        if errors:
+            msg = f"Added {added_count} file(s). Errors: {'; '.join(errors)}"
+        else:
+            msg = f"Successfully added {added_count} file(s)"
+
+        # Refresh project detail page
+        project = project_manager.get_project(project_id)
+        page_content = no_update
+        if project:
+            page_content = create_project_detail(project.to_dict())
+
+        return True, msg, page_content
+
+    @app.callback(
+        Output('enhanced-file-picker-store', 'data', allow_duplicate=True),
+        Input("add-enhanced-files-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def clear_enhanced_file_picker_store(n_clicks):
+        """Clear the enhanced file picker store after files are added."""
+        if not n_clicks:
+            raise PreventUpdate
+        return []
+
+
+# Register callbacks function end
