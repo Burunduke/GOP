@@ -8,6 +8,7 @@ using either OpenDroneMap (preferred) or GDAL as a fallback.
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Dict, Any, List, Optional
 
@@ -243,8 +244,14 @@ class OrthophotoProcessor:
             # Use gdal_merge.py to create mosaic
             output_path = os.path.join(output_dir, "orthophoto.tif")
 
+            # Resolve gdal_merge.py path and use sys.executable for cross-platform compatibility
+            gdal_merge_path = shutil.which("gdal_merge.py")
+            if gdal_merge_path is None:
+                raise RuntimeError("gdal_merge.py not found in PATH")
+
             cmd = [
-                "gdal_merge.py",
+                sys.executable,
+                gdal_merge_path,
                 "-o",
                 output_path,
                 "-of",
@@ -405,8 +412,13 @@ class OrthophotoProcessor:
                 output_path = f"{base_path}_optimized.tif"
 
             # GDAL command for optimization
+            # Resolve gdal_translate path for robustness
+            gdal_translate_path = shutil.which("gdal_translate")
+            if gdal_translate_path is None:
+                raise RuntimeError("gdal_translate not found in PATH")
+
             cmd = [
-                "gdal_translate",
+                gdal_translate_path,
                 orthophoto_path,
                 output_path,
                 "-co",
@@ -426,8 +438,13 @@ class OrthophotoProcessor:
                 raise RuntimeError(f"Optimization error: {result.stderr}")
 
             # Create pyramids
+            # Resolve gdaladdo path for robustness
+            gdaladdo_path = shutil.which("gdaladdo")
+            if gdaladdo_path is None:
+                raise RuntimeError("gdaladdo not found in PATH")
+
             pyramid_cmd = [
-                "gdaladdo",
+                gdaladdo_path,
                 "-r",
                 "average",
                 output_path,

@@ -63,7 +63,10 @@ def setup_logger(
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-
+    
+    # Prevent propagation to root logger to avoid duplicate logs
+    logger.propagate = False
+    
     return logger
 
 
