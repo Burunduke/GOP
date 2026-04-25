@@ -8,6 +8,7 @@ pipeline including data loading and orthophoto creation.
 import os
 import json
 import numpy as np
+import time
 from typing import Dict, Any, Optional, List
 from numpy.typing import NDArray
 
@@ -23,6 +24,7 @@ from ...core.config import get_config
 from ...utils.logger import setup_logger
 from ...utils.exceptions import ProcessingError, FileError
 from .validators import HyperspectralValidator
+from ...utils.memory_monitor import ResourceMonitor
 from .cache import HyperspectralCache
 
 # Type aliases for better type safety
@@ -215,20 +217,48 @@ class HyperspectralProcessor:
         Returns:
             Dictionary with tiff_paths and metadata for orthophoto processor
         """
-        try:
-            self.logger.info(f"[{os.path.basename(input_path)}] Starting processing")
+        process_start_time = time.perf_counter()
+        input_basename = os.path.basename(input_path)
+        self.logger.info(f"[hsp] process: start input={input_basename} output={output_dir}")
 
+        try:
             # Step 1: Load data from file
-            data = self.load_data(input_path)
+            self.logger.info("[hsp] process: Step 1/4 load_data - start")
+            load_start_time = time.perf_counter()
+            with ResourceMonitor("process.load_data", logger=self.logger):
+                data = self.load_data(input_path)
+            load_duration = time.perf_counter() - load_start_time
+            self.logger.info(
+                f"[hsp] process: Step 1/4 load_data - end "
+                f"shape={data.shape} dtype={data.dtype} "
+                f"duration={load_duration:.2f}s"
+            )
 
             # Step 2: Get preprocessing configuration
             preprocessing_config = self.config.get("processing", {})
 
             # Step 3: Apply preprocessing steps
-            processed_data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
+            self.logger.info("[hsp] process: Step 2/4 _apply_preprocessing - start")
+            preprocess_start_time = time.perf_counter()
+            with ResourceMonitor("process.apply_preprocessing", logger=self.logger, interval_s=10.0):
+                processed_data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
+            preprocess_duration = time.perf_counter() - preprocess_start_time
+            self.logger.info(
+                f"[hsp] process: Step 2/4 _apply_preprocessing - end "
+                f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                f"duration={preprocess_duration:.2f}s"
+            )
 
             # Step 4: Save results as per-band GeoTIFFs
-            tiff_paths = self._save_band_tiffs(processed_data, input_path, output_dir, metadata)
+            self.logger.info("[hsp] process: Step 3/4 _save_band_tiffs - start")
+            save_start_time = time.perf_counter()
+            with ResourceMonitor("process._save_band_tiffs", logger=self.logger):
+                tiff_paths = self._save_band_tiffs(processed_data, input_path, output_dir, metadata)
+            save_duration = time.perf_counter() - save_start_time
+            self.logger.info(
+                f"[hsp] process: Step 3/4 _save_band_tiffs - end "
+                f"tiffs={len(tiff_paths)} duration={save_duration:.2f}s"
+            )
 
             # Step 5: Prepare result dictionary for orthophoto processor
             result = {
@@ -236,7 +266,11 @@ class HyperspectralProcessor:
                 "metadata": metadata
             }
 
-            self.logger.info(f"[{os.path.basename(input_path)}] Processing completed. {len(tiff_paths)} GeoTIFFs created.")
+            process_duration = time.perf_counter() - process_start_time
+            self.logger.info(
+                f"[hsp] process: Step 4/4 done - "
+                f"tiffs={len(tiff_paths)} total_duration={process_duration:.2f}s"
+            )
             return result
 
         except Exception as e:
@@ -255,10 +289,24 @@ class HyperspectralProcessor:
         Returns:
             Tuple of (processed_data, applied_steps, metadata)
         """
-        import time
         from ...utils.gdal_utils import get_raster_metadata
         
-        processed_data = data.copy()
+        self.logger.info(
+            f"[hsp] _apply_preprocessing: start "
+            f"shape={data.shape} dtype={data.dtype} "
+            f"size={data.nbytes / 1024 / 1024:.1f} MiB"
+        )
+        
+        # Explicit log before data.copy() - the suspected OOM point
+        copy_size_mb = data.nbytes / 1024 / 1024
+        self.logger.info(
+            f"[hsp] _apply_preprocessing: About to copy input cube "
+            f"shape={data.shape} dtype={data.dtype} size={copy_size_mb:.1f} MiB"
+        )
+        with ResourceMonitor("apply_preprocessing.copy_input", logger=self.logger):
+            processed_data = data.copy()
+        self.logger.info("[hsp] _apply_preprocessing: Copy complete")
+        
         applied_steps = []
         
         # Get source metadata
@@ -273,46 +321,66 @@ class HyperspectralProcessor:
         # 1. Dark current subtraction
         radiometric_config = config.get("radiometric_correction", {})
         if radiometric_config.get("method") == "dark_current":
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: dark_current - start")
+            start_time = time.perf_counter()
             dark_percentile = radiometric_config.get("dark_percentile", 1)
             dark_value = np.percentile(processed_data, dark_percentile)
             processed_data = processed_data - dark_value
             applied_steps.append("dark_current_subtraction")
-            duration = time.time() - start_time
-            self.logger.info(f"Applied dark current subtraction (value: {dark_value:.4f}) in {duration:.2f}s")
+            duration = time.perf_counter() - start_time
+            self.logger.info(
+                f"[hsp] _apply_preprocessing: dark_current - end "
+                f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                f"duration={duration:.2f}s"
+            )
         
         # 2. Flat field correction
         if radiometric_config.get("method") == "flat_field":
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: flat_field - start")
+            start_time = time.perf_counter()
             mean_value = np.mean(processed_data)
             if mean_value > 0:
                 processed_data = processed_data / mean_value
             applied_steps.append("flat_field_correction")
-            duration = time.time() - start_time
-            self.logger.info(f"Applied flat field correction (mean: {mean_value:.4f}) in {duration:.2f}s")
+            duration = time.perf_counter() - start_time
+            self.logger.info(
+                f"[hsp] _apply_preprocessing: flat_field - end "
+                f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                f"duration={duration:.2f}s"
+            )
         
         # 3. Radiometric correction
         if radiometric_config.get("method") == "empirical_line":
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: radiometric - start")
+            start_time = time.perf_counter()
             gain = radiometric_config.get("gain", 1.0)
             offset = radiometric_config.get("offset", 0.0)
             processed_data = gain * processed_data + offset
             applied_steps.append("radiometric_correction")
-            duration = time.time() - start_time
-            self.logger.info(f"Applied radiometric correction (gain: {gain}, offset: {offset}) in {duration:.2f}s")
+            duration = time.perf_counter() - start_time
+            self.logger.info(
+                f"[hsp] _apply_preprocessing: radiometric - end "
+                f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                f"duration={duration:.2f}s"
+            )
         
         # 4. Atmospheric correction
         atmospheric_config = config.get("atmospheric_correction", {})
         if atmospheric_config.get("enabled", False):
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: atmospheric - start")
+            start_time = time.perf_counter()
             method = atmospheric_config.get("method", "simplified")
             if method == "simplified":
                 # Simple scalar correction
                 atm_correction = atmospheric_config.get("correction_factor", 0.95)
                 processed_data = processed_data * atm_correction
                 applied_steps.append("atmospheric_correction")
-                duration = time.time() - start_time
-                self.logger.info(f"Applied simplified atmospheric correction (factor: {atm_correction}) in {duration:.2f}s")
+                duration = time.perf_counter() - start_time
+                self.logger.info(
+                    f"[hsp] _apply_preprocessing: atmospheric - end "
+                    f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                    f"duration={duration:.2f}s"
+                )
             else:
                 # TODO: Implement other atmospheric correction methods
                 self.logger.warning(f"Atmospheric correction method '{method}' not implemented, skipping")
@@ -320,7 +388,8 @@ class HyperspectralProcessor:
         # 5. Noise filtering
         noise_config = config.get("noise_reduction", {})
         if noise_config.get("method"):
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: noise_filtering - start")
+            start_time = time.perf_counter()
             method = noise_config.get("method")
             
             # Try to use scipy if available, otherwise fall back to numpy
@@ -347,44 +416,69 @@ class HyperspectralProcessor:
                                 processed_data[:, :, band_idx], window_length, polyorder
                             )
                         applied_steps.append("noise_filtering_savgol")
-                        duration = time.time() - start_time
-                        self.logger.info(f"Applied Savitzky-Golay filtering in {duration:.2f}s")
+                        duration = time.perf_counter() - start_time
+                        self.logger.info(
+                            f"[hsp] _apply_preprocessing: noise_filtering_savgol - end "
+                            f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                            f"duration={duration:.2f}s"
+                        )
                     else:
                         # Fallback to median filter
                         processed_data = median_filter(processed_data, size=3)
                         applied_steps.append("noise_filtering_median")
-                        duration = time.time() - start_time
-                        self.logger.info(f"Applied median filtering (fallback) in {duration:.2f}s")
+                        duration = time.perf_counter() - start_time
+                        self.logger.info(
+                            f"[hsp] _apply_preprocessing: noise_filtering_median (fallback) - end "
+                            f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                            f"duration={duration:.2f}s"
+                        )
                 except Exception as e:
                     self.logger.warning(f"Error applying Savitzky-Golay filter: {e}, falling back to median filter")
                     processed_data = median_filter(processed_data, size=3)
                     applied_steps.append("noise_filtering_median")
-                    duration = time.time() - start_time
-                    self.logger.info(f"Applied median filtering (fallback) in {duration:.2f}s")
+                    duration = time.perf_counter() - start_time
+                    self.logger.info(
+                        f"[hsp] _apply_preprocessing: noise_filtering_median (fallback) - end "
+                        f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                        f"duration={duration:.2f}s"
+                    )
             elif method == "median" or not scipy_available:
                 # Simple 3x3 median filter using scipy or numpy
                 if scipy_available:
                     processed_data = median_filter(processed_data, size=3)
                     applied_steps.append("noise_filtering_median")
-                    duration = time.time() - start_time
-                    self.logger.info(f"Applied median filtering in {duration:.2f}s")
+                    duration = time.perf_counter() - start_time
+                    self.logger.info(
+                        f"[hsp] _apply_preprocessing: noise_filtering_median (scipy) - end "
+                        f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                        f"duration={duration:.2f}s"
+                    )
                 else:
                     processed_data = self._numpy_median_filter(processed_data, 3)
                     applied_steps.append("noise_filtering_median")
-                    duration = time.time() - start_time
-                    self.logger.info(f"Applied numpy-based median filtering in {duration:.2f}s")
+                    duration = time.perf_counter() - start_time
+                    self.logger.info(
+                        f"[hsp] _apply_preprocessing: noise_filtering_median (numpy) - end "
+                        f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                        f"duration={duration:.2f}s"
+                    )
             else:
                 # Fallback to simple mean filter
                 kernel_size = 3
                 processed_data = self._numpy_mean_filter(processed_data, kernel_size)
                 applied_steps.append("noise_filtering_mean")
-                duration = time.time() - start_time
-                self.logger.info(f"Applied mean filtering in {duration:.2f}s")
+                duration = time.perf_counter() - start_time
+                self.logger.info(
+                    f"[hsp] _apply_preprocessing: noise_filtering_mean - end "
+                    f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                    f"duration={duration:.2f}s"
+                )
         
         # 6. Normalization - check if it's enabled in spectral calibration or as a separate config
         spectral_config = config.get("spectral_calibration", {})
         if spectral_config.get("normalization", False):
-            start_time = time.time()
+            self.logger.info("[hsp] _apply_preprocessing: normalization - start")
+            start_time = time.perf_counter()
             # Use minmax normalization by default
             # Normalize each band to [0, 1]
             for band_idx in range(processed_data.shape[2]):
@@ -394,8 +488,12 @@ class HyperspectralProcessor:
                 if max_val > min_val:
                     processed_data[:, :, band_idx] = (band - min_val) / (max_val - min_val)
             applied_steps.append("normalization_minmax")
-            duration = time.time() - start_time
-            self.logger.info(f"Applied min-max normalization in {duration:.2f}s")
+            duration = time.perf_counter() - start_time
+            self.logger.info(
+                f"[hsp] _apply_preprocessing: normalization - end "
+                f"shape={processed_data.shape} dtype={processed_data.dtype} "
+                f"duration={duration:.2f}s"
+            )
         
         # Build metadata
         metadata = {
@@ -422,19 +520,34 @@ class HyperspectralProcessor:
         Returns:
             Filtered data
         """
+        total_pixels = data.shape[0] * data.shape[1] * data.shape[2]
+        self.logger.warning(
+            f"[hsp] _numpy_median_filter: start - "
+            f"WARNING: Using slow Python loop for {total_pixels:,} pixels"
+        )
+        
         # For simplicity, we'll use a basic approach for 3D data
         # This is a simplified implementation - in practice, you might want to use scipy
         filtered_data = data.copy()
         pad = kernel_size // 2
         
         # Apply filter to each band separately
-        for band_idx in range(data.shape[2]):
+        bands = data.shape[2]
+        for band_idx in range(bands):
+            band_start_time = time.perf_counter()
             band = data[:, :, band_idx]
             padded = np.pad(band, pad, mode='edge')
             for i in range(band.shape[0]):
                 for j in range(band.shape[1]):
                     window = padded[i:i+kernel_size, j:j+kernel_size]
                     filtered_data[i, j, band_idx] = np.median(window)
+            
+            # Log progress every band (or could do every N bands for less verbosity)
+            band_duration = time.perf_counter() - band_start_time
+            self.logger.info(
+                f"[hsp] _numpy_median_filter: band {band_idx}/{bands} filtered "
+                f"in {band_duration:.2f}s"
+            )
         
         return filtered_data
     
@@ -449,18 +562,34 @@ class HyperspectralProcessor:
         Returns:
             Filtered data
         """
+        total_pixels = data.shape[0] * data.shape[1] * data.shape[2]
+        self.logger.warning(
+            f"[hsp] _numpy_mean_filter: start - "
+            f"WARNING: Using slow Python loop for {total_pixels:,} pixels"
+        )
+        
         # For simplicity, we'll use a basic approach for 3D data
+        # This is a simplified implementation - in practice, you might want to use scipy
         filtered_data = data.copy()
         pad = kernel_size // 2
         
         # Apply filter to each band separately
-        for band_idx in range(data.shape[2]):
+        bands = data.shape[2]
+        for band_idx in range(bands):
+            band_start_time = time.perf_counter()
             band = data[:, :, band_idx]
             padded = np.pad(band, pad, mode='edge')
             for i in range(band.shape[0]):
                 for j in range(band.shape[1]):
                     window = padded[i:i+kernel_size, j:j+kernel_size]
                     filtered_data[i, j, band_idx] = np.mean(window)
+            
+            # Log progress every band (or could do every N bands for less verbosity)
+            band_duration = time.perf_counter() - band_start_time
+            self.logger.info(
+                f"[hsp] _numpy_mean_filter: band {band_idx}/{bands} filtered "
+                f"in {band_duration:.2f}s"
+            )
         
         return filtered_data
     
@@ -477,8 +606,11 @@ class HyperspectralProcessor:
         Returns:
             List of paths to saved GeoTIFFs
         """
-        import os
         from ...utils.gdal_utils import write_raster
+        
+        input_basename = os.path.basename(input_path)
+        self.logger.info(f"[hsp] _save_band_tiffs: start bands={data.shape[2]}")
+        start_time = time.perf_counter()
         
         os.makedirs(output_dir, exist_ok=True)
         tiff_paths = []
@@ -499,8 +631,10 @@ class HyperspectralProcessor:
             )
             
             tiff_paths.append(tiff_path)
-            self.logger.info(f"[{os.path.basename(input_path)}] Saved band {band_idx} to {tiff_path}")
+            self.logger.info(f"[{input_basename}] Saved band {band_idx} to {tiff_path}")
         
+        duration = time.perf_counter() - start_time
+        self.logger.info(f"[hsp] _save_band_tiffs: end duration={duration:.2f}s")
         return tiff_paths
 
 
