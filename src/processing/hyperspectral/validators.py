@@ -193,3 +193,24 @@ class HyperspectralValidator:
             raise ValueError(
                 f"Insufficient channels for RGB composite. Required: {max(rgb_bands)}, available: {max_bands}"
             )
+
+    @staticmethod
+    def validate_data(data: np.ndarray) -> None:
+        """
+        Validate hyperspectral data array.
+        
+        Args:
+            data: Hyperspectral data array
+            
+        Raises:
+            ValueError: If data is invalid
+        """
+        if data is None or data.size == 0:
+            raise ValueError("Input data is empty or None")
+            
+        if len(data.shape) != 3:
+            raise ValueError(f"Expected 3D array, got {len(data.shape)}D")
+            
+        rows, cols, bands = data.shape
+        if rows <= 0 or cols <= 0 or bands <= 0:
+            raise ValueError(f"Invalid data dimensions: {rows}x{cols}x{bands}")

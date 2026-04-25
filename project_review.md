@@ -254,6 +254,7 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 | File path handling fixed | ✅ |
 | Directory handling improved | ✅ |
 | Error handling enhanced | ✅ |
+| HyperspectralValidator fixed | ✅ |
 
 > Note: `from gui.app.app import create_app` was not exercised at runtime because the verification environment lacks `numpy`, `dash`, and GDAL. Static parsing and import structure are correct; full runtime startup should be re-checked on a machine with the production dependencies installed.
 
@@ -268,6 +269,10 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
 - **Directory handling improved** in [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:58) by adding logic to handle directory paths correctly. When a directory is passed, the adapter now selects the first file in the directory for processing, which resolves the issue where the processor was trying to open a directory as a file.
 
 - **Error handling enhanced** in [`gui/services/project_manager.py`](gui/services/project_manager.py:477) by adding a check in `start_processing` method to prevent processing projects with no files, providing a clearer error message to users.
+
+### Additional fixes - 2026-04-25
+
+- **HyperspectralValidator fixed** in [`src/processing/hyperspectral/validators.py`](src/processing/hyperspectral/validators.py:197) by adding the missing `validate_data` method that was causing the "HyperspectralValidator object has no attribute 'validate_data'" error during preprocessing.
 
 ---
 
