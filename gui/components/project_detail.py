@@ -5,11 +5,12 @@ This module provides the detailed project view with tabs for overview, files,
 processing, and results.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import dash_bootstrap_components as dbc
 from dash import html
 
 from gui.utils.format_utils import format_date, format_file_size, get_stage_display_name
+from gui.utils.odm_utils import check_odm_status
 
 from gui.components.enhanced_file_picker import create_enhanced_file_picker
 
@@ -34,6 +35,97 @@ def _get_run_display_name(run_data: dict) -> str:
             pass
     # Fallback to generic naming for legacy runs or if no folder name
     return f"Run (Legacy)"
+
+def _get_stitching_method_options(project: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Get stitching method options, disabling ODM when it's not available.
+    
+    Args:
+        project: Project data dictionary
+        
+    Returns:
+        List of option dictionaries for the stitching method dropdown
+    """
+    # Default options
+    options = [
+        {"label": "GDAL (georeferenced merge + feather blend) — recommended", "value": "gdal"},
+        {"label": "OpenCV (feature-based, experimental)", "value": "opencv"},
+        {"label": "OpenDroneMap (ODM)", "value": "odm"},
+    ]
+    
+    if project is not None:
+        # Get image count from project
+        image_count = len(project.get("files", []))
+        
+        # Check ODM status
+        odm_available, odm_reason = check_odm_status(image_count)
+        
+        # If ODM is not available, disable the option
+        if not odm_available:
+            # Find the ODM option and mark it as disabled
+            for option in options:
+                if option["value"] == "odm":
+                    option["disabled"] = True
+                    # Add reason to the label
+                    option["label"] = f"OpenDroneMap (ODM) - {odm_reason}"
+                    break
+    
+    return options
+
+def _get_default_stitching_method(project: Optional[Dict[str, Any]]) -> str:
+    """
+    Get the default stitching method, falling back from ODM if it's not available.
+    
+    Args:
+        project: Project data dictionary
+        
+    Returns:
+        Default stitching method value
+    """
+    default_method = "gdal"
+    if project is not None:
+        # Get the saved method from project config
+        saved_method = project.get("processing_config", {}).get("orthophoto", {}).get("stitching_method", default_method)
+        
+        # If ODM is selected but not available, fall back to default
+        if saved_method == "odm":
+            image_count = len(project.get("files", []))
+            odm_available, _ = check_odm_status(image_count)
+            if not odm_available:
+                return default_method
+        
+        return saved_method
+    
+    return default_method
+
+def _get_stitching_method_hint(project: Optional[Dict[str, Any]]) -> str:
+    """
+    Get hint text for the current stitching method selection.
+    
+    Args:
+        project: Project data dictionary
+        
+    Returns:
+        Hint text to display
+    """
+    if project is not None:
+        # Get current method from project config
+        current_method = project.get("processing_config", {}).get("orthophoto", {}).get("stitching_method", "gdal")
+        image_count = len(project.get("files", []))
+        
+        # If ODM is selected or would be selected, show ODM status
+        if current_method == "odm":
+            _, odm_reason = check_odm_status(image_count)
+            return odm_reason
+        elif current_method == "opencv":
+            return "OpenCV stitching is experimental and may fail on inputs without sufficient overlap or feature points."
+        else:
+            # For GDAL, check if ODM would be available as additional info
+            odm_available, odm_reason = check_odm_status(image_count)
+            if odm_available:
+                return f"GDAL selected. {odm_reason}"
+    
+    return ""
 
 def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
     """
@@ -272,18 +364,14 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                         html.H6("Stitching method", className="mb-3"),
                                         dbc.Select(
                                             id="stitching-method-dropdown",
-                                            options=[
-                                                {"label": "GDAL (georeferenced merge + feather blend) — recommended", "value": "gdal"},
-                                                {"label": "OpenCV (feature-based, experimental)", "value": "opencv"},
-                                                {"label": "OpenDroneMap (ODM)", "value": "odm"},
-                                            ],
-                                            value=project.get("processing_config", {}).get("orthophoto", {}).get("stitching_method", "gdal"),
+                                            options=_get_stitching_method_options(project),
+                                            value=_get_default_stitching_method(project),
                                             className="mb-2"
                                         ),
                                         html.Small(
                                             id="stitching-method-warning",
                                             className="text-muted",
-                                            children=""
+                                            children=_get_stitching_method_hint(project)
                                         ),
                                     ]),
                                 ], width=6),

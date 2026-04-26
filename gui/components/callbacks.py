@@ -794,22 +794,47 @@ def register_callbacks(
     @app.callback(
         [Output("stitching-method-warning", "children"),
          Output("stitching-method-warning", "className")],
-        Input("stitching-method-dropdown", "value"),
+        [Input("stitching-method-dropdown", "value"),
+         Input("url", "pathname")],
         prevent_initial_call=False,
     )
-    def update_stitching_method_warning(selected_method):
+    def update_stitching_method_warning(selected_method, pathname):
         """Update warning message based on selected stitching method."""
+        # Get project to check ODM status
+        project = None
+        if pathname and pathname.startswith("/project/") and project_manager:
+            project_id = pathname.split("/project/")[-1]
+            project = project_manager.get_project(project_id)
+        
         if selected_method == "opencv":
             return (
                 "OpenCV stitching is experimental and may fail on inputs without sufficient overlap or feature points.",
                 "text-warning"
             )
         elif selected_method == "odm":
-            return (
-                "OpenDroneMap selected. Make sure `docker` and the ODM image are available on this machine.",
-                "text-muted"
-            )
+            # Check ODM status
+            if project is not None:
+                from gui.utils.odm_utils import check_odm_status
+                image_count = project.get_file_count()
+                odm_available, odm_reason = check_odm_status(image_count)
+                if odm_available:
+                    return (odm_reason, "text-muted")
+                else:
+                    return (f"ODM selected but unavailable: {odm_reason}", "text-danger")
+            else:
+                return (
+                    "OpenDroneMap selected. Make sure `docker` and the ODM image are available on this machine.",
+                    "text-muted"
+                )
         else:
+            # For GDAL, show ODM availability info if relevant
+            if project is not None:
+                from gui.utils.odm_utils import check_odm_status
+                image_count = project.get_file_count()
+                odm_available, odm_reason = check_odm_status(image_count)
+                if odm_available:
+                    return (f"GDAL selected. {odm_reason}", "text-muted")
+            
             return ("", "text-muted")
 
     @app.callback(
@@ -826,14 +851,23 @@ def register_callbacks(
         project_id = pathname.split("/project/")[-1]
         project = project_manager.get_project(project_id)
         if project:
+            # If ODM is selected but not available, fall back to GDAL
+            final_method = selected_method
+            if selected_method == "odm":
+                from gui.utils.odm_utils import check_odm_status
+                image_count = project.get_file_count()
+                odm_available, _ = check_odm_status(image_count)
+                if not odm_available:
+                    final_method = "gdal"  # Fallback to GDAL
+            
             # Update processing config with selected stitching method
             processing_config = project.processing_config
             if "orthophoto" not in processing_config:
                 processing_config["orthophoto"] = {}
-            processing_config["orthophoto"]["stitching_method"] = selected_method
+            processing_config["orthophoto"]["stitching_method"] = final_method
             
             # Save updated project
-            project_manager.update_processing_config(project_id, {"orthophoto": {"stitching_method": selected_method}})
+            project_manager.update_processing_config(project_id, {"orthophoto": {"stitching_method": final_method}})
             
             # Refresh project detail page
             updated_project = project_manager.get_project(project_id)

@@ -566,3 +566,40 @@ Large images are automatically downscaled for feature detection, preventing memo
 #### 5. Files modified
 
 - [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — functions `_prepare_for_features` (new) and `_detect_and_match` (modified)
+
+### ODM Integration Notes
+
+#### 1. Availability Check
+
+The OpenDroneMap integration now includes a comprehensive availability check that verifies:
+- Docker is running (when using Docker mode)
+- The `opendronemap/odm` Docker image is available locally
+- Native ODM installation is complete and functional (when using native mode)
+- Sufficient images are provided (minimum 3 images required for ODM to work properly)
+
+#### 2. Improved Error Reporting
+
+Error reporting for ODM failures has been significantly enhanced to include:
+- Process return code
+- Last 50 lines of stdout for context
+- Complete stderr output
+- Detailed logging of the exact command being executed
+- Clear Windows-specific path information for Docker volume mounts
+
+#### 3. Windows-Specific Improvements
+
+- Docker volume mount paths are now properly formatted for Windows
+- Removed problematic `-it` flags that can cause issues on Windows
+- Added explicit logging of host and container paths for troubleshooting
+
+#### 4. Minimum Image Requirements
+
+OpenDroneMap requires a minimum of 3 overlapping images to successfully create an orthophoto. With only 2 images, ODM will almost certainly fail because Structure-from-Motion (SfM) algorithms need multiple overlapping views to reconstruct 3D geometry and create a seamless orthophoto. For projects with only 2 images, consider using alternative stitching methods like `gdal` or `opencv`.
+
+#### 5. UX Safeguards for ODM Selection
+
+- Added `check_odm_status` helper function in `gui/utils/odm_utils.py` to determine ODM availability
+- ODM option in the stitching method selector is automatically disabled when requirements are not met
+- Informative hint text is displayed explaining why ODM is disabled or available
+- Auto-fallback mechanism switches selection from ODM to GDAL when ODM becomes unavailable
+- Dynamic updates occur when project file count changes (adding/removing images)

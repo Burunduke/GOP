@@ -110,6 +110,17 @@ class OrthophotoProcessor:
             True if ODM Docker image is available, False otherwise
         """
         try:
+            # First check if docker info works
+            info_result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if info_result.returncode != 0:
+                return False
+            
+            # Then check if the image is available locally
             result = subprocess.run(
                 ["docker", "images", "opendronemap/odm", "--format", "{{.Repository}}"],
                 capture_output=True,
@@ -119,6 +130,57 @@ class OrthophotoProcessor:
             return result.returncode == 0 and "opendronemap/odm" in result.stdout
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
+
+    def _check_odm_available(self, tiff_paths: List[str]) -> None:
+        """
+        Check if OpenDroneMap is available for the chosen execution method.
+        
+        Args:
+            tiff_paths: List of TIFF file paths to be processed
+            
+        Raises:
+            RuntimeError: If ODM is not available or if there are insufficient images
+        """
+        # Check minimum image count for ODM (needs at least 3-5 overlapping images)
+        if len(tiff_paths) < 3:
+            raise RuntimeError(
+                f"OpenDroneMap requires at least 3 overlapping images to create an orthophoto, "
+                f"but only {len(tiff_paths)} image(s) were provided. "
+                f"Consider using a different stitching method like 'gdal' or 'opencv' for small image counts."
+            )
+        
+        use_docker = self._should_use_docker()
+        
+        if use_docker:
+            # Check Docker availability
+            if not self._is_docker_available():
+                raise RuntimeError(
+                    "Docker is not available or not running. Please ensure Docker Desktop is installed "
+                    "and running on your system. See https://docs.docker.com/get-docker/ for installation instructions."
+                )
+            
+            # Check ODM Docker image availability
+            if not self._is_odm_docker_image_available():
+                raise RuntimeError(
+                    "OpenDroneMap Docker image (opendronemap/odm) is not available. "
+                    "Please pull the image using: docker pull opendronemap/odm"
+                )
+        else:
+            # Check native ODM availability
+            if not self.odm_path:
+                raise RuntimeError(
+                    "OpenDroneMap is not installed or not found in standard locations. "
+                    "Please install ODM or ensure Docker is available with the opendronemap/odm image pulled. "
+                    "See https://github.com/OpenDroneMap/ODM for installation instructions."
+                )
+            
+            # Check if required Python is available for native ODM
+            run_script = os.path.join(self.odm_path, "run.py")
+            if not os.path.exists(run_script):
+                raise RuntimeError(
+                    f"OpenDroneMap installation appears to be incomplete. "
+                    f"Expected run.py at {run_script} but file was not found."
+                )
 
     def _should_use_docker(self) -> bool:
         """
@@ -276,14 +338,9 @@ class OrthophotoProcessor:
             RuntimeError: If OpenDroneMap execution fails
             FileNotFoundError: If results are not found
         """
-        # Pre-flight checks
+        # Pre-flight checks - now using the dedicated availability check
+        self._check_odm_available(tiff_paths)
         use_docker = self._should_use_docker()
-        if not use_docker and not self.odm_path:
-            raise RuntimeError(
-                "OpenDroneMap not found. Please install ODM or ensure Docker is available "
-                "with the opendronemap/odm image pulled. "
-                "See https://github.com/OpenDroneMap/ODM for installation instructions."
-            )
 
         self.logger.info(f"[{len(tiff_paths)} files] Creating orthophoto using OpenDroneMap "
                          f"({'Docker' if use_docker else 'native'})...")
@@ -311,9 +368,19 @@ class OrthophotoProcessor:
 
                 if use_docker:
                     # Run ODM via Docker
+                    # Handle Windows paths for Docker volume mounts
+                    import platform
+                    if platform.system() == "Windows":
+                        # On Windows, ensure paths are in the correct format for Docker
+                        # Docker Desktop on Windows accepts both forward slashes and backslashes
+                        # but we'll use forward slashes for consistency
+                        docker_project_dir = project_dir.replace("\\", "/")
+                    else:
+                        docker_project_dir = project_dir
+                    
                     cmd = [
-                        "docker", "run", "-it", "--rm",
-                        "-v", f"{project_dir}:/project",
+                        "docker", "run", "--rm",  # Remove -it flags for better compatibility
+                        "-v", f"{docker_project_dir}:/project",
                         "opendronemap/odm",
                         "--orthophoto-resolution",
                         str(self.config.get("processing.orthophoto_resolution", 0.05)),
@@ -333,6 +400,8 @@ class OrthophotoProcessor:
                         cmd.extend(["--gps-file", f"/project/{gps_filename}"])
 
                     self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap via Docker...")
+                    self.logger.info(f"Mounting host path: {docker_project_dir} to container path: /project")
+                    self.logger.info(f"Executing command: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         capture_output=True,
@@ -361,6 +430,7 @@ class OrthophotoProcessor:
                         cmd.extend(["--gps-file", gps_file])
 
                     self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap natively...")
+                    self.logger.info(f"Executing command: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         cwd=self.odm_path,
@@ -370,8 +440,18 @@ class OrthophotoProcessor:
                     )
 
                 if result.returncode != 0:
-                    self.logger.error(f"ODM failed with error: {result.stderr}")
-                    raise RuntimeError(f"OpenDroneMap error: {result.stderr}")
+                    # Include both stdout and stderr in the error message
+                    error_msg = f"OpenDroneMap failed with return code {result.returncode}"
+                    if result.stdout:
+                        # Include last 50 lines of stdout for context
+                        stdout_lines = result.stdout.strip().split('\n')
+                        last_lines = stdout_lines[-50:] if len(stdout_lines) > 50 else stdout_lines
+                        error_msg += f"\nLast {len(last_lines)} line(s) of stdout:\n" + '\n'.join(last_lines)
+                    if result.stderr:
+                        error_msg += f"\nstderr:\n{result.stderr}"
+                    
+                    self.logger.error(f"ODM failed: {error_msg}")
+                    raise RuntimeError(error_msg)
 
                 # Copy results
                 odm_results_path = os.path.join(project_dir, "odm_orthophoto", "odm_orthophoto.tif")
