@@ -8,6 +8,8 @@ pyproj>=3.3.0
 
 # Image processing dependencies
 Pillow>=9.0.0
+# Required for OpenCV-based orthophoto stitching (cv2.Stitcher, SIFT, ORB)
+opencv-contrib-python>=4.5.0
 opencv-python>=4.5.0
 matplotlib>=3.5.0
 

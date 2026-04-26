@@ -601,3 +601,51 @@ The orchestrator should decide whether to dispatch a code-mode follow-up for the
 - [`gui/components/callbacks.py`](gui/components/callbacks.py:794) — warning + persist callbacks.
 - [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:337) — forwards the value into `parameters`.
 - [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:107) — forwards `stitching_method` to `Pipeline.process`.
+
+### J. Hotfix — Black padding clobbering overlap regions (2026-04-26)
+
+A follow-up fix on top of Subtask 2's feather blender. Read this if you're touching the GDAL stitching path.
+
+#### 1. Problem observed
+
+The user opened the merged orthophoto and saw that one image's **black padding pixels** (the area around its irregular footprint) were **overwriting the real imagery** of the other image inside the overlap zone — even though the two inputs *do* overlap geographically. This was visible in the second screenshot the user shared.
+
+#### 2. Root cause
+
+The original blending logic from Subtask 2 trusted **only the GeoTIFF nodata flag** to identify invalid pixels. The user's input files don't have a nodata flag set, so the all-zero black padding was treated as valid imagery and given full blending weight. In overlap regions, the padding of one image clobbered the real data of the other.
+
+#### 3. Fix applied
+
+Implemented in [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1):
+
+- **At warp time:** pass `srcNodata=0` and `dstNodata=0` to `gdal.Warp` by default; honor an alpha band if present.
+- **During blending:** a new `_compute_valid_mask` helper flags a pixel **invalid** if **any** of the following are true:
+  - GDAL nodata flag matches, **or**
+  - all bands equal the configured nodata color (default `0`), **or**
+  - the alpha band is `≤ 0`.
+- **Anti-halo:** erode the valid mask by `edge_erosion_px` pixels (default `2`) using `scipy.ndimage.binary_erosion` **before** computing the distance transform. This eliminates the thin band of near-black "edge garbage" that JPEG-compressed orthophotos often have.
+- **Logging:** an INFO log per input image showing the percentage of valid pixels after masking and erosion, so the user can verify masking is working.
+
+#### 4. New config keys
+
+Added under the existing `processing.orthophoto.blend` section in [`config.yaml`](config.yaml:31):
+
+```yaml
+processing:
+  orthophoto:
+    blend:
+      input_nodata: 0        # 0 | null (disable) | "alpha" (use alpha band)
+      edge_erosion_px: 2     # erode valid mask by N pixels; 0 disables
+```
+
+Backward-compatible defaults — old configs continue to work without changes.
+
+#### 5. What the user will see now
+
+In the overlap zone, the imagery from the image that **actually has data** wins; black padding is excluded. Single-image-only areas remain untouched (no fade-to-black at the outer hull, thanks to the Subtask 2 safeguard). The stitched mosaic should look continuous in the overlap region.
+
+#### 6. If results still aren't right
+
+- Try raising `edge_erosion_px` to `4` or `6` if a thin black halo remains at seams.
+- If the inputs use a **non-zero pad color** (e.g. white), set `input_nodata` accordingly. Currently only a single integer is supported; a different color would be a follow-up enhancement.
+- If the inputs have an **alpha channel**, set `input_nodata: alpha`.

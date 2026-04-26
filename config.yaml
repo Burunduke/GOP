@@ -28,6 +28,8 @@ processing:
       enabled: true            # if false, fall back to "last image wins" old behavior
       method: feather          # feather (distance-transform) is the only method for now
       feather_distance_px: 0   # 0 = use full distance transform; >0 = clamp weights at this px distance
+      input_nodata: 0          # 0 | null (disable) | "alpha" (use alpha band)
+      edge_erosion_px: 2       # erode valid mask by N pixels before distance transform; 0 disables
     stitching_method: gdal     # gdal | opencv | odm
     opencv:
       detector: auto         # auto | sift | orb

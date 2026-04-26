@@ -18,7 +18,7 @@ from ..utils.validators import validate_file_path
 from ..utils.exceptions import ValidationError
 from ..utils.gdal_utils import open_gdal_dataset
 import numpy as np
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, binary_erosion
 
 # Try to import cv2 with graceful error handling
 try:
@@ -65,6 +65,8 @@ class OrthophotoProcessor:
             "enabled": self.config.get("processing.orthophoto.blend.enabled", True),
             "method": self.config.get("processing.orthophoto.blend.method", "feather"),
             "feather_distance_px": self.config.get("processing.orthophoto.blend.feather_distance_px", 0),
+            "input_nodata": self.config.get("processing.orthophoto.blend.input_nodata", 0),
+            "edge_erosion_px": self.config.get("processing.orthophoto.blend.edge_erosion_px", 2),
         }
         
         # Load stitching method configuration with default
@@ -516,7 +518,7 @@ class OrthophotoProcessor:
         except Exception as e:
             self.logger.warning(f"Could not build overviews: {e}")
 
-    def _warp_to_common_grid(self, tiff_paths: List[str], temp_dir: str, common_bounds: tuple, 
+    def _warp_to_common_grid(self, tiff_paths: List[str], temp_dir: str, common_bounds: tuple,
                            pixel_size_x: float, pixel_size_y: float, srs) -> List[str]:
         """
         Warp all input images to a common grid.
@@ -539,22 +541,53 @@ class OrthophotoProcessor:
         width = int((common_bounds[2] - common_bounds[0]) / pixel_size_x)
         height = int((common_bounds[3] - common_bounds[1]) / pixel_size_y)
         
+        # Get nodata configuration
+        input_nodata = self.blend_config["input_nodata"]
+        
         for i, tiff_path in enumerate(tiff_paths):
             warped_path = os.path.join(temp_dir, f"warped_{i}.tif")
             self.logger.info(f"Warping image {i+1}/{len(tiff_paths)}: {os.path.basename(tiff_path)}")
             
-            # Warp options for common grid
-            warp_options = gdal.WarpOptions(
-                format="GTiff",
-                outputBounds=common_bounds,
-                width=width,
-                height=height,
-                resampleAlg="bilinear",
-                dstNodata=0,
-                srcSRS=srs,
-                dstSRS=srs,
-                targetAlignedPixels=True,
-            )
+            # Open source dataset to check for alpha band and nodata
+            with open_gdal_dataset(tiff_path) as src_ds:
+                band_count = src_ds.RasterCount
+                has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
+                
+                # Check if file has explicit nodata value set
+                src_nodata = None
+                if band_count > 0:
+                    band = src_ds.GetRasterBand(1)
+                    src_nodata = band.GetNoDataValue()
+            
+            # Determine nodata handling options
+            warp_options_dict = {
+                "format": "GTiff",
+                "outputBounds": common_bounds,
+                "width": width,
+                "height": height,
+                "resampleAlg": "bilinear",
+                "srcSRS": srs,
+                "dstSRS": srs,
+                "targetAlignedPixels": True,
+            }
+            
+            # Handle nodata and alpha bands
+            if has_alpha and input_nodata == "alpha":
+                # Use alpha band for transparency
+                warp_options_dict["dstAlpha"] = True
+            elif input_nodata is not None and input_nodata != "alpha":
+                # Use explicit nodata values
+                if src_nodata is not None:
+                    # Respect file's existing nodata value
+                    warp_options_dict["srcNodata"] = src_nodata
+                else:
+                    # Use configured nodata value
+                    warp_options_dict["srcNodata"] = input_nodata
+                warp_options_dict["dstNodata"] = input_nodata
+            # If input_nodata is None, don't override nodata values
+            
+            # Create warp options
+            warp_options = gdal.WarpOptions(**warp_options_dict)
             
             # Perform the warp operation
             gdal.Warp(warped_path, tiff_path, options=warp_options)
@@ -562,6 +595,82 @@ class OrthophotoProcessor:
             
         return warped_paths
 
+    def _compute_distance_weights(self, warped_paths: List[str], temp_dir: str) -> List[str]:
+        """
+        Compute distance transform weights for each warped image.
+        
+        Args:
+            warped_paths: List of paths to warped TIFF files
+            temp_dir: Temporary directory for output files
+            
+        Returns:
+            List of paths to weight files (.npy)
+        """
+        
+    def _compute_valid_mask(self, warped_array_or_dataset, nodata_value=None, has_alpha=False):
+        """
+        Compute a 2D boolean mask indicating valid pixels.
+        
+        A pixel is valid if:
+        - It is not flagged as nodata by the warped raster's nodata value (if any), AND
+        - It is not equal to the configured nodata color (default 0 across all bands), AND
+        - If an alpha band exists in the warped output, alpha > 0.
+        
+        Args:
+            warped_array_or_dataset: Either a numpy array (H, W, B) or GDAL dataset
+            nodata_value: Nodata value to check against
+            has_alpha: Whether the data has an alpha channel
+            
+        Returns:
+            2D boolean numpy array where True indicates valid pixels
+        """
+        if hasattr(warped_array_or_dataset, 'ReadAsArray'):
+            # It's a GDAL dataset
+            with open_gdal_dataset(warped_array_or_dataset) as ds:
+                band_count = ds.RasterCount
+                data = ds.ReadAsArray()
+                if data.ndim == 2:
+                    data = np.expand_dims(data, axis=2)
+                elif data.ndim == 3 and data.shape[0] < data.shape[2]:
+                    # Assume first dimension is bands, need to transpose
+                    data = np.transpose(data, (1, 2, 0))
+        else:
+            # It's a numpy array
+            data = warped_array_or_dataset
+            
+        # Ensure data is 3D (H, W, B)
+        if data.ndim == 2:
+            data = np.expand_dims(data, axis=2)
+            
+        height, width, bands = data.shape
+        
+        # Start with all pixels valid
+        valid_mask = np.ones((height, width), dtype=bool)
+        
+        # Check nodata value from dataset if provided
+        if nodata_value is not None:
+            # Check first band for nodata values
+            valid_mask &= (data[:, :, 0] != nodata_value)
+        
+        # Check for configured nodata color (default 0)
+        input_nodata = self.blend_config["input_nodata"]
+        if input_nodata is not None and input_nodata != "alpha":
+            if bands >= 3:
+                # For RGB images, check if all bands are nodata
+                nodata_condition = np.all(data == input_nodata, axis=2)
+                valid_mask &= ~nodata_condition
+            else:
+                # For single band, check if band equals nodata
+                valid_mask &= (data[:, :, 0] != input_nodata)
+        
+        # Check alpha channel if present
+        if has_alpha and bands > 1:
+            # Assume last band is alpha
+            alpha_band = data[:, :, -1]
+            valid_mask &= (alpha_band > 0)
+            
+        return valid_mask
+        
     def _compute_distance_weights(self, warped_paths: List[str], temp_dir: str) -> List[str]:
         """
         Compute distance transform weights for each warped image.
@@ -585,12 +694,38 @@ class OrthophotoProcessor:
         # Read all masks first
         for i, warped_path in enumerate(warped_paths):
             with open_gdal_dataset(warped_path) as src_ds:
+                band_count = src_ds.RasterCount
+                has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
                 band = src_ds.GetRasterBand(1)
-                data = band.ReadAsArray()
-                nodata = band.GetNoDataValue() or 0
+                nodata = band.GetNoDataValue()
                 
-                # Create valid data mask (where data is not nodata)
-                mask = data != nodata
+                # Read data for mask computation
+                data = src_ds.ReadAsArray()
+                if data.ndim == 2:
+                    data = np.expand_dims(data, axis=2)
+                elif data.ndim == 3 and data.shape[0] < data.shape[2]:
+                    # Assume first dimension is bands, need to transpose
+                    data = np.transpose(data, (1, 2, 0))
+                
+                # Create valid data mask using helper
+                mask = self._compute_valid_mask(data, nodata, has_alpha)
+                
+                # Apply erosion if configured
+                edge_erosion_px = self.blend_config["edge_erosion_px"]
+                if edge_erosion_px > 0:
+                    structure = np.ones((3, 3), dtype=bool)
+                    mask = binary_erosion(mask, structure=structure, iterations=edge_erosion_px)
+                
+                # Log valid pixel ratio
+                total_pixels = mask.size
+                valid_pixels = np.sum(mask)
+                valid_ratio = (valid_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+                
+                filename = os.path.basename(warped_path)
+                nodata_info = f"nodata={nodata}" if nodata is not None else "nodata=unset"
+                erosion_info = f"erosion={edge_erosion_px}px"
+                self.logger.info(f"{filename}: valid pixels = {valid_pixels} / {total_pixels} ({valid_ratio:.1f}%) after {nodata_info} and {erosion_info}")
+                
                 masks.append(mask)
                 
                 # Update combined mask
