@@ -422,3 +422,13 @@ Right after the naming change above, a regression slipped through: new projects 
 - **Files changed:** [`src/utils/image_type.py`](src/utils/image_type.py:1) (new), [`gui/services/project_manager.py`](gui/services/project_manager.py:1), [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1), [`src/core/pipeline.py`](src/core/pipeline.py:1), [`gui/components/callbacks.py`](gui/components/callbacks.py:1).
 - **Verification:** static — `python3 -m py_compile` on the touched modules passes; no tests added (per project policy).
 - **UI follow-up — type badge in project file list:** [`gui/components/project_detail.py`](gui/components/project_detail.py:206) now renders a small `dbc.Badge` ("RGB" or "HS") next to each file in the project file list, derived from [`ProjectFile.file_type`](gui/models/project.py:1). The existing "гиперспектральный" label is preserved alongside the badge — the badge is purely additive. Legacy projects with a missing/unset `file_type` default to "HS" so old data keeps rendering correctly.
+
+## Recent Changes
+
+### Fix orthophoto merging bug — 2026-04-26
+
+- **Bug:** When 2+ images were uploaded, the orthophoto stage ran once per image instead of merging all images into one orthophoto.
+- **Root cause:** `gop_adapter.py` was passing only the first file to the pipeline instead of the directory containing all files.
+- **Fix:** Modified `gop_adapter.py` to pass the directory path so all files are processed together in a single pipeline run.
+- **Files changed:** [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:95) (line 95).
+- **Verification:** The call chain is now: project run → adapter (once) → pipeline (once) → orthophoto stage (once with all TIFFs).

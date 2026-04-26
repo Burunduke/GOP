@@ -91,8 +91,8 @@ class GOPAdapter:
                 sensor_type = file_types[0] if file_types else "hyperspectral"
                 logger.info(f"Detected sensor type: {sensor_type} for directory: {data_path}")
                 
-                # Use the first file for processing
-                actual_data_path = file_paths[0]
+                # Pass the directory path so all files are processed together
+                actual_data_path = data_path
             else:
                 # For single file, detect its type
                 sensor_type = detect_image_type(data_path)
