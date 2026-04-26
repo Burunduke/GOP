@@ -547,8 +547,27 @@ class ProjectManager:
             logger.error(f"Project {project.name} has no files to process")
             return None
         
-        # Check if project has mixed file types
-        file_types = {f.get("file_type", "hyperspectral") for f in project.files}
+        # Check if project has mixed file types (using fresh detection)
+        file_types = set()
+        updated_files = []
+        for f in project.files:
+            # Detect file type fresh from the actual file
+            file_path = f.get("file_path", "")
+            if file_path and os.path.exists(file_path):
+                detected_type = detect_image_type(file_path)
+                file_types.add(detected_type)
+                # Update the file's type in the project object
+                f["file_type"] = detected_type
+                updated_files.append(f)
+            else:
+                # If file doesn't exist, use stored type or default
+                stored_type = f.get("file_type", "hyperspectral")
+                file_types.add(stored_type)
+                updated_files.append(f)
+        
+        # Update project files with fresh types
+        project.files = updated_files
+        
         if "rgb" in file_types and "hyperspectral" in file_types:
             error_msg = (
                 "Нельзя объединить RGB и гиперспектральные изображения "

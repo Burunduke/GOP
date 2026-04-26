@@ -57,10 +57,19 @@ class GOPAdapter:
             # Check if data_path is a directory
             import os
             if os.path.isdir(data_path):
-                # Get list of files in directory
-                files = [f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))]
+                # Get list of files in directory, filtering to only user-uploaded source files
+                all_items = os.listdir(data_path)
+                files = []
+                valid_extensions = {'.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bil', '.hdr', '.img', '.dat', '.geotiff'}
+                
+                for item in all_items:
+                    item_path = os.path.join(data_path, item)
+                    # Skip subdirectories and files with invalid extensions
+                    if os.path.isfile(item_path) and any(item.lower().endswith(ext) for ext in valid_extensions):
+                        files.append(item)
+                
                 if not files:
-                    raise Exception(f"No files found in directory: {data_path}")
+                    raise Exception(f"No valid source files found in directory: {data_path}")
                 
                 # Detect image type for each file
                 file_types = []
