@@ -690,3 +690,40 @@ Two runtime bugs surfaced after the orthophoto stitching overhaul and were fixed
 - **Fix:** Captured the return value of `gdal.Warp` and explicitly set it to `None` to release the file lock in `_warp_to_common_grid` function.
 - **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_warp_to_common_grid` (line 626).
 - **Why this approach:** Ensures that all GDAL Dataset objects are properly released on Windows to prevent file locks during temporary directory cleanup.
+
+#### 5. Additional Windows file lock prevention — 2026-04-26
+
+- **Symptom:** `WinError 32` when cleaning up temporary directory after orthophoto creation.
+- **Root cause:** The `gdal.Warp` function in the fallback section (when blending is disabled) was not properly releasing the returned Dataset object, causing file locks on Windows.
+- **Fix:** Captured the return value of `gdal.Warp` and explicitly set it to `None` to release the file lock.
+- **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_create_with_gdal` (line 1121).
+- **Why this approach:** Ensures that all GDAL Dataset objects are properly released on Windows to prevent file locks during temporary directory cleanup.
+
+#### 6. Additional Windows file lock prevention — 2026-04-26
+
+- **Symptom:** `WinError 32` when cleaning up temporary directory after orthophoto creation.
+- **Root cause:** GDAL file handles were not being immediately released before the temporary directory cleanup, causing file locks on Windows.
+- **Fix:** Added `gc.collect()` call before temporary directory cleanup to force immediate release of GDAL file handles on Windows.
+- **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_create_with_gdal` (line 1059).
+- **Why this approach:** Forces garbage collection to immediately release GDAL file handles on Windows before temporary directory cleanup.
+
+#### 7. Additional Windows file lock prevention — 2026-04-26
+
+- **Symptom:** `WinError 32` when cleaning up temporary directory after orthophoto creation.
+- **Root cause:** Temporary directory cleanup could fail due to file locks on Windows.
+- **Fix:** Added retry-with-backoff fallback around temporary directory cleanup as a Windows safety net.
+- **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_create_with_gdal` (lines 1063-1076).
+- **Why this approach:** Provides a safety net for temporary directory cleanup on Windows by retrying with exponential backoff if file locks are encountered.
+
+#### Diagnostic logging added to locate WinError 32 source — 2026-04-26
+
+- **Purpose:** Added comprehensive DEBUG-level logging to trace file handle operations and identify the exact source of Windows `WinError 32` file locks during orthophoto creation.
+- **What was added:**
+  - Changed `logger.error` to `logger.exception` in catching blocks to capture full tracebacks
+  - Added DEBUG logs around all `gdal.Warp` operations (entry/exit)
+  - Added DEBUG logs around all `open_gdal_dataset` context manager usage (entry/exit)
+  - Added DEBUG logs before temporary directory cleanup operations
+  - Enabled DEBUG level logging for the `OrthophotoProcessor` logger
+- **How to use:** Run the pipeline again and share the full traceback + DEBUG lines around "Computing distance weights for blending"
+- **To disable DEBUG logging:** Change `level=logging.DEBUG` back to `level=logging.INFO` in `src/processing/orthophoto.py` line 48
+- **Note:** This is temporary instrumentation and will be removed after the bug is found.

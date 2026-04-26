@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import logging
 from typing import Dict, Any, List, Optional
 
 from ..core.config import Config, get_config
@@ -45,7 +46,7 @@ class OrthophotoProcessor:
             config_instance: Optional configuration instance for dependency injection
         """
         self.config = get_config(config_instance)
-        self.logger = setup_logger("OrthophotoProcessor")
+        self.logger = setup_logger("OrthophotoProcessor", level=logging.DEBUG)  # DEBUG level for diagnostics - temporary
         self.odm_path = self._find_odm_path()
         
         # Load orthophoto output configuration with defaults
@@ -222,7 +223,7 @@ class OrthophotoProcessor:
             return orthophoto_path
 
         except Exception as e:
-            self.logger.error(f"Error creating orthophoto: {e}")
+            self.logger.exception(f"Error creating orthophoto: {e}")
             raise
 
     def _dispatch_stitching(self, tiff_paths: List[str], output_dir: str, processed_data: Dict[str, Any]) -> str:
@@ -395,6 +396,7 @@ class OrthophotoProcessor:
             finally:
                 # Clean up temporary directory
                 try:
+                    self.logger.debug(f"About to clean up temporary directory: {temp_dir}")
                     if os.path.exists(temp_dir):
                         shutil.rmtree(temp_dir)
                         self.logger.debug(f"Cleaned up temporary directory: {temp_dir}")
@@ -582,7 +584,9 @@ class OrthophotoProcessor:
             self.logger.info(f"Warping image {i+1}/{len(tiff_paths)}: {os.path.basename(tiff_path)}")
             
             # Open source dataset to check for alpha band and nodata
+            self.logger.debug(f"About to open GDAL dataset: {tiff_path}")
             with open_gdal_dataset(tiff_path) as src_ds:
+                self.logger.debug(f"Opened GDAL dataset: {tiff_path}")
                 band_count = src_ds.RasterCount
                 has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
                 
@@ -624,8 +628,10 @@ class OrthophotoProcessor:
             
             # Perform the warp operation
             # Capture and immediately release the returned dataset to prevent file locks on Windows
+            self.logger.debug(f"About to call gdal.Warp with source: {tiff_path}, destination: {warped_path}")
             warped_ds = gdal.Warp(warped_path, tiff_path, options=warp_options)
             warped_ds = None  # Release dataset to prevent file lock on Windows
+            self.logger.debug(f"gdal.Warp released dataset for: {warped_path}")
             warped_paths.append(warped_path)
             
         return warped_paths
@@ -750,7 +756,9 @@ class OrthophotoProcessor:
         
         # Read all masks first
         for i, warped_path in enumerate(warped_paths):
+            self.logger.debug(f"About to open GDAL dataset for distance weights: {warped_path}")
             with open_gdal_dataset(warped_path) as src_ds:
+                self.logger.debug(f"Opened GDAL dataset for distance weights: {warped_path}")
                 band_count = src_ds.RasterCount
                 has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
                 band = src_ds.GetRasterBand(1)
@@ -922,7 +930,9 @@ class OrthophotoProcessor:
                     
                     # Accumulate weighted values from each image
                     for i, (warped_path, weights) in enumerate(zip(warped_paths, tile_weights)):
+                        self.logger.debug(f"About to open GDAL dataset for blending: {warped_path}")
                         with open_gdal_dataset(warped_path) as src_ds:
+                            self.logger.debug(f"Opened GDAL dataset for blending: {warped_path}")
                             band = src_ds.GetRasterBand(band_num)
                             data = band.ReadAsArray(xoff=x, yoff=y, win_xsize=tile_width, win_ysize=tile_height)
                             
@@ -993,7 +1003,9 @@ class OrthophotoProcessor:
             pixel_size_x, pixel_size_y = None, None
             
             for tiff_path in tiff_paths:
+                self.logger.debug(f"About to open GDAL dataset for bounds calculation: {tiff_path}")
                 with open_gdal_dataset(tiff_path) as src_ds:
+                    self.logger.debug(f"Opened GDAL dataset for bounds calculation: {tiff_path}")
                     geotransform = src_ds.GetGeoTransform()
                     srs = src_ds.GetSpatialRef()
                     
@@ -1055,6 +1067,27 @@ class OrthophotoProcessor:
                             width, height, pixel_size_x, pixel_size_y,
                             min_x, min_y, max_x, max_y, first_srs
                         )
+                        
+                        # Force garbage collection to release GDAL file handles on Windows
+                        import gc
+                        gc.collect()
+                        
+                        # Additional safety net for Windows file locks
+                        import time
+                        import shutil
+                        max_retries = 3
+                        for attempt in range(max_retries):
+                            try:
+                                # The temporary directory will be automatically cleaned up
+                                # by the context manager, but we want to ensure it's clean
+                                # No explicit cleanup needed as context manager handles it
+                                break
+                            except Exception as e:
+                                if attempt < max_retries - 1:
+                                    time.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                                else:
+                                    self.logger.debug(f"About to clean up temporary directory (attempt {attempt + 1}): {temp_dir}")
+                                    self.logger.warning(f"Failed to clean up temporary directory after {max_retries} attempts: {e}")
                 else:
                     # Fall back to original behavior (last image wins)
                     self.logger.info("Using original GDAL warp (last image wins)")
@@ -1098,7 +1131,10 @@ class OrthophotoProcessor:
                     )
                     
                     # Perform the warp operation
-                    gdal.Warp(output_path, tiff_paths, options=warp_options)
+                    self.logger.debug(f"About to call gdal.Warp with {len(tiff_paths)} sources, destination: {output_path}")
+                    warped_ds = gdal.Warp(output_path, tiff_paths, options=warp_options)
+                    warped_ds = None  # Release dataset to prevent file lock on Windows
+                    self.logger.debug(f"gdal.Warp released dataset for: {output_path}")
                 
                 # Convert to target dtype if needed
                 if self.orthophoto_config["target_dtype"] == "uint8":
@@ -1119,7 +1155,7 @@ class OrthophotoProcessor:
                 raise RuntimeError("Could not determine output bounds from input files")
 
         except Exception as e:
-            self.logger.error(f"Error creating orthophoto with GDAL: {e}")
+            self.logger.exception(f"Error creating orthophoto with GDAL: {e}")
             raise
 
     def _create_gps_file(

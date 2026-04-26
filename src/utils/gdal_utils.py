@@ -104,8 +104,14 @@ def open_gdal_dataset(
     gdal.Dataset
         The opened GDAL dataset
     """
-    with GDALDatasetManager(file_path, access_mode) as dataset:
-        yield dataset
+    from src.utils.logger import get_logger
+    logger = get_logger("OrthophotoProcessor")
+    logger.debug(f"open_gdal_dataset OPEN: {file_path}")
+    try:
+        with GDALDatasetManager(file_path, access_mode) as dataset:
+            yield dataset
+    finally:
+        logger.debug(f"open_gdal_dataset CLOSE: {file_path}")
 
 
 def read_gdal_band_safe(file_path: str, band_number: int = 1) -> Any:
