@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import logging
+import warnings
 from typing import Dict, Any, List, Optional
 
 from ..core.config import Config, get_config
@@ -28,6 +29,10 @@ try:
 except ImportError:
     cv2 = None
     CV2_AVAILABLE = False
+
+# Silence harmless TIFF tag warnings
+warnings.filterwarnings("ignore", message=".*unknown.*tag.*")
+os.environ["GDAL_PAM_ENABLED"] = "NO"
 
 
 class OrthophotoProcessor:
@@ -1712,7 +1717,10 @@ class OrthophotoProcessor:
                 return output_path
             else:
                 status_msg = status_messages.get(status, f"Unknown error ({status})")
-                self.logger.warning(f"cv2.Stitcher failed with status {status}: {status_msg}")
+                if status == cv2.Stitcher_ERR_NEED_MORE_IMGS:
+                    self.logger.info("cv2.Stitcher requires ≥3 images, using geo-referenced fallback")
+                else:
+                    self.logger.warning(f"cv2.Stitcher failed with status {status}: {status_msg}")
                 return None
                 
         except Exception as e:
@@ -1731,19 +1739,73 @@ class OrthophotoProcessor:
         Returns:
             Path to result file
         """
-        # Handle multi-image case
-        if len(images) > 2:
-            self.logger.info("Manual fallback supports pairwise stitching only; for N>2 inputs, prefer cv2.Stitcher")
-            # Stitch pairs sequentially left-to-right
-            result_img = images[0]
-            for i in range(1, len(images)):
-                self.logger.info(f"Stitching image pair {i}/{len(images)-1}")
-                result_img, _ = self._stitch_pair(result_img, images[i])
-        elif len(images) == 2:
-            result_img, _ = self._stitch_pair(images[0], images[1])
+        # For geo-referenced images, use geo-referenced placement
+        if len(images) == 2 and len(tiff_paths) == 2:
+            try:
+                # Compute geo-referenced bounds
+                min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs = self._compute_geo_bounds(tiff_paths)
+                
+                # Calculate output dimensions using geo-referenced bounds
+                width = int(np.ceil((max_x - min_x) / pixel_size_x))
+                height = int(np.ceil((max_y - min_y) / pixel_size_y))
+                
+                self.logger.info(f"Using geo-referenced canvas: {width}x{height}")
+                
+                # Use geo-referenced stitching
+                result_img = self._geo_referenced_stitch(images, tiff_paths, min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs)
+            except Exception as e:
+                self.logger.warning(f"Geo-referenced stitching failed, falling back to homography: {e}")
+                result_img, _ = self._stitch_pair(images[0], images[1])
         else:
-            # Single image, just copy it
-            result_img = images[0]
+            # Handle multi-image case with geo-referenced stitching if all images have geotransforms
+            try:
+                # Check if all images have valid geotransforms
+                from ..utils.gdal_utils import get_raster_metadata
+                all_georeferenced = True
+                for tiff_path in tiff_paths:
+                    metadata = get_raster_metadata(tiff_path)
+                    geotransform = metadata["geotransform"]
+                    if geotransform is None or all(v == 0 for v in geotransform):
+                        all_georeferenced = False
+                        break
+                
+                if all_georeferenced and len(images) > 2:
+                    # Compute geo-referenced bounds
+                    min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs = self._compute_geo_bounds(tiff_paths)
+                    
+                    # Calculate output dimensions using geo-referenced bounds
+                    width = int(np.ceil((max_x - min_x) / pixel_size_x))
+                    height = int(np.ceil((max_y - min_y) / pixel_size_y))
+                    
+                    self.logger.info(f"Using geo-referenced canvas for {len(images)} images: {width}x{height}")
+                    
+                    # Use geo-referenced stitching for multi-image case
+                    result_img = self._geo_referenced_stitch(images, tiff_paths, min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs)
+                else:
+                    # Fall back to homography-based stitching
+                    if len(images) > 2:
+                        self.logger.info("Manual fallback supports pairwise stitching only; for N>2 inputs, prefer cv2.Stitcher")
+                        # Stitch pairs sequentially left-to-right
+                        result_img = images[0]
+                        for i in range(1, len(images)):
+                            self.logger.info(f"Stitching image pair {i}/{len(images)-1}")
+                            result_img, _ = self._stitch_pair(result_img, images[i])
+                    else:
+                        # Single image, just copy it
+                        result_img = images[0]
+            except Exception as e:
+                self.logger.warning(f"Geo-referenced stitching failed, falling back to homography: {e}")
+                # Fall back to homography-based stitching
+                if len(images) > 2:
+                    self.logger.info("Manual fallback supports pairwise stitching only; for N>2 inputs, prefer cv2.Stitcher")
+                    # Stitch pairs sequentially left-to-right
+                    result_img = images[0]
+                    for i in range(1, len(images)):
+                        self.logger.info(f"Stitching image pair {i}/{len(images)-1}")
+                        result_img, _ = self._stitch_pair(result_img, images[i])
+                else:
+                    # Single image, just copy it
+                    result_img = images[0]
         
         # Save result
         output_path = os.path.join(output_dir, "orthophoto_opencv.tif")
@@ -1764,13 +1826,15 @@ class OrthophotoProcessor:
         
         return output_path
     
-    def _stitch_pair(self, img1: np.ndarray, img2: np.ndarray) -> tuple:
+    def _stitch_pair(self, img1: np.ndarray, img2: np.ndarray, geotransform1: Optional[tuple] = None, geotransform2: Optional[tuple] = None) -> tuple:
         """
         Stitch a pair of images using feature detection and homography.
         
         Args:
             img1: First image (reference)
             img2: Second image (to be aligned)
+            geotransform1: Geo-transform for first image (optional)
+            geotransform2: Geo-transform for second image (optional)
             
         Returns:
             Tuple of (stitched_image, success_flag)
@@ -1938,6 +2002,60 @@ class OrthophotoProcessor:
         
         return H, inliers
     
+    def _compute_geo_bounds(self, tiff_paths: List[str]) -> tuple:
+        """
+        Compute tight bounding box from geo-referenced input extents.
+        
+        Args:
+            tiff_paths: List of paths to geo-referenced TIFF files
+            
+        Returns:
+            Tuple of (min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs)
+        """
+        from ..utils.gdal_utils import get_raster_metadata
+        from osgeo import osr
+        
+        min_x, min_y, max_x, max_y = None, None, None, None
+        first_srs = None
+        pixel_size_x, pixel_size_y = None, None
+        
+        for tiff_path in tiff_paths:
+            metadata = get_raster_metadata(tiff_path)
+            geotransform = metadata["geotransform"]
+            srs_wkt = metadata["projection"]
+            
+            if first_srs is None:
+                first_srs = osr.SpatialReference()
+                first_srs.ImportFromWkt(srs_wkt)
+                pixel_size_x = abs(geotransform[1])
+                pixel_size_y = abs(geotransform[5])
+            
+            # Calculate bounds
+            x_size = metadata["width"]
+            y_size = metadata["height"]
+            ul_x = geotransform[0]
+            ul_y = geotransform[3]
+            lr_x = ul_x + geotransform[1] * x_size + geotransform[2] * y_size
+            lr_y = ul_y + geotransform[4] * x_size + geotransform[5] * y_size
+            
+            # Get actual bounds (accounting for rotation)
+            x_coords = [ul_x, ul_x + geotransform[1] * x_size, ul_x + geotransform[2] * y_size, lr_x]
+            y_coords = [ul_y, ul_y + geotransform[4] * x_size, ul_y + geotransform[5] * y_size, lr_y]
+            file_min_x, file_max_x = min(x_coords), max(x_coords)
+            file_min_y, file_max_y = min(y_coords), max(y_coords)
+            
+            # Update overall bounds
+            if min_x is None or file_min_x < min_x:
+                min_x = file_min_x
+            if min_y is None or file_min_y < min_y:
+                min_y = file_min_y
+            if max_x is None or file_max_x > max_x:
+                max_x = file_max_x
+            if max_y is None or file_max_y > max_y:
+                max_y = file_max_y
+        
+        return min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, first_srs
+    
     def _warp_and_blend(self, img1: np.ndarray, img2: np.ndarray, H: np.ndarray) -> np.ndarray:
         """
         Warp second image and blend with first using distance transform.
@@ -1985,8 +2103,8 @@ class OrthophotoProcessor:
         H_translated = np.dot(translation, H)
         
         # Calculate canvas size
-        canvas_width = int(max_x - min_x)
-        canvas_height = int(max_y - min_y)
+        canvas_width = int(np.ceil(max_x - min_x))
+        canvas_height = int(np.ceil(max_y - min_y))
         
         self.logger.info(f"Output canvas size: {canvas_width}x{canvas_height}")
         
@@ -1995,8 +2113,8 @@ class OrthophotoProcessor:
         
         # Translate img1 to canvas
         warped_img1 = np.zeros((canvas_height, canvas_width, img1.shape[2]), dtype=img1.dtype)
-        y_offset = int(ty)
-        x_offset = int(tx)
+        y_offset = int(np.floor(ty))
+        x_offset = int(np.floor(tx))
         warped_img1[y_offset:y_offset+h1, x_offset:x_offset+w1] = img1
         
         # Create masks for valid data areas
@@ -2045,14 +2163,25 @@ class OrthophotoProcessor:
                         tile_dist1 = cv2.distanceTransform(tile_only_img1 | tile_overlap, cv2.DIST_L2, 5)
                         tile_dist2 = cv2.distanceTransform(tile_only_img2 | tile_overlap, cv2.DIST_L2, 5)
                         
-                        # Normalize distances to weights
+                        # Normalize distances to weights (fix overflow by casting to float32)
+                        tile_dist1 = tile_dist1.astype(np.float32)
+                        tile_dist2 = tile_dist2.astype(np.float32)
+                        
+                        # Normalize each distance map to [0,1] before combining
+                        max_dist1 = np.max(tile_dist1)
+                        max_dist2 = np.max(tile_dist2)
+                        if max_dist1 > 0:
+                            tile_dist1 = tile_dist1 / max_dist1
+                        if max_dist2 > 0:
+                            tile_dist2 = tile_dist2 / max_dist2
+                        
+                        # Compute weight sum with guard against division by zero
                         tile_weight_sum = tile_dist1 + tile_dist2
-                        # Avoid division by zero
-                        tile_weight_sum[tile_weight_sum == 0] = 1
+                        tile_weight_sum = np.where(tile_weight_sum > 0, tile_weight_sum, 1)
                         
                         # Compute normalized weights
-                        tile_w1 = tile_dist1 / tile_weight_sum
-                        tile_w2 = tile_dist2 / tile_weight_sum
+                        tile_w1 = np.where(tile_weight_sum > 0, tile_dist1 / tile_weight_sum, 0)
+                        tile_w2 = np.where(tile_weight_sum > 0, tile_dist2 / tile_weight_sum, 0)
                         
                         # Apply blending in overlap area for this tile
                         tile_result = np.zeros((tile_h, tile_w, tile_warped_img1.shape[2]), dtype=np.float32)
@@ -2188,3 +2317,259 @@ class OrthophotoProcessor:
         self.logger.info(f"Downscaled image from {width}x{height} to {new_width}x{new_height} (scale={scale:.3f}) for feature detection")
         
         return small_img, scale
+    
+    def _geo_referenced_stitch(self, images: List[np.ndarray], tiff_paths: List[str],
+                                 min_x: float, min_y: float, max_x: float, max_y: float,
+                                 pixel_size_x: float, pixel_size_y: float, srs) -> np.ndarray:
+        """
+        Stitch images using geo-referenced placement and distance-weighted blending.
+        
+        Args:
+            images: List of loaded images
+            tiff_paths: List of original file paths
+            min_x, min_y, max_x, max_y: Canvas bounds in geospatial coordinates
+            pixel_size_x, pixel_size_y: Pixel size in geospatial units
+            srs: Spatial reference system
+            
+        Returns:
+            Stitched image as numpy array
+        """
+        from ..utils.gdal_utils import get_raster_metadata
+        
+        # Calculate canvas dimensions
+        canvas_width = int(np.ceil((max_x - min_x) / pixel_size_x))
+        canvas_height = int(np.ceil((max_y - min_y) / pixel_size_y))
+        
+        self.logger.info(f"Creating geo-referenced canvas: {canvas_width}x{canvas_height}")
+        
+        # Initialize accumulators for blending
+        canvas_sum = np.zeros((canvas_height, canvas_width, 3), dtype=np.float32)
+        weight_sum = np.zeros((canvas_height, canvas_width), dtype=np.float32)
+        
+        # Process each image
+        for i, (image, tiff_path) in enumerate(zip(images, tiff_paths)):
+            self.logger.info(f"Processing image {i+1}/{len(images)}: {os.path.basename(tiff_path)}")
+            
+            try:
+                # Get image geotransform
+                metadata = get_raster_metadata(tiff_path)
+                geotransform = metadata["geotransform"]
+                
+                if geotransform is None:
+                    raise RuntimeError(f"Image {tiff_path} has no geotransform")
+                
+                # Get image dimensions
+                image_height, image_width = image.shape[:2]
+                
+                # Compute canvas_max_y
+                canvas_max_y = max_y
+                
+                # Compute placement rectangle on canvas
+                tile_x, tile_y, tile_width, tile_height = self._tile_to_canvas_rect(
+                    geotransform, min_x, min_y, pixel_size_x, pixel_size_y, image_width, image_height, canvas_max_y
+                )
+                
+                self.logger.info(f"  Tile rect: ({tile_x}, {tile_y}) size {tile_width}x{tile_height}")
+                
+                # Resample image to canvas resolution if needed
+                resampled_image = self._resample_to_canvas_resolution(
+                    image, geotransform, pixel_size_x, pixel_size_y
+                )
+                
+                # Ensure resampled image matches expected tile size
+                if resampled_image.shape[0] != tile_height or resampled_image.shape[1] != tile_width:
+                    # Resize to match expected tile size
+                    resampled_image = cv2.resize(resampled_image, (tile_width, tile_height),
+                                               interpolation=cv2.INTER_LINEAR)
+                
+                # Create valid pixel mask
+                if len(resampled_image.shape) == 3:
+                    valid_mask = np.any(resampled_image > 0, axis=2)
+                else:
+                    valid_mask = resampled_image > 0
+                
+                # Compute distance transform weights
+                weights = self._compute_tile_weights(valid_mask)
+                
+                # Blend tile into canvas
+                self._blend_tile_into_canvas(
+                    resampled_image, weights, tile_x, tile_y,
+                    canvas_sum, weight_sum
+                )
+                
+                self.logger.info(f"  Successfully processed image {i+1}")
+                
+            except Exception as e:
+                self.logger.warning(f"  Failed to process image {i+1} ({tiff_path}): {e}")
+                continue
+        
+        # Normalize canvas to create final image
+        with np.errstate(divide='ignore', invalid='ignore'):
+            # Avoid division by zero
+            normalized = np.where(weight_sum[..., np.newaxis] > 0,
+                                   canvas_sum / weight_sum[..., np.newaxis], 0)
+        
+        # Convert to uint8
+        result = np.clip(normalized, 0, 255).astype(np.uint8)
+        
+        self.logger.info("Geo-referenced stitching completed successfully")
+        return result
+    
+    def _tile_to_canvas_rect(self, geotransform: tuple, canvas_min_x: float, canvas_min_y: float,
+                               pixel_size_x: float, pixel_size_y: float, image_width: int, image_height: int,
+                               canvas_max_y: float) -> tuple:
+        """
+        Compute tile placement rectangle on canvas from geotransform.
+        
+        Args:
+            geotransform: GDAL geotransform tuple (6 elements)
+            canvas_min_x, canvas_min_y: Canvas origin in geospatial coordinates
+            pixel_size_x, pixel_size_y: Canvas pixel size in geospatial units
+            image_width, image_height: Image dimensions in pixels
+            canvas_max_y: Canvas maximum Y coordinate in geospatial coordinates
+            
+        Returns:
+            Tuple of (offset_x, offset_y, width, height) in canvas pixels
+        """
+        # Image bounds in geospatial coordinates
+        img_min_x = geotransform[0]
+        img_max_y = geotransform[3]  # Top edge (remember Y is inverted in geotransform)
+        
+        # Calculate image bounds in geospatial coordinates
+        img_max_x = img_min_x + geotransform[1] * image_width + geotransform[2] * image_height
+        img_min_y = img_max_y + geotransform[4] * image_width + geotransform[5] * image_height
+        
+        # Calculate offset in canvas pixels (use floor for offset)
+        offset_x = int(np.floor((img_min_x - canvas_min_x) / pixel_size_x))
+        offset_y = int(np.floor((canvas_max_y - img_max_y) / pixel_size_y))
+        
+        # Calculate width and height in canvas pixels (use ceil for size)
+        width = int(np.ceil((img_max_x - img_min_x) / pixel_size_x))
+        height = int(np.ceil((img_max_y - img_min_y) / pixel_size_y))
+        
+        return offset_x, offset_y, width, height
+    
+    def _resample_to_canvas_resolution(self, image: np.ndarray, geotransform: tuple,
+                                         target_pixel_size_x: float, target_pixel_size_y: float) -> np.ndarray:
+        """
+        Resample image to match canvas resolution.
+        
+        Args:
+            image: Input image
+            geotransform: Image's geotransform
+            target_pixel_size_x, target_pixel_size_y: Target pixel size
+            
+        Returns:
+            Resampled image
+        """
+        # Get image's pixel size from geotransform
+        img_pixel_size_x = abs(geotransform[1])
+        img_pixel_size_y = abs(geotransform[5])
+        
+        # If resolution matches, return as-is
+        if (abs(img_pixel_size_x - target_pixel_size_x) < 1e-10 and
+            abs(img_pixel_size_y - target_pixel_size_y) < 1e-10):
+            return image
+        
+        # Calculate scale factors
+        scale_x = img_pixel_size_x / target_pixel_size_x
+        scale_y = img_pixel_size_y / target_pixel_size_y
+        
+        # Calculate new dimensions
+        new_width = int(image.shape[1] * scale_x)
+        new_height = int(image.shape[0] * scale_y)
+        
+        # Choose interpolation method based on scale
+        if scale_x < 1.0 or scale_y < 1.0:
+            # Downscaling - use area interpolation
+            interpolation = cv2.INTER_AREA
+        else:
+            # Upscaling - use linear interpolation
+            interpolation = cv2.INTER_LINEAR
+        
+        # Resample image
+        resampled = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
+        
+        return resampled
+    
+    def _compute_tile_weights(self, valid_mask: np.ndarray) -> np.ndarray:
+        """
+        Compute distance transform weights for a tile.
+        
+        Args:
+            valid_mask: Boolean mask indicating valid pixels
+            
+        Returns:
+            Weight array (float32) normalized to [0, 1]
+        """
+        # Convert to uint8 for cv2.distanceTransform
+        mask_uint8 = valid_mask.astype(np.uint8) * 255
+        
+        # Compute distance transform
+        if CV2_AVAILABLE:
+            # Use OpenCV distance transform (returns float32 directly)
+            dist_transform = cv2.distanceTransform(mask_uint8, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        else:
+            # Fallback to scipy (returns float64, cast to float32)
+            from scipy.ndimage import distance_transform_edt
+            dist_transform = distance_transform_edt(mask_uint8).astype(np.float32)
+        
+        # Normalize to [0, 1]
+        max_dist = np.max(dist_transform)
+        if max_dist > 0:
+            weights = dist_transform / max_dist
+        else:
+            weights = np.ones_like(dist_transform, dtype=np.float32)
+        
+        return weights
+    
+    def _blend_tile_into_canvas(self, tile: np.ndarray, weights: np.ndarray,
+                                  offset_x: int, offset_y: int,
+                                  canvas_sum: np.ndarray, weight_sum: np.ndarray) -> None:
+        """
+        Blend a tile into the canvas accumulators.
+        
+        Args:
+            tile: Tile image data
+            weights: Weight array for the tile
+            offset_x, offset_y: Tile offset on canvas
+            canvas_sum: Accumulator for weighted sum
+            weight_sum: Accumulator for weight sum
+        """
+        # Get canvas dimensions
+        canvas_height, canvas_width = canvas_sum.shape[:2]
+        
+        # Calculate tile bounds on canvas
+        x_start = max(0, offset_x)
+        y_start = max(0, offset_y)
+        x_end = min(canvas_width, offset_x + tile.shape[1])
+        y_end = min(canvas_height, offset_y + tile.shape[0])
+        
+        # Calculate corresponding tile bounds
+        tile_x_start = max(0, -offset_x)
+        tile_y_start = max(0, -offset_y)
+        tile_x_end = tile_x_start + (x_end - x_start)
+        tile_y_end = tile_y_start + (y_end - y_start)
+        
+        # Skip if tile is completely outside canvas
+        if x_start >= canvas_width or y_start >= canvas_height or x_end <= 0 or y_end <= 0:
+            return
+        
+        # Extract valid regions
+        tile_region = tile[tile_y_start:tile_y_end, tile_x_start:tile_x_end]
+        weight_region = weights[tile_y_start:tile_y_end, tile_x_start:tile_x_end]
+        
+        # Update canvas accumulators
+        if len(tile_region.shape) == 3:
+            # Multi-band image
+            for c in range(tile_region.shape[2]):
+                canvas_sum[y_start:y_end, x_start:x_end, c] += (
+                    tile_region[:, :, c].astype(np.float32) * weight_region
+                )
+        else:
+            # Single-band image
+            canvas_sum[y_start:y_end, x_start:x_end, 0] += (
+                tile_region.astype(np.float32) * weight_region
+            )
+        
+        weight_sum[y_start:y_end, x_start:x_end] += weight_region

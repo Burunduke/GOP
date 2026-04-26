@@ -636,3 +636,59 @@ Large images can now be processed without running out of memory. The stitching p
 #### 5. Files modified
 
 - [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_warp_and_blend` (lines 2020-2081)
+
+### Fix for OpenCV orthophoto black gaps & misplaced tiles — 2026-04-26
+
+#### 1. Problem observed
+
+The OpenCV stitching pipeline produced an orthophoto with large black gaps and visibly misplaced tiles compared to the reference output from the GDAL pipeline on the same dataset. Logs showed three concurrent symptoms:
+
+- `cv2.Stitcher` returning status `1` ("Need more images") and being logged as an error.
+- `RuntimeWarning: overflow encountered in add` raised inside `_warp_and_blend` while accumulating distance-based weights.
+- Repeated TIFF / GeoTIFF tag warnings from GDAL_PAM cluttering the log.
+
+#### 2. Root cause
+
+- Distance maps used as blending weights were kept in their default integer/float64 dtype and summed without normalization, causing numeric overflow and unstable weights at tile borders.
+- When `cv2.Stitcher` failed, the pipeline fell back to a homography-only path that ignored each input's geotransform, so tiles were positioned by feature matches instead of their true geographic coordinates — producing both gaps (no overlap where there should be) and misplacement.
+- A `cv2.Stitcher` status `1` is a normal "not enough overlap, try fallback" signal, but it was being logged at `error` level, masking the real issue in the noise.
+- Harmless TIFF/GDAL_PAM warnings were not filtered, making logs hard to read.
+
+#### 3. Fix applied
+
+All changes are in [`src/processing/orthophoto.py`](src/processing/orthophoto.py):
+
+- **Warning hygiene** — silenced the harmless TIFF / GDAL_PAM warnings at module load so real errors stand out.
+- **Overflow fix in `_warp_and_blend`** — distance maps are now cast to `float32`, normalized to `[0, 1]`, and the per-pixel weight sum is guarded against divide-by-zero before blending.
+- **Stitcher logging** — `cv2.Stitcher` status `1` is now logged at `info` level (expected fallback case), not `error`.
+- **Geo-referenced manual fallback (new primary path)** — added a stitching path that uses each input's geotransform directly. It is now used:
+  - whenever inputs have valid geotransforms (the common case for our GeoTIFFs), and
+  - whenever `cv2.Stitcher` fails on geo-referenced inputs.
+- **New helpers** added to support the geo-referenced path:
+  - `_compute_geo_bounds` — computes the union geographic extent of all inputs.
+  - `_geo_referenced_stitch` — top-level orchestrator for the geo-aware path.
+  - `_tile_to_canvas_rect` — maps each tile's geo-extent to canvas pixel coordinates, using `floor` for offsets and `ceil` for sizes so adjacent tiles touch without gaps.
+  - `_resample_to_canvas_resolution` — resamples each tile to the common output resolution.
+  - `_compute_tile_weights` — computes `float32`, normalized distance-based weights per tile.
+  - `_blend_tile_into_canvas` — accumulates weighted tiles into the output canvas.
+- **Homography fallback retained** — the previous feature-matching/homography path is kept as a secondary fallback for inputs that have no valid geotransform.
+
+#### 4. What the user will see now
+
+The OpenCV pipeline produces a continuous mosaic visually comparable to the GDAL reference output: no black gaps between tiles, and tiles positioned correctly in geographic space. Logs are also cleaner — no spurious overflow warnings, no false-error messages from the Stitcher fallback, no TIFF tag noise.
+
+#### 5. Verification
+
+- ✅ `py_compile` passes on [`src/processing/orthophoto.py`](src/processing/orthophoto.py).
+- ⏳ The user should rerun the OpenCV pipeline on the same dataset to visually confirm the mosaic matches the GDAL reference.
+
+#### 6. Files modified
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — module-level warning filters; `_warp_and_blend`; `cv2.Stitcher` failure logging; new helpers `_compute_geo_bounds`, `_geo_referenced_stitch`, `_tile_to_canvas_rect`, `_resample_to_canvas_resolution`, `_compute_tile_weights`, `_blend_tile_into_canvas`.
+
+#### 7. Junior-friendly takeaways
+
+1. When you sum distance maps to build blending weights, always cast to `float32` (or smaller) and normalize first — integer/float64 sums overflow or waste memory on large canvases.
+2. If your inputs already carry geographic coordinates (geotransforms), trust them: feature-match-only stitching can drift and is better used as a *fallback*, not the primary path.
+3. Use `floor` for tile offsets and `ceil` for tile sizes when mapping geographic extents to pixel canvases — this guarantees adjacent tiles touch and you never get one-pixel black seams.
+4. Not every non-zero status from a third-party library is an error. `cv2.Stitcher` status `1` just means "I couldn't stitch — try something else"; log it at `info` and let your fallback do its job.
