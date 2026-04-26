@@ -67,7 +67,8 @@ class ProcessingConfig:
     })
     orthophoto: Dict[str, Any] = field(default_factory=lambda: {
         "resolution": 0.1,
-        "crs": "EPSG:4326"
+        "crs": "EPSG:4326",
+        "stitching_method": "gdal"
     })
     
     def to_dict(self) -> Dict[str, Any]:

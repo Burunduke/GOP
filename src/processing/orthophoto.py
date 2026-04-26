@@ -16,6 +16,17 @@ from ..core.config import Config, get_config
 from ..utils.logger import setup_logger
 from ..utils.validators import validate_file_path
 from ..utils.exceptions import ValidationError
+from ..utils.gdal_utils import open_gdal_dataset
+import numpy as np
+from scipy.ndimage import distance_transform_edt
+
+# Try to import cv2 with graceful error handling
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None
+    CV2_AVAILABLE = False
 
 
 class OrthophotoProcessor:
@@ -36,6 +47,83 @@ class OrthophotoProcessor:
         self.config = get_config(config_instance)
         self.logger = setup_logger("OrthophotoProcessor")
         self.odm_path = self._find_odm_path()
+        
+        # Load orthophoto output configuration with defaults
+        self.orthophoto_config = {
+            "compression": self.config.get("processing.orthophoto.output.compression", "LZW"),
+            "predictor": self.config.get("processing.orthophoto.output.predictor", "auto"),
+            "tiled": self.config.get("processing.orthophoto.output.tiled", True),
+            "block_size": self.config.get("processing.orthophoto.output.block_size", 512),
+            "bigtiff": self.config.get("processing.orthophoto.output.bigtiff", "IF_SAFER"),
+            "target_dtype": self.config.get("processing.orthophoto.output.target_dtype", "uint8"),
+            "build_overviews": self.config.get("processing.orthophoto.output.build_overviews", True),
+            "overview_levels": self.config.get("processing.orthophoto.output.overview_levels", [2, 4, 8, 16]),
+        }
+        
+        # Load orthophoto blend configuration with defaults
+        self.blend_config = {
+            "enabled": self.config.get("processing.orthophoto.blend.enabled", True),
+            "method": self.config.get("processing.orthophoto.blend.method", "feather"),
+            "feather_distance_px": self.config.get("processing.orthophoto.blend.feather_distance_px", 0),
+        }
+        
+        # Load stitching method configuration with default
+        self.stitching_method = self.config.get("processing.orthophoto.stitching_method", "gdal")
+        
+        # Load OpenCV configuration with defaults
+        self.opencv_config = {
+            "detector": self.config.get("processing.orthophoto.opencv.detector", "auto"),
+            "ratio_test": self.config.get("processing.orthophoto.opencv.ratio_test", 0.75),
+            "ransac_reproj_threshold": self.config.get("processing.orthophoto.opencv.ransac_reproj_threshold", 5.0),
+            "min_matches": self.config.get("processing.orthophoto.opencv.min_matches", 10),
+            "try_use_gpu": self.config.get("processing.orthophoto.opencv.try_use_gpu", False),
+        }
+
+    def _is_docker_available(self) -> bool:
+        """
+        Check if Docker is available and accessible.
+        
+        Returns:
+            True if Docker is available, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ["docker", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _is_odm_docker_image_available(self) -> bool:
+        """
+        Check if the OpenDroneMap Docker image is available.
+        
+        Returns:
+            True if ODM Docker image is available, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ["docker", "images", "opendronemap/odm", "--format", "{{.Repository}}"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            return result.returncode == 0 and "opendronemap/odm" in result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _should_use_docker(self) -> bool:
+        """
+        Determine if Docker should be used for ODM execution.
+        
+        Returns:
+            True if Docker should be used, False otherwise
+        """
+        # Check if Docker is available and ODM image is present
+        return self._is_docker_available() and self._is_odm_docker_image_available()
 
     def _find_odm_path(self) -> Optional[str]:
         """
@@ -124,11 +212,8 @@ class OrthophotoProcessor:
 
             self.logger.info(f"[{len(tiff_paths)} files] Starting orthophoto creation")
 
-            # Create orthophoto
-            if self.odm_path:
-                orthophoto_path = self._create_with_odm(tiff_paths, output_dir, processed_data)
-            else:
-                orthophoto_path = self._create_with_gdal(tiff_paths, output_dir)
+            # Create orthophoto using the selected stitching method
+            orthophoto_path = self._dispatch_stitching(tiff_paths, output_dir, processed_data)
 
             self.logger.info(f"[{len(tiff_paths)} files] Orthophoto created: {orthophoto_path}")
             return orthophoto_path
@@ -136,6 +221,39 @@ class OrthophotoProcessor:
         except Exception as e:
             self.logger.error(f"Error creating orthophoto: {e}")
             raise
+
+    def _dispatch_stitching(self, tiff_paths: List[str], output_dir: str, processed_data: Dict[str, Any]) -> str:
+        """
+        Dispatch to the appropriate stitching method based on configuration.
+        
+        Args:
+            tiff_paths: List of paths to TIFF files
+            output_dir: Directory to save results
+            processed_data: Processed data containing metadata
+            
+        Returns:
+            Path to the created orthophoto
+            
+        Raises:
+            ValueError: If an unknown stitching method is specified
+        """
+        self.logger.info(f"Using stitching method: {self.stitching_method}")
+        
+        # Dictionary mapping method names to their corresponding functions
+        stitching_methods = {
+            "gdal": self._create_with_gdal,
+            "odm": lambda paths, out_dir: self._create_with_odm(paths, out_dir, processed_data),
+            "opencv": self._create_with_opencv,
+        }
+        
+        # Get the appropriate method
+        if self.stitching_method in stitching_methods:
+            method = stitching_methods[self.stitching_method]
+            # All methods have the same signature now
+            return method(tiff_paths, output_dir)
+        else:
+            valid_methods = ", ".join(stitching_methods.keys())
+            raise ValueError(f"Unknown stitching method: {self.stitching_method}. Valid options are: {valid_methods}")
 
     def _create_with_odm(self, tiff_paths: List[str], output_dir: str, processed_data: Dict[str, Any] = None) -> str:
         """
@@ -153,9 +271,25 @@ class OrthophotoProcessor:
             RuntimeError: If OpenDroneMap execution fails
             FileNotFoundError: If results are not found
         """
+        # Pre-flight checks
+        use_docker = self._should_use_docker()
+        if not use_docker and not self.odm_path:
+            raise RuntimeError(
+                "OpenDroneMap not found. Please install ODM or ensure Docker is available "
+                "with the opendronemap/odm image pulled. "
+                "See https://github.com/OpenDroneMap/ODM for installation instructions."
+            )
+
+        self.logger.info(f"[{len(tiff_paths)} files] Creating orthophoto using OpenDroneMap "
+                         f"({'Docker' if use_docker else 'native'})...")
+
+        # Create stable output path
+        output_path = os.path.join(output_dir, "orthophoto.tif")
+        
         try:
             # Create temporary directory for ODM
-            with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir = tempfile.mkdtemp()
+            try:
                 project_dir = os.path.join(temp_dir, "project")
                 os.makedirs(project_dir, exist_ok=True)
 
@@ -170,52 +304,99 @@ class OrthophotoProcessor:
                 # Create GPS file if necessary
                 gps_file = self._create_gps_file(processed_data, project_dir)
 
-                # Build ODM command
-                cmd = [
-                    os.path.join(self.odm_path, "run.sh"),
-                    "--project-path",
-                    project_dir,
-                    "--orthophoto-resolution",
-                    str(self.config.get("processing.orthophoto_resolution", 0.05)),
-                    "--dem-resolution",
-                    str(self.config.get("processing.dem_resolution", 0.1)),
-                    "--feature-quality",
-                    self.config.get("processing.feature_quality", "high"),
-                    "--matcher-neighbors",
-                    str(self.config.get("processing.matcher_neighbors", 8)),
-                    "--use-exif",
-                    "false",
-                ]
+                if use_docker:
+                    # Run ODM via Docker
+                    cmd = [
+                        "docker", "run", "-it", "--rm",
+                        "-v", f"{project_dir}:/project",
+                        "opendronemap/odm",
+                        "--orthophoto-resolution",
+                        str(self.config.get("processing.orthophoto_resolution", 0.05)),
+                        "--dem-resolution",
+                        str(self.config.get("processing.dem_resolution", 0.1)),
+                        "--feature-quality",
+                        self.config.get("processing.feature_quality", "high"),
+                        "--matcher-neighbors",
+                        str(self.config.get("processing.matcher_neighbors", 8)),
+                        "--use-exif",
+                        "false",
+                    ]
 
-                if gps_file:
-                    cmd.extend(["--gps-file", gps_file])
+                    if gps_file:
+                        # Map the GPS file into the container
+                        gps_filename = os.path.basename(gps_file)
+                        cmd.extend(["--gps-file", f"/project/{gps_filename}"])
 
-                # Run ODM
-                self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap...")
-                result = subprocess.run(
-                    cmd,
-                    cwd=self.odm_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=self.config.get(
-                        "processing.odm_timeout", 3600
-                    ),  # 1 hour default
-                )
+                    self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap via Docker...")
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=self.config.get("processing.odm_timeout", 7200),  # 2 hours default
+                    )
+                else:
+                    # Run ODM natively
+                    cmd = [
+                        os.path.join(self.odm_path, "run.sh"),
+                        "--project-path",
+                        project_dir,
+                        "--orthophoto-resolution",
+                        str(self.config.get("processing.orthophoto_resolution", 0.05)),
+                        "--dem-resolution",
+                        str(self.config.get("processing.dem_resolution", 0.1)),
+                        "--feature-quality",
+                        self.config.get("processing.feature_quality", "high"),
+                        "--matcher-neighbors",
+                        str(self.config.get("processing.matcher_neighbors", 8)),
+                        "--use-exif",
+                        "false",
+                    ]
+
+                    if gps_file:
+                        cmd.extend(["--gps-file", gps_file])
+
+                    self.logger.info(f"[{len(tiff_paths)} files] Running OpenDroneMap natively...")
+                    result = subprocess.run(
+                        cmd,
+                        cwd=self.odm_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=self.config.get("processing.odm_timeout", 7200),  # 2 hours default
+                    )
 
                 if result.returncode != 0:
                     self.logger.error(f"ODM failed with error: {result.stderr}")
                     raise RuntimeError(f"OpenDroneMap error: {result.stderr}")
 
                 # Copy results
-                odm_results_dir = os.path.join(
-                    project_dir, "odm_orthophoto", "odm_orthophoto.tif"
-                )
-                if os.path.exists(odm_results_dir):
-                    output_path = os.path.join(output_dir, "orthophoto.tif")
-                    self._copy_file(odm_results_dir, output_path)
+                odm_results_path = os.path.join(project_dir, "odm_orthophoto", "odm_orthophoto.tif")
+                if os.path.exists(odm_results_path):
+                    # Copy ODM output to temporary location for optimization
+                    temp_output_path = os.path.join(temp_dir, "odm_output.tif")
+                    self._copy_file(odm_results_path, temp_output_path)
+                    
+                    # Post-process ODM output via optimize_orthophoto
+                    self.logger.info("Optimizing ODM output...")
+                    optimized_path = self.optimize_orthophoto(temp_output_path, output_path)
+                    
+                    # Ensure the final output path is what the caller expects
+                    if optimized_path != output_path:
+                        self._copy_file(optimized_path, output_path)
+                        os.remove(optimized_path)
+                    
+                    self.logger.info(f"Orthophoto created successfully: {output_path}")
                     return output_path
                 else:
                     raise FileNotFoundError("ODM results not found")
+
+            finally:
+                # Clean up temporary directory
+                try:
+                    if os.path.exists(temp_dir):
+                        shutil.rmtree(temp_dir)
+                        self.logger.debug(f"Cleaned up temporary directory: {temp_dir}")
+                except Exception as cleanup_error:
+                    self.logger.warning(f"Failed to clean up temporary directory {temp_dir}: {cleanup_error}")
 
         except subprocess.TimeoutExpired:
             self.logger.error("OpenDroneMap execution timeout exceeded")
@@ -224,9 +405,362 @@ class OrthophotoProcessor:
             self.logger.error(f"Error working with OpenDroneMap: {e}")
             raise
 
+    def _convert_to_uint8(self, file_path: str) -> None:
+        """
+        Convert orthophoto to uint8 data type with proper scaling.
+        
+        Args:
+            file_path: Path to the orthophoto file
+        """
+        try:
+            from osgeo import gdal
+            gdal.UseExceptions()
+            
+            # Open dataset
+            with open_gdal_dataset(file_path, gdal.GA_Update) as src_ds:
+                # Check if already uint8
+                band = src_ds.GetRasterBand(1)
+                data_type = band.DataType
+                
+                if data_type == gdal.GDT_Byte:
+                    # Already uint8, no conversion needed
+                    return
+                
+                # Read data from all bands
+                band_count = src_ds.RasterCount
+                bands_data = []
+                
+                for i in range(1, band_count + 1):
+                    band = src_ds.GetRasterBand(i)
+                    data = band.ReadAsArray()
+                    bands_data.append(data)
+                
+                # Get georeferencing info
+                geotransform = src_ds.GetGeoTransform()
+                projection = src_ds.GetProjection()
+                
+                # Get nodata value while still in the context
+                nodata_value = band.GetNoDataValue()
+                
+            # Calculate min/max for scaling (use percentiles for robustness)
+            all_data = np.stack(bands_data)
+            min_val = np.percentile(all_data[all_data != nodata_value], 1) if nodata_value is not None else np.min(all_data)
+            max_val = np.percentile(all_data[all_data != nodata_value], 99) if nodata_value is not None else np.max(all_data)
+            
+            # Scale to 0-255 range
+            if max_val > min_val:
+                scaled_bands = []
+                for data in bands_data:
+                    # Handle nodata values
+                    nodata_mask = (data == nodata_value) if nodata_value is not None else np.zeros_like(data, dtype=bool)
+                    
+                    # Scale data
+                    scaled = ((data - min_val) / (max_val - min_val) * 255).astype(np.uint8)
+                    
+                    # Apply nodata mask
+                    scaled[nodata_mask] = 0
+                    
+                    scaled_bands.append(scaled)
+            else:
+                # If all values are the same, set to 128 (middle gray)
+                scaled_bands = [np.full_like(data, 128, dtype=np.uint8) for data in bands_data]
+            
+            # Write back to file
+            driver = gdal.GetDriverByName('GTiff')
+            dst_ds = driver.Create(file_path + '_temp', src_ds.RasterXSize, src_ds.RasterYSize,
+                                  band_count, gdal.GDT_Byte)
+            
+            # Copy georeferencing
+            dst_ds.SetGeoTransform(geotransform)
+            dst_ds.SetProjection(projection)
+            
+            # Write scaled data
+            for i, scaled_data in enumerate(scaled_bands):
+                dst_band = dst_ds.GetRasterBand(i + 1)
+                dst_band.WriteArray(scaled_data)
+                dst_band.SetNoDataValue(0)
+            
+            # Close datasets
+            dst_ds = None
+            src_ds = None
+            
+            # Replace original file
+            os.replace(file_path + '_temp', file_path)
+            
+        except Exception as e:
+            self.logger.warning(f"Could not convert to uint8: {e}")
+            # Clean up temp file if it exists
+            if os.path.exists(file_path + '_temp'):
+                os.remove(file_path + '_temp')
+
+    def _build_overviews(self, file_path: str) -> None:
+        """
+        Build internal overviews (pyramids) for the orthophoto.
+        
+        Args:
+            file_path: Path to the orthophoto file
+        """
+        try:
+            from osgeo import gdal
+            gdal.UseExceptions()
+            
+            # Open dataset in update mode
+            with open_gdal_dataset(file_path, gdal.GA_Update) as ds:
+                # Build overviews with LZW compression
+                ds.BuildOverviews(
+                    resampling="average",
+                    overviewlist=self.orthophoto_config["overview_levels"],
+                    options=["COMPRESS_OVERVIEW=LZW"]
+                )
+                
+        except Exception as e:
+            self.logger.warning(f"Could not build overviews: {e}")
+
+    def _warp_to_common_grid(self, tiff_paths: List[str], temp_dir: str, common_bounds: tuple, 
+                           pixel_size_x: float, pixel_size_y: float, srs) -> List[str]:
+        """
+        Warp all input images to a common grid.
+        
+        Args:
+            tiff_paths: List of paths to TIFF files
+            temp_dir: Temporary directory for output files
+            common_bounds: (min_x, min_y, max_x, max_y) bounds for output
+            pixel_size_x: Pixel size in X direction
+            pixel_size_y: Pixel size in Y direction
+            srs: Spatial reference system
+            
+        Returns:
+            List of paths to warped TIFF files
+        """
+        from osgeo import gdal
+        gdal.UseExceptions()
+        
+        warped_paths = []
+        width = int((common_bounds[2] - common_bounds[0]) / pixel_size_x)
+        height = int((common_bounds[3] - common_bounds[1]) / pixel_size_y)
+        
+        for i, tiff_path in enumerate(tiff_paths):
+            warped_path = os.path.join(temp_dir, f"warped_{i}.tif")
+            self.logger.info(f"Warping image {i+1}/{len(tiff_paths)}: {os.path.basename(tiff_path)}")
+            
+            # Warp options for common grid
+            warp_options = gdal.WarpOptions(
+                format="GTiff",
+                outputBounds=common_bounds,
+                width=width,
+                height=height,
+                resampleAlg="bilinear",
+                dstNodata=0,
+                srcSRS=srs,
+                dstSRS=srs,
+                targetAlignedPixels=True,
+            )
+            
+            # Perform the warp operation
+            gdal.Warp(warped_path, tiff_path, options=warp_options)
+            warped_paths.append(warped_path)
+            
+        return warped_paths
+
+    def _compute_distance_weights(self, warped_paths: List[str], temp_dir: str) -> List[str]:
+        """
+        Compute distance transform weights for each warped image.
+        
+        Args:
+            warped_paths: List of paths to warped TIFF files
+            temp_dir: Temporary directory for output files
+            
+        Returns:
+            List of paths to weight files (.npy)
+        """
+        from osgeo import gdal
+        gdal.UseExceptions()
+        
+        weight_paths = []
+        
+        # First, compute a combined mask to identify overlap areas
+        combined_mask = None
+        masks = []
+        
+        # Read all masks first
+        for i, warped_path in enumerate(warped_paths):
+            with open_gdal_dataset(warped_path) as src_ds:
+                band = src_ds.GetRasterBand(1)
+                data = band.ReadAsArray()
+                nodata = band.GetNoDataValue() or 0
+                
+                # Create valid data mask (where data is not nodata)
+                mask = data != nodata
+                masks.append(mask)
+                
+                # Update combined mask
+                if combined_mask is None:
+                    combined_mask = mask.astype(np.uint8)
+                else:
+                    combined_mask += mask.astype(np.uint8)
+        
+        # Compute weights for each image
+        for i, (warped_path, mask) in enumerate(zip(warped_paths, masks)):
+            self.logger.info(f"Computing weights for image {i+1}/{len(warped_paths)}")
+            
+            # For pixels where exactly one image is valid, force weight = 1
+            # For pixels where multiple images are valid, use distance transform
+            single_image_area = (combined_mask == 1) & mask
+            multi_image_area = (combined_mask > 1) & mask
+            
+            # Initialize weights
+            weights = np.zeros_like(mask, dtype=np.float32)
+            
+            # Set weight = 1 for single image areas
+            weights[single_image_area] = 1.0
+            
+            # For multi-image areas, compute distance transform
+            if np.any(multi_image_area):
+                # Compute distance to nearest invalid pixel within the multi-image area
+                # Invert the mask for distance transform (distance to invalid pixels)
+                inverted_mask = ~mask
+                dist_transform = distance_transform_edt(~inverted_mask)
+                
+                # Apply feather distance limit if configured
+                if self.blend_config["feather_distance_px"] > 0:
+                    dist_transform = np.minimum(dist_transform, self.blend_config["feather_distance_px"])
+                
+                # Normalize distances to weights (0-1 range)
+                max_dist = np.max(dist_transform[multi_image_area])
+                if max_dist > 0:
+                    weights[multi_image_area] = dist_transform[multi_image_area] / max_dist
+                else:
+                    weights[multi_image_area] = 1.0
+            
+            # Save weights to file
+            weight_path = os.path.join(temp_dir, f"weights_{i}.npy")
+            np.save(weight_path, weights)
+            weight_paths.append(weight_path)
+            
+        return weight_paths
+
+    def _blend_tiles(self, warped_paths: List[str], weight_paths: List[str], 
+                   output_path: str, width: int, height: int, 
+                   pixel_size_x: float, pixel_size_y: float, 
+                   min_x: float, min_y: float, max_x: float, max_y: float, srs) -> None:
+        """
+        Blend warped images using precomputed weights in tiled fashion.
+        
+        Args:
+            warped_paths: List of paths to warped TIFF files
+            weight_paths: List of paths to weight files
+            output_path: Path to output file
+            width: Output width in pixels
+            height: Output height in pixels
+            pixel_size_x: Pixel size in X direction
+            pixel_size_y: Pixel size in Y direction
+            min_x, min_y, max_x, max_y: Output bounds
+            srs: Spatial reference system
+        """
+        from osgeo import gdal
+        gdal.UseExceptions()
+        
+        # Tile size for processing (avoid loading entire images into memory)
+        tile_size = 2048
+        
+        # Build creation options from config
+        creation_options = []
+        if self.orthophoto_config["compression"] != "NONE":
+            creation_options.extend([
+                f"COMPRESS={self.orthophoto_config['compression']}",
+            ])
+        
+        if self.orthophoto_config["tiled"]:
+            creation_options.extend([
+                "TILED=YES",
+                f"BLOCKXSIZE={self.orthophoto_config['block_size']}",
+                f"BLOCKYSIZE={self.orthophoto_config['block_size']}",
+            ])
+        
+        creation_options.append(f"BIGTIFF={self.orthophoto_config['bigtiff']}")
+        
+        # Determine predictor based on data type and config
+        predictor = self.orthophoto_config["predictor"]
+        if predictor == "auto":
+            # For integer data, use PREDICTOR=2; for float, use PREDICTOR=3
+            predictor = 2  # Default to 2 for integer data
+        
+        if predictor != 1:  # PREDICTOR=1 is no predictor
+            creation_options.append(f"PREDICTOR={predictor}")
+        
+        # Create output dataset
+        driver = gdal.GetDriverByName("GTiff")
+        with open_gdal_dataset(warped_paths[0]) as ref_ds:
+            band_count = ref_ds.RasterCount
+        
+        dst_ds = driver.Create(output_path, width, height, band_count, gdal.GDT_Byte, options=creation_options)
+        
+        # Set geotransform and projection
+        geotransform = (min_x, pixel_size_x, 0, max_y, 0, -pixel_size_y)
+        dst_ds.SetGeoTransform(geotransform)
+        dst_ds.SetProjection(srs.ExportToWkt())
+        
+        # Process tiles
+        total_tiles = 0
+        for y in range(0, height, tile_size):
+            for x in range(0, width, tile_size):
+                tile_width = min(tile_size, width - x)
+                tile_height = min(tile_size, height - y)
+                total_tiles += 1
+                
+                if total_tiles % 100 == 0:
+                    self.logger.info(f"Blending tile {total_tiles}: ({x}, {y}) size {tile_width}x{tile_height}")
+                
+                # Initialize accumulators for this tile
+                weighted_sum = None
+                weight_sum = None
+                
+                # Load weights for this tile
+                tile_weights = []
+                for weight_path in weight_paths:
+                    weights = np.load(weight_path)
+                    tile_weights.append(weights[y:y+tile_height, x:x+tile_width])
+                
+                # Process each band
+                for band_num in range(1, band_count + 1):
+                    # Initialize accumulators for this band if needed
+                    if weighted_sum is None:
+                        weighted_sum = np.zeros((tile_height, tile_width), dtype=np.float32)
+                        weight_sum = np.zeros((tile_height, tile_width), dtype=np.float32)
+                    
+                    # Accumulate weighted values from each image
+                    for i, (warped_path, weights) in enumerate(zip(warped_paths, tile_weights)):
+                        with open_gdal_dataset(warped_path) as src_ds:
+                            band = src_ds.GetRasterBand(band_num)
+                            data = band.ReadAsArray(xoff=x, yoff=y, win_xsize=tile_width, win_ysize=tile_height)
+                            
+                            # Apply weights
+                            weighted_sum += data.astype(np.float32) * weights
+                            weight_sum += weights
+                    
+                    # Normalize by weight sum
+                    # Avoid division by zero
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        result = np.where(weight_sum > 0, weighted_sum / weight_sum, 0)
+                    
+                    # Convert to uint8
+                    result = np.clip(result, 0, 255).astype(np.uint8)
+                    
+                    # Write to output
+                    dst_band = dst_ds.GetRasterBand(band_num)
+                    dst_band.WriteArray(result, xoff=x, yoff=y)
+                    dst_band.SetNoDataValue(0)
+                    
+                    # Reset accumulators for next band
+                    weighted_sum = None
+                    weight_sum = None
+        
+        # Close dataset
+        dst_ds = None
+
     def _create_with_gdal(self, tiff_paths: List[str], output_dir: str) -> str:
         """
-        Create orthophoto using GDAL (alternative method).
+        Create orthophoto using GDAL with seamless blending (alternative method).
 
         Args:
             tiff_paths: List of paths to TIFF files
@@ -239,37 +773,158 @@ class OrthophotoProcessor:
             RuntimeError: If GDAL merge fails
         """
         try:
-            self.logger.info(f"[{len(tiff_paths)} files] Creating orthophoto using GDAL")
+            self.logger.info(f"[{len(tiff_paths)} files] Creating orthophoto using GDAL with seamless blending")
+            
+            # Handle single-input degenerate case
+            if len(tiff_paths) == 1:
+                self.logger.info("Only one input image, using direct copy")
+                output_path = os.path.join(output_dir, "orthophoto.tif")
+                shutil.copy2(tiff_paths[0], output_path)
+                return output_path
 
-            # Use gdal_merge.py to create mosaic
+            # Calculate input files total size
+            input_size = sum(os.path.getsize(path) for path in tiff_paths if os.path.exists(path))
+
+            # Use gdal.Warp to create mosaic with tight bounding box
             output_path = os.path.join(output_dir, "orthophoto.tif")
 
-            # Resolve gdal_merge.py path and use sys.executable for cross-platform compatibility
-            gdal_merge_path = shutil.which("gdal_merge.py")
-            if gdal_merge_path is None:
-                raise RuntimeError("gdal_merge.py not found in PATH")
+            # Import GDAL
+            try:
+                from osgeo import gdal, osr
+                gdal.UseExceptions()
+            except ImportError:
+                raise RuntimeError("GDAL library is required but not available. Install with: pip install gdal")
 
-            cmd = [
-                sys.executable,
-                gdal_merge_path,
-                "-o",
-                output_path,
-                "-of",
-                "GTiff",
-                "-co",
-                "COMPRESS=LZW",
-                "-co",
-                "TILED=YES",
-            ]
-            cmd.extend(tiff_paths)
+            # Calculate tight bounding box from input extents
+            min_x, min_y, max_x, max_y = None, None, None, None
+            first_srs = None
+            pixel_size_x, pixel_size_y = None, None
+            
+            for tiff_path in tiff_paths:
+                with open_gdal_dataset(tiff_path) as src_ds:
+                    geotransform = src_ds.GetGeoTransform()
+                    srs = src_ds.GetSpatialRef()
+                    
+                    if first_srs is None:
+                        first_srs = srs
+                        pixel_size_x = abs(geotransform[1])
+                        pixel_size_y = abs(geotransform[5])
+                    
+                    # Calculate bounds
+                    x_size = src_ds.RasterXSize
+                    y_size = src_ds.RasterYSize
+                    ul_x = geotransform[0]
+                    ul_y = geotransform[3]
+                    lr_x = ul_x + geotransform[1] * x_size + geotransform[2] * y_size
+                    lr_y = ul_y + geotransform[4] * x_size + geotransform[5] * y_size
+                    
+                    # Get actual bounds (accounting for rotation)
+                    x_coords = [ul_x, ul_x + geotransform[1] * x_size, ul_x + geotransform[2] * y_size, lr_x]
+                    y_coords = [ul_y, ul_y + geotransform[4] * x_size, ul_y + geotransform[5] * y_size, lr_y]
+                    file_min_x, file_max_x = min(x_coords), max(x_coords)
+                    file_min_y, file_max_y = min(y_coords), max(y_coords)
+                    
+                    # Update overall bounds
+                    if min_x is None or file_min_x < min_x:
+                        min_x = file_min_x
+                    if min_y is None or file_min_y < min_y:
+                        min_y = file_min_y
+                    if max_x is None or file_max_x > max_x:
+                        max_x = file_max_x
+                    if max_y is None or file_max_y > max_y:
+                        max_y = file_max_y
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                self.logger.error(f"GDAL merge error: {result.stderr}")
-                raise RuntimeError(f"GDAL merge error: {result.stderr}")
-
-            return output_path
+            # Calculate output dimensions
+            if min_x is not None and pixel_size_x is not None:
+                width = int((max_x - min_x) / pixel_size_x)
+                height = int((max_y - min_y) / pixel_size_y)
+                
+                # Check if blending is enabled
+                if self.blend_config["enabled"] and len(tiff_paths) > 1:
+                    # Use seamless blending approach
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        self.logger.info(f"Reprojecting {len(tiff_paths)} images to common grid")
+                        
+                        # Warp all images to common grid
+                        warped_paths = self._warp_to_common_grid(
+                            tiff_paths, temp_dir, 
+                            (min_x, min_y, max_x, max_y),
+                            pixel_size_x, pixel_size_y, first_srs
+                        )
+                        
+                        self.logger.info("Computing distance weights for blending")
+                        # Compute distance weights for blending
+                        weight_paths = self._compute_distance_weights(warped_paths, temp_dir)
+                        
+                        self.logger.info("Blending images with distance-weighted approach")
+                        # Blend images using precomputed weights
+                        self._blend_tiles(
+                            warped_paths, weight_paths, output_path,
+                            width, height, pixel_size_x, pixel_size_y,
+                            min_x, min_y, max_x, max_y, first_srs
+                        )
+                else:
+                    # Fall back to original behavior (last image wins)
+                    self.logger.info("Using original GDAL warp (last image wins)")
+                    
+                    # Build creation options from config
+                    creation_options = []
+                    if self.orthophoto_config["compression"] != "NONE":
+                        creation_options.extend([
+                            f"COMPRESS={self.orthophoto_config['compression']}",
+                        ])
+                    
+                    if self.orthophoto_config["tiled"]:
+                        creation_options.extend([
+                            "TILED=YES",
+                            f"BLOCKXSIZE={self.orthophoto_config['block_size']}",
+                            f"BLOCKYSIZE={self.orthophoto_config['block_size']}",
+                        ])
+                    
+                    creation_options.append(f"BIGTIFF={self.orthophoto_config['bigtiff']}")
+                    
+                    # Determine predictor based on data type and config
+                    predictor = self.orthophoto_config["predictor"]
+                    if predictor == "auto":
+                        # For integer data, use PREDICTOR=2; for float, use PREDICTOR=3
+                        predictor = 2  # Default to 2 for integer data
+                    
+                    if predictor != 1:  # PREDICTOR=1 is no predictor
+                        creation_options.append(f"PREDICTOR={predictor}")
+                    
+                    # Warp options for tight bounding box
+                    warp_options = gdal.WarpOptions(
+                        format="GTiff",
+                        outputBounds=[min_x, min_y, max_x, max_y],
+                        width=width,
+                        height=height,
+                        resampleAlg="bilinear",
+                        dstNodata=0,
+                        creationOptions=creation_options,
+                        srcSRS=first_srs,
+                        dstSRS=first_srs,
+                    )
+                    
+                    # Perform the warp operation
+                    gdal.Warp(output_path, tiff_paths, options=warp_options)
+                
+                # Convert to target dtype if needed
+                if self.orthophoto_config["target_dtype"] == "uint8":
+                    self._convert_to_uint8(output_path)
+                
+                # Build overviews if requested
+                if self.orthophoto_config["build_overviews"]:
+                    self._build_overviews(output_path)
+                
+                # Log size reduction
+                if os.path.exists(output_path):
+                    output_size = os.path.getsize(output_path)
+                    reduction = (1 - output_size / input_size) * 100 if input_size > 0 else 0
+                    self.logger.info(f"Orthophoto size: {input_size:,} → {output_size:,} bytes ({reduction:.1f}% reduction)")
+                
+                return output_path
+            else:
+                raise RuntimeError("Could not determine output bounds from input files")
 
         except Exception as e:
             self.logger.error(f"Error creating orthophoto with GDAL: {e}")
@@ -411,54 +1066,632 @@ class OrthophotoProcessor:
                 base_path = os.path.splitext(orthophoto_path)[0]
                 output_path = f"{base_path}_optimized.tif"
 
-            # GDAL command for optimization
-            # Resolve gdal_translate path for robustness
-            gdal_translate_path = shutil.which("gdal_translate")
-            if gdal_translate_path is None:
-                raise RuntimeError("gdal_translate not found in PATH")
+            # Calculate input file size
+            input_size = os.path.getsize(orthophoto_path) if os.path.exists(orthophoto_path) else 0
 
-            cmd = [
-                gdal_translate_path,
-                orthophoto_path,
-                output_path,
-                "-co",
-                "COMPRESS=LZW",
-                "-co",
-                "TILED=YES",
-                "-co",
-                "BIGTIFF=IF_NEEDED",
-                "-co",
-                "PREDICTOR=2",
-            ]
+            # Import GDAL
+            try:
+                from osgeo import gdal
+                gdal.UseExceptions()
+            except ImportError:
+                raise RuntimeError("GDAL library is required but not available. Install with: pip install gdal")
 
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            # Build creation options from config
+            creation_options = []
+            if self.orthophoto_config["compression"] != "NONE":
+                creation_options.extend([
+                    f"COMPRESS={self.orthophoto_config['compression']}",
+                ])
+            
+            if self.orthophoto_config["tiled"]:
+                creation_options.extend([
+                    "TILED=YES",
+                    f"BLOCKXSIZE={self.orthophoto_config['block_size']}",
+                    f"BLOCKYSIZE={self.orthophoto_config['block_size']}",
+                ])
+            
+            creation_options.append(f"BIGTIFF={self.orthophoto_config['bigtiff']}")
+            
+            # Determine predictor based on data type and config
+            predictor = self.orthophoto_config["predictor"]
+            if predictor == "auto":
+                # For integer data, use PREDICTOR=2; for float, use PREDICTOR=3
+                predictor = 2  # Default to 2 for integer data
+            
+            if predictor != 1:  # PREDICTOR=1 is no predictor
+                creation_options.append(f"PREDICTOR={predictor}")
 
-            if result.returncode != 0:
-                self.logger.error(f"Optimization error: {result.stderr}")
-                raise RuntimeError(f"Optimization error: {result.stderr}")
-
-            # Create pyramids
-            # Resolve gdaladdo path for robustness
-            gdaladdo_path = shutil.which("gdaladdo")
-            if gdaladdo_path is None:
-                raise RuntimeError("gdaladdo not found in PATH")
-
-            pyramid_cmd = [
-                gdaladdo_path,
-                "-r",
-                "average",
-                output_path,
-                "2",
-                "4",
-                "8",
-                "16",
-            ]
-
-            subprocess.run(pyramid_cmd, capture_output=True, text=True)
-
-            self.logger.info(f"Orthophoto optimized: {output_path}")
+            # Use gdal.Translate for optimization
+            translate_options = gdal.TranslateOptions(
+                format="GTiff",
+                creationOptions=creation_options,
+            )
+            
+            gdal.Translate(output_path, orthophoto_path, options=translate_options)
+            
+            # Convert to target dtype if needed
+            if self.orthophoto_config["target_dtype"] == "uint8":
+                self._convert_to_uint8(output_path)
+            
+            # Build overviews if requested
+            if self.orthophoto_config["build_overviews"]:
+                self._build_overviews(output_path)
+            
+            # Log size reduction
+            if os.path.exists(output_path):
+                output_size = os.path.getsize(output_path)
+                reduction = (1 - output_size / input_size) * 100 if input_size > 0 else 0
+                self.logger.info(f"Orthophoto optimized: {input_size:,} → {output_size:,} bytes ({reduction:.1f}% reduction)")
+            
             return output_path
 
         except Exception as e:
             self.logger.error(f"Error optimizing orthophoto: {e}")
             raise
+
+    def _create_with_opencv(self, tiff_paths: List[str], output_dir: str) -> str:
+        """
+        Create orthophoto using OpenCV feature-based stitching.
+        
+        This method implements feature-based stitching using OpenCV's stitching module
+        with a fallback to manual SIFT/ORB + homography approach.
+        
+        Args:
+            tiff_paths: List of paths to TIFF files
+            output_dir: Directory to save results
+            
+        Returns:
+            Path to the created orthophoto
+            
+        Raises:
+            RuntimeError: If stitching fails due to insufficient matches or other issues
+        """
+        # Check if cv2 is available
+        if not CV2_AVAILABLE:
+            raise RuntimeError("OpenCV stitching requires opencv-contrib-python. Install with: pip install opencv-contrib-python")
+        
+        self.logger.info(f"[{len(tiff_paths)} files] Starting OpenCV feature-based stitching")
+        
+        # Load and normalize images
+        images = []
+        for i, path in enumerate(tiff_paths):
+            self.logger.info(f"Loading image {i+1}/{len(tiff_paths)}: {os.path.basename(path)}")
+            img = self._load_and_normalize(path)
+            images.append(img)
+        
+        # Try primary path using cv2.Stitcher
+        result_path = self._try_cv2_stitcher(images, tiff_paths, output_dir)
+        
+        # If primary path failed, try manual fallback
+        if result_path is None:
+            self.logger.info("Falling back to manual stitching pipeline")
+            result_path = self._manual_stitching_pipeline(images, tiff_paths, output_dir)
+        
+        self.logger.info(f"OpenCV stitching completed: {result_path}")
+        return result_path
+    
+    def _load_and_normalize(self, image_path: str) -> np.ndarray:
+        """
+        Load image and normalize to uint8 if needed.
+        
+        Args:
+            image_path: Path to the image file
+            
+        Returns:
+            Normalized image as numpy array (BGR format for OpenCV)
+        """
+        # Try to load with OpenCV first (handles many formats including TIFF)
+        img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+        
+        if img is None:
+            # Fallback to GDAL for geospatial formats
+            try:
+                from osgeo import gdal
+                gdal.UseExceptions()
+                with open_gdal_dataset(image_path) as ds:
+                    # Read first 3 bands or first band if grayscale
+                    band_count = min(ds.RasterCount, 3)
+                    bands = []
+                    for i in range(1, band_count + 1):
+                        band = ds.GetRasterBand(i)
+                        band_data = band.ReadAsArray()
+                        bands.append(band_data)
+                    
+                    # Stack bands
+                    if len(bands) == 1:
+                        img = bands[0]
+                    elif len(bands) == 3:
+                        # Stack as BGR (OpenCV format)
+                        img = np.stack([bands[2], bands[1], bands[0]], axis=2)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load image {image_path}: {e}")
+        
+        # Convert to uint8 if needed
+        if img.dtype != np.uint8:
+            self.logger.info(f"Converting image from {img.dtype} to uint8")
+            # For 16-bit images, use percentile-based normalization
+            if img.dtype in [np.uint16, np.int16]:
+                # Use 1st and 99th percentiles to avoid outliers
+                p1, p99 = np.percentile(img, (1, 99))
+                img = np.clip(img, p1, p99)
+                img = ((img - p1) / (p99 - p1) * 255).astype(np.uint8)
+            elif img.dtype in [np.float32, np.float64]:
+                # For float images, assume 0-1 range or normalize
+                if img.max() <= 1.0:
+                    img = (img * 255).astype(np.uint8)
+                else:
+                    # Normalize to 0-255 range
+                    img_min, img_max = img.min(), img.max()
+                    if img_max > img_min:
+                        img = ((img - img_min) / (img_max - img_min) * 255).astype(np.uint8)
+                    else:
+                        img = np.full_like(img, 128, dtype=np.uint8)
+            else:
+                # For other dtypes, simple conversion
+                img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        
+        # Ensure 3 channels for color images
+        if len(img.shape) == 2:
+            # Grayscale to BGR
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif len(img.shape) == 3 and img.shape[2] == 1:
+            # Single channel to BGR
+            img = cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
+        elif len(img.shape) == 3 and img.shape[2] == 3:
+            # Already BGR, no change needed
+            pass
+        elif len(img.shape) == 3 and img.shape[2] == 4:
+            # BGRA to BGR
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        
+        return img
+    
+    def _try_cv2_stitcher(self, images: List[np.ndarray], tiff_paths: List[str], output_dir: str) -> Optional[str]:
+        """
+        Try to stitch images using cv2.Stitcher.
+        
+        Args:
+            images: List of loaded images
+            tiff_paths: List of original file paths (for naming)
+            output_dir: Directory to save results
+            
+        Returns:
+            Path to result file if successful, None otherwise
+        """
+        try:
+            # Create stitcher
+            if hasattr(cv2, 'Stitcher_create'):
+                stitcher = cv2.Stitcher_create()  # OpenCV 3.x+
+            else:
+                stitcher = cv2.Stitcher.create()  # OpenCV 4.x+
+            
+            # Set GPU usage if requested
+            if self.opencv_config["try_use_gpu"] and hasattr(stitcher, 'setTryUseGPU'):
+                stitcher.setTryUseGPU(True)
+            
+            self.logger.info(f"Attempting cv2.Stitcher with {len(images)} images")
+            
+            # Perform stitching
+            status, stitched = stitcher.stitch(images)
+            
+            # Check status
+            status_messages = {
+                cv2.Stitcher_OK: "OK",
+                cv2.Stitcher_ERR_NEED_MORE_IMGS: "Need more images",
+                cv2.Stitcher_ERR_HOMOGRAPHY_EST_FAIL: "Homography estimation failed",
+                cv2.Stitcher_ERR_CAMERA_PARAMS_ADJUST_FAIL: "Camera parameters adjustment failed",
+            }
+            
+            if status == cv2.Stitcher_OK:
+                self.logger.info("cv2.Stitcher succeeded")
+                # Save result
+                output_path = os.path.join(output_dir, "orthophoto_opencv.tif")
+                self._save_pixel_space_tiff(stitched, output_path)
+                
+                # Also save PNG preview if possible
+                try:
+                    png_path = os.path.join(output_dir, "orthophoto_opencv.png")
+                    # Convert BGR to RGB for PNG
+                    if len(stitched.shape) == 3:
+                        rgb_img = cv2.cvtColor(stitched, cv2.COLOR_BGR2RGB)
+                        cv2.imwrite(png_path, rgb_img)
+                    else:
+                        cv2.imwrite(png_path, stitched)
+                    self.logger.info(f"Saved PNG preview: {png_path}")
+                except Exception as e:
+                    self.logger.warning(f"Could not save PNG preview: {e}")
+                
+                return output_path
+            else:
+                status_msg = status_messages.get(status, f"Unknown error ({status})")
+                self.logger.warning(f"cv2.Stitcher failed with status {status}: {status_msg}")
+                return None
+                
+        except Exception as e:
+            self.logger.warning(f"cv2.Stitcher failed: {e}")
+            return None
+    
+    def _manual_stitching_pipeline(self, images: List[np.ndarray], tiff_paths: List[str], output_dir: str) -> str:
+        """
+        Manual stitching pipeline using SIFT/ORB + homography + feathered blend.
+        
+        Args:
+            images: List of loaded images
+            tiff_paths: List of original file paths (for naming)
+            output_dir: Directory to save results
+            
+        Returns:
+            Path to result file
+        """
+        # Handle multi-image case
+        if len(images) > 2:
+            self.logger.info("Manual fallback supports pairwise stitching only; for N>2 inputs, prefer cv2.Stitcher")
+            # Stitch pairs sequentially left-to-right
+            result_img = images[0]
+            for i in range(1, len(images)):
+                self.logger.info(f"Stitching image pair {i}/{len(images)-1}")
+                result_img, _ = self._stitch_pair(result_img, images[i])
+        elif len(images) == 2:
+            result_img, _ = self._stitch_pair(images[0], images[1])
+        else:
+            # Single image, just copy it
+            result_img = images[0]
+        
+        # Save result
+        output_path = os.path.join(output_dir, "orthophoto_opencv.tif")
+        self._save_pixel_space_tiff(result_img, output_path)
+        
+        # Also save PNG preview if possible
+        try:
+            png_path = os.path.join(output_dir, "orthophoto_opencv.png")
+            # Convert BGR to RGB for PNG
+            if len(result_img.shape) == 3:
+                rgb_img = cv2.cvtColor(result_img, cv2.COLOR_BGR2RGB)
+                cv2.imwrite(png_path, rgb_img)
+            else:
+                cv2.imwrite(png_path, result_img)
+            self.logger.info(f"Saved PNG preview: {png_path}")
+        except Exception as e:
+            self.logger.warning(f"Could not save PNG preview: {e}")
+        
+        return output_path
+    
+    def _stitch_pair(self, img1: np.ndarray, img2: np.ndarray) -> tuple:
+        """
+        Stitch a pair of images using feature detection and homography.
+        
+        Args:
+            img1: First image (reference)
+            img2: Second image (to be aligned)
+            
+        Returns:
+            Tuple of (stitched_image, success_flag)
+        """
+        # Detect and match features
+        kp1, des1, kp2, des2, detector_name = self._detect_and_match(img1, img2)
+        
+        # Apply Lowe's ratio test
+        matches = self._apply_ratio_test(des1, des2)
+        
+        self.logger.info(f"Found {len(matches)} good matches using {detector_name}")
+        
+        if len(matches) < self.opencv_config["min_matches"]:
+            raise RuntimeError(f"OpenCV stitching failed: not enough feature matches ({len(matches)} < {self.opencv_config['min_matches']}) between images. Inputs likely don't overlap or lack texture.")
+        
+        # Compute homography
+        H, inliers = self._compute_homography(kp1, kp2, matches)
+        
+        inlier_ratio = len(inliers) / len(matches) if len(matches) > 0 else 0
+        self.logger.info(f"Found homography with {len(inliers)} inliers ({inlier_ratio:.2%} inlier ratio)")
+        
+        # Warp and blend images
+        result_img = self._warp_and_blend(img1, img2, H)
+        
+        return result_img, True
+    
+    def _detect_and_match(self, img1: np.ndarray, img2: np.ndarray) -> tuple:
+        """
+        Detect features and match them between two images.
+        
+        Args:
+            img1: First image
+            img2: Second image
+            
+        Returns:
+            Tuple of (kp1, des1, kp2, des2, detector_name)
+        """
+        # Convert to grayscale if needed
+        if len(img1.shape) == 3:
+            gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        else:
+            gray1 = img1
+            
+        if len(img2.shape) == 3:
+            gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+        else:
+            gray2 = img2
+        
+        # Choose detector
+        detector_name = self.opencv_config["detector"]
+        if detector_name == "auto":
+            # Try SIFT first, fall back to ORB
+            try:
+                detector = cv2.SIFT_create()
+                detector_name = "SIFT"
+                self.logger.info("Using SIFT detector")
+            except AttributeError:
+                detector = cv2.ORB_create(nfeatures=5000)
+                detector_name = "ORB"
+                self.logger.info("Using ORB detector (SIFT not available)")
+        elif detector_name == "sift":
+            try:
+                detector = cv2.SIFT_create()
+                detector_name = "SIFT"
+                self.logger.info("Using SIFT detector")
+            except AttributeError:
+                # Fallback to ORB if SIFT is not available
+                detector = cv2.ORB_create(nfeatures=5000)
+                detector_name = "ORB"
+                self.logger.warning("SIFT requested but not available, falling back to ORB")
+        else:  # orb
+            detector = cv2.ORB_create(nfeatures=5000)
+            detector_name = "ORB"
+            self.logger.info("Using ORB detector")
+        
+        # Detect features
+        kp1, des1 = detector.detectAndCompute(gray1, None)
+        kp2, des2 = detector.detectAndCompute(gray2, None)
+        
+        self.logger.info(f"Detected {len(kp1)} features in image 1, {len(kp2)} in image 2")
+        
+        if des1 is None or des2 is None:
+            raise RuntimeError("OpenCV stitching failed: could not detect features in one or both images")
+        
+        return kp1, des1, kp2, des2, detector_name
+    
+    def _apply_ratio_test(self, des1: np.ndarray, des2: np.ndarray) -> list:
+        """
+        Apply Lowe's ratio test to filter good matches.
+        
+        Args:
+            des1: Descriptors for first image
+            des2: Descriptors for second image
+            
+        Returns:
+            List of good matches
+        """
+        # Create matcher based on descriptor type
+        if des1.dtype == np.uint8:
+            # ORB descriptors - use Hamming distance
+            matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+        else:
+            # SIFT descriptors - use L2 distance
+            matcher = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
+        
+        # Find matches
+        matches = matcher.knnMatch(des1, des2, k=2)
+        
+        # Apply Lowe's ratio test
+        good_matches = []
+        ratio = self.opencv_config["ratio_test"]
+        for pair in matches:
+            if len(pair) == 2:
+                m, n = pair
+                if m.distance < ratio * n.distance:
+                    good_matches.append(m)
+        
+        return good_matches
+    
+    def _compute_homography(self, kp1: list, kp2: list, matches: list) -> tuple:
+        """
+        Compute homography matrix using RANSAC.
+        
+        Args:
+            kp1: Keypoints from first image
+            kp2: Keypoints from second image
+            matches: Good matches between images
+            
+        Returns:
+            Tuple of (homography_matrix, inliers)
+        """
+        if len(matches) < 4:
+            raise RuntimeError(f"OpenCV stitching failed: not enough matches ({len(matches)}) to compute homography (minimum 4 required)")
+        
+        # Extract matched points
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+        
+        # Compute homography with RANSAC
+        threshold = self.opencv_config["ransac_reproj_threshold"]
+        H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, threshold)
+        
+        if H is None:
+            raise RuntimeError("OpenCV stitching failed: homography estimation failed")
+        
+        # Extract inliers
+        inliers = [matches[i] for i in range(len(matches)) if mask[i]]
+        
+        return H, inliers
+    
+    def _warp_and_blend(self, img1: np.ndarray, img2: np.ndarray, H: np.ndarray) -> np.ndarray:
+        """
+        Warp second image and blend with first using distance transform.
+        
+        Args:
+            img1: First image (reference)
+            img2: Second image (to be warped)
+            H: Homography matrix
+            
+        Returns:
+            Blended image
+        """
+        h1, w1 = img1.shape[:2]
+        h2, w2 = img2.shape[:2]
+        
+        # Compute corners of warped image2
+        corners = np.array([
+            [0, 0, 1],
+            [w2, 0, 1],
+            [w2, h2, 1],
+            [0, h2, 1]
+        ], dtype=np.float32)
+        
+        # Apply homography
+        warped_corners = np.dot(H, corners.T).T
+        # Normalize homogeneous coordinates
+        warped_corners = warped_corners[:, :2] / warped_corners[:, 2:]
+        
+        # Find bounding box of warped image
+        min_x = min(0, np.min(warped_corners[:, 0]))
+        max_x = max(w1, np.max(warped_corners[:, 0]))
+        min_y = min(0, np.min(warped_corners[:, 1]))
+        max_y = max(h1, np.max(warped_corners[:, 1]))
+        
+        # Create translation matrix to ensure positive coordinates
+        tx = -min_x
+        ty = -min_y
+        translation = np.array([
+            [1, 0, tx],
+            [0, 1, ty],
+            [0, 0, 1]
+        ], dtype=np.float32)
+        
+        # Adjust homography with translation
+        H_translated = np.dot(translation, H)
+        
+        # Calculate canvas size
+        canvas_width = int(max_x - min_x)
+        canvas_height = int(max_y - min_y)
+        
+        self.logger.info(f"Output canvas size: {canvas_width}x{canvas_height}")
+        
+        # Warp img2 to canvas
+        warped_img2 = cv2.warpPerspective(img2, H_translated, (canvas_width, canvas_height))
+        
+        # Translate img1 to canvas
+        warped_img1 = np.zeros((canvas_height, canvas_width, img1.shape[2]), dtype=img1.dtype)
+        y_offset = int(ty)
+        x_offset = int(tx)
+        warped_img1[y_offset:y_offset+h1, x_offset:x_offset+w1] = img1
+        
+        # Create masks for valid data areas
+        mask1 = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
+        mask1[y_offset:y_offset+h1, x_offset:x_offset+w1] = 255
+        
+        mask2 = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
+        # Create mask from warped image (non-black pixels)
+        if len(warped_img2.shape) == 3:
+            mask2 = np.any(warped_img2 > 0, axis=2).astype(np.uint8) * 255
+        else:
+            mask2 = (warped_img2 > 0).astype(np.uint8) * 255
+        
+        # Find overlap area
+        overlap = cv2.bitwise_and(mask1, mask2)
+        
+        # For areas where only one image exists, use that image directly
+        only_img1 = cv2.bitwise_and(mask1, cv2.bitwise_not(mask2))
+        only_img2 = cv2.bitwise_and(mask2, cv2.bitwise_not(mask1))
+        
+        # For overlap area, use distance transform for feathered blending
+        if np.any(overlap):
+            # Compute distance transforms
+            dist1 = cv2.distanceTransform(only_img1 | overlap, cv2.DIST_L2, 5)
+            dist2 = cv2.distanceTransform(only_img2 | overlap, cv2.DIST_L2, 5)
+            
+            # Normalize distances to weights
+            weight_sum = dist1 + dist2
+            # Avoid division by zero
+            weight_sum[weight_sum == 0] = 1
+            
+            # Compute normalized weights
+            w1 = dist1 / weight_sum
+            w2 = dist2 / weight_sum
+            
+            # Apply blending in overlap area
+            result = np.zeros_like(warped_img1, dtype=np.float32)
+            if len(warped_img1.shape) == 3:
+                for c in range(warped_img1.shape[2]):
+                    result[:, :, c] = (
+                        w1 * warped_img1[:, :, c].astype(np.float32) +
+                        w2 * warped_img2[:, :, c].astype(np.float32)
+                    )
+            else:
+                result = (
+                    w1 * warped_img1.astype(np.float32) +
+                    w2 * warped_img2.astype(np.float32)
+                )
+            result = np.clip(result, 0, 255).astype(np.uint8)
+        else:
+            # No overlap, just combine images
+            result = warped_img1.copy()
+        
+        # Apply single-image areas
+        # In areas where only img1 exists, keep img1
+        # In areas where only img2 exists, use img2
+        if len(result.shape) == 3:
+            for c in range(result.shape[2]):
+                result[only_img1 > 0, c] = warped_img1[only_img1 > 0, c]
+                result[only_img2 > 0, c] = warped_img2[only_img2 > 0, c]
+        else:
+            result[only_img1 > 0] = warped_img1[only_img1 > 0]
+            result[only_img2 > 0] = warped_img2[only_img2 > 0]
+        
+        return result
+    
+    def _save_pixel_space_tiff(self, image: np.ndarray, output_path: str) -> None:
+        """
+        Save image as non-georeferenced TIFF with compression.
+        
+        Args:
+            image: Image to save
+            output_path: Path to save the image
+        """
+        # Try to save with cv2 first (simpler)
+        try:
+            # Save with LZW compression if possible
+            cv2.imwrite(output_path, image, [cv2.IMWRITE_TIFF_COMPRESSION, 5])  # LZW
+            self.logger.info(f"Saved orthophoto with LZW compression: {output_path}")
+            return
+        except Exception as e:
+            self.logger.warning(f"Could not save with LZW compression: {e}")
+        
+        # Fallback to GDAL for more control
+        try:
+            from osgeo import gdal, gdalconst
+            gdal.UseExceptions()
+            
+            # Create driver
+            driver = gdal.GetDriverByName('GTiff')
+            
+            # Determine image dimensions and bands
+            if len(image.shape) == 2:
+                height, width = image.shape
+                bands = 1
+            else:
+                height, width, bands = image.shape
+            
+            # Create dataset
+            options = [
+                'COMPRESS=LZW',
+                'TILED=YES',
+                'BIGTIFF=IF_SAFER'
+            ]
+            dst_ds = driver.Create(output_path, width, height, bands, gdal.GDT_Byte, options=options)
+            
+            # Write data
+            if bands == 1:
+                dst_ds.GetRasterBand(1).WriteArray(image)
+            else:
+                # OpenCV uses BGR, GDAL expects RGB - but since this is pixel-space,
+                # we'll keep the BGR order to maintain consistency
+                for i in range(bands):
+                    dst_ds.GetRasterBand(i + 1).WriteArray(image[:, :, i])
+            
+            # Close dataset
+            dst_ds = None
+            self.logger.info(f"Saved orthophoto with GDAL: {output_path}")
+        except Exception as e:
+            # Final fallback - save with cv2 without compression
+            self.logger.warning(f"Could not save with GDAL: {e}")
+            cv2.imwrite(output_path, image)
+            self.logger.info(f"Saved orthophoto without compression: {output_path}")

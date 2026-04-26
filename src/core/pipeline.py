@@ -169,6 +169,7 @@ class Pipeline:
         input_path: str,
         output_dir: Optional[str] = None,
         sensor_type: Optional[str] = None,
+        stitching_method: Optional[str] = None,
     ) -> PipelineResult:
         """
         Complete data processing cycle with scientific methodology
@@ -177,6 +178,7 @@ class Pipeline:
             input_path: Path to input data
             output_dir: Directory for saving results
             sensor_type: Sensor type ('rgb', 'hyperspectral', or None for auto-detection)
+            stitching_method: Orthophoto stitching method ('gdal', 'opencv', 'odm')
 
         Returns:
             Dictionary with processing results
@@ -217,7 +219,7 @@ class Pipeline:
 
             # Stage 2: Orthophoto creation (same for both paths)
             self.logger.info("Stage 2: Orthophoto creation")
-            orthophoto_path = self._create_orthophoto(processed_data, output_dir)
+            orthophoto_path = self._create_orthophoto(processed_data, output_dir, stitching_method)
 
             # Collect results
             self.results = {
@@ -252,7 +254,7 @@ class Pipeline:
         return self.hyperspectral_processor.process(input_path, output_dir)
 
     def _create_orthophoto(
-        self, processed_data: Dict[str, Any], output_dir: str
+        self, processed_data: Dict[str, Any], output_dir: str, stitching_method: Optional[str] = None
     ) -> str:
         """
         Create orthophoto
@@ -260,11 +262,26 @@ class Pipeline:
         Args:
             processed_data: Preprocessing results
             output_dir: Directory for saving results
+            stitching_method: Orthophoto stitching method ('gdal', 'opencv', 'odm')
 
         Returns:
             Path to created orthophoto
         """
-        return self.orthophoto_processor.create_orthophoto(processed_data, output_dir)
+        # If stitching method is provided, temporarily override the processor's method
+        # Note: The config uses "processing.orthophoto.stitching_method" while project overrides
+        # use "orthophoto.stitching_method" - both paths are handled by the pipeline executor
+        # and this temporary override mechanism maintains backward compatibility.
+        original_method = None
+        if stitching_method is not None:
+            original_method = self.orthophoto_processor.stitching_method
+            self.orthophoto_processor.stitching_method = stitching_method
+        
+        try:
+            return self.orthophoto_processor.create_orthophoto(processed_data, output_dir)
+        finally:
+            # Restore original method if we changed it
+            if original_method is not None:
+                self.orthophoto_processor.stitching_method = original_method
 
 
     def _get_processing_metadata(self) -> Dict[str, Any]:

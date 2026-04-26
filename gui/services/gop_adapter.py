@@ -103,7 +103,8 @@ class GOPAdapter:
             result = self.pipeline.process(
                 input_path=actual_data_path,
                 output_dir=parameters.get('output_dir'),
-                sensor_type=sensor_type
+                sensor_type=sensor_type,
+                stitching_method=parameters.get('stitching_method', 'gdal')
             )
             return result
         except Exception as e:

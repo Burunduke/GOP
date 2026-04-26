@@ -791,5 +791,56 @@ def register_callbacks(
             raise PreventUpdate
         return []
 
+    @app.callback(
+        [Output("stitching-method-warning", "children"),
+         Output("stitching-method-warning", "className")],
+        Input("stitching-method-dropdown", "value"),
+        prevent_initial_call=False,
+    )
+    def update_stitching_method_warning(selected_method):
+        """Update warning message based on selected stitching method."""
+        if selected_method == "opencv":
+            return (
+                "OpenCV stitching is experimental and may fail on inputs without sufficient overlap or feature points.",
+                "text-warning"
+            )
+        elif selected_method == "odm":
+            return (
+                "OpenDroneMap selected. Make sure `docker` and the ODM image are available on this machine.",
+                "text-muted"
+            )
+        else:
+            return ("", "text-muted")
+
+    @app.callback(
+        Output("page-content", "children", allow_duplicate=True),
+        Input("stitching-method-dropdown", "value"),
+        State("url", "pathname"),
+        prevent_initial_call=True,
+    )
+    def save_stitching_method(selected_method, pathname):
+        """Save selected stitching method to project configuration."""
+        if not pathname or not pathname.startswith("/project/") or not project_manager:
+            raise PreventUpdate
+        
+        project_id = pathname.split("/project/")[-1]
+        project = project_manager.get_project(project_id)
+        if project:
+            # Update processing config with selected stitching method
+            processing_config = project.processing_config
+            if "orthophoto" not in processing_config:
+                processing_config["orthophoto"] = {}
+            processing_config["orthophoto"]["stitching_method"] = selected_method
+            
+            # Save updated project
+            project_manager.update_project(project_id, {"processing_config": processing_config})
+            
+            # Refresh project detail page
+            updated_project = project_manager.get_project(project_id)
+            if updated_project:
+                from gui.components.project_detail import create_project_detail
+                return create_project_detail(updated_project.to_dict())
+        
+        raise PreventUpdate
 
 # Register callbacks function end

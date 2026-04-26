@@ -13,6 +13,29 @@ processing:
   matcher_neighbors: 8            # Number of neighbors for feature matching
   odm_timeout: 7200               # OpenDroneMap timeout in seconds (2 hours)
   
+  # Orthophoto output settings
+  orthophoto:
+    output:
+      compression: LZW       # LZW | DEFLATE | NONE
+      predictor: auto        # auto | 1 | 2 | 3
+      tiled: true
+      block_size: 512
+      bigtiff: IF_SAFER
+      target_dtype: uint8    # uint8 | preserve
+      build_overviews: true
+      overview_levels: [2, 4, 8, 16]
+    blend:
+      enabled: true            # if false, fall back to "last image wins" old behavior
+      method: feather          # feather (distance-transform) is the only method for now
+      feather_distance_px: 0   # 0 = use full distance transform; >0 = clamp weights at this px distance
+    stitching_method: gdal     # gdal | opencv | odm
+    opencv:
+      detector: auto         # auto | sift | orb
+      ratio_test: 0.75
+      ransac_reproj_threshold: 5.0
+      min_matches: 10
+      try_use_gpu: false     # passed to cv2.Stitcher_create if supported
+   
   # Scientific processing parameters
   radiometric_correction:
     method: "empirical_line"        # dark_current, empirical_line, flat_field

@@ -331,7 +331,11 @@ class PipelineExecutor:
             result = self.gop_adapter.process_data(
                 data_path=str(files_dir),
                 processing_type=stage,  # Stage name (not sensor type - GOPAdapter derives that from files)
-                parameters={**config.get(stage, {}), "output_dir": run_folder}
+                parameters={
+                    **config.get(stage, {}),
+                    "output_dir": run_folder,
+                    "stitching_method": config.get("orthophoto", {}).get("stitching_method", "gdal")
+                }
             )
             return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}
         else:

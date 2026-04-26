@@ -432,3 +432,172 @@ Right after the naming change above, a regression slipped through: new projects 
 - **Fix:** Modified `gop_adapter.py` to pass the directory path so all files are processed together in a single pipeline run.
 - **Files changed:** [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:95) (line 95).
 - **Verification:** The call chain is now: project run → adapter (once) → pipeline (once) → orthophoto stage (once with all TIFFs).
+
+---
+
+## Recent changes — Orthophoto stitching pipeline overhaul — 2026-04-26
+
+This section is written for a junior Python developer joining the project. Read it top-to-bottom before touching the orthophoto code.
+
+### A. What changed and why
+
+**Original problem (reported by the user):**
+- The pipeline produced a **~3.5 GB** orthophoto from just two input images.
+- The two images were placed **side by side on a huge canvas** instead of being stitched into a single mosaic — there was a clear gap between them.
+
+**Root causes identified:**
+1. The output writer used the default GDAL settings (`float32`, no compression, no overviews, loose bounding box) → file size exploded.
+2. The merge step was a plain `gdal_merge.py` call ("last image wins"), which does not blend overlap regions — and if the inputs don't actually overlap geographically, no merge step can stitch them.
+3. There was no way to choose a non-georeferenced (feature-based) stitcher when GPS/CRS metadata was unreliable.
+
+**High-level solution:**
+- Introduced a single **public entry point** [`OrthophotoProcessor.create_orthophoto()`](src/processing/orthophoto.py:155) that **dispatches** to one of three pluggable stitching backends via [`_dispatch_stitching()`](src/processing/orthophoto.py:225):
+  1. [`_create_with_gdal()`](src/processing/orthophoto.py:763) — georeferenced warp + distance-transform feather blend (the new default).
+  2. [`_create_with_opencv()`](src/processing/orthophoto.py:1134) — feature-based stitching with `cv2.Stitcher` and a manual SIFT/ORB + RANSAC fallback.
+  3. [`_create_with_odm()`](src/processing/orthophoto.py:262) — full OpenDroneMap photogrammetry pipeline (Docker-preferred, native fallback).
+- Every method's output is written through the **same compressed/tight-bbox/uint8/overviews TIFF writer**, so the 3.5 GB problem is fixed regardless of which backend is chosen.
+
+### B. New configuration
+
+The new orthophoto-related knobs live under `processing.orthophoto.*` in [`config.yaml`](config.yaml:17). Copy-paste-ready snippet:
+
+```yaml
+processing:
+  orthophoto:
+    stitching_method: gdal      # gdal | opencv | odm — which backend to use by default
+    output:
+      compression: LZW          # LZW | DEFLATE | NONE — TIFF compression codec
+      predictor: auto           # auto | 1 | 2 | 3 — LZW/DEFLATE predictor (auto = pick by dtype)
+      tiled: true               # write tiled TIFF (much better for overviews + random access)
+      block_size: 512           # tile edge in pixels
+      bigtiff: IF_SAFER         # YES | NO | IF_NEEDED | IF_SAFER — BigTIFF policy
+      target_dtype: uint8       # uint8 | preserve — downcast float/int16 to uint8 (huge size win)
+      build_overviews: true     # build internal pyramids so the file opens fast in QGIS
+      overview_levels: [2, 4, 8, 16]   # decimation factors for overviews
+    blend:
+      enabled: true             # if false, fall back to "last image wins" GDAL behavior
+      method: feather           # feather (distance-transform) is the only method for now
+      feather_distance_px: 0    # 0 = full distance transform; >0 = clamp weights at this px distance
+    opencv:
+      detector: auto            # auto | sift | orb — auto tries SIFT first, falls back to ORB
+      ratio_test: 0.75          # Lowe's ratio test threshold (lower = stricter)
+      ransac_reproj_threshold: 5.0   # RANSAC reprojection error in pixels
+      min_matches: 10           # minimum good matches required to compute homography
+      try_use_gpu: false        # passed to cv2.Stitcher_create if supported
+```
+
+> ⚠️ **Heads up — config path mismatch (see "Issues to address" below):** the OpenCV block in the *current* [`config.yaml`](config.yaml:34) is at `processing.opencv.*` (top-level), but [`OrthophotoProcessor.__init__`](src/processing/orthophoto.py:74) reads from `processing.orthophoto.opencv.*`. Until that is reconciled, the OpenCV settings in `config.yaml` are ignored and the in-code defaults are used.
+
+All keys have backward-compatible defaults — `Config.get("...", default)` is used everywhere in [`orthophoto.py`](src/processing/orthophoto.py:53), so old `config.yaml` files that don't have the new sections still load.
+
+### C. Architecture diagram (text)
+
+```
+GUI dropdown (project_detail.py)
+        │  user picks "gdal" / "opencv" / "odm"
+        ▼
+callbacks.py  →  ProjectManager.update_project   (persists to project.json)
+        │
+        ▼
+PipelineExecutor._run_stage  (reads project.processing_config.orthophoto.stitching_method)
+        │  passes as parameters["stitching_method"]
+        ▼
+GOPAdapter.process_data  →  Pipeline.process(stitching_method=...)
+        │
+        ▼
+Pipeline._create_orthophoto  (temporarily sets orthophoto_processor.stitching_method)
+        │
+        ▼
+OrthophotoProcessor.create_orthophoto  →  _dispatch_stitching
+        │
+        ├──► _create_with_gdal     (warp → feather blend → optimize → uint8 → overviews)
+        ├──► _create_with_opencv   (cv2.Stitcher → manual SIFT/ORB fallback → pixel-space TIFF)
+        └──► _create_with_odm      (Docker run → optimize_orthophoto → uint8 → overviews)
+                                                  │
+                                                  ▼
+                                         orthophoto.tif (LZW, tiled, uint8, overviews)
+```
+
+### D. The three stitching methods — when to use each
+
+#### 1. GDAL (default, recommended)
+- **Use when:** input TIFFs are properly georeferenced (CRS + geotransform) and physically overlap.
+- **How it works:** computes a tight common bounding box, [`gdal.Warp`](src/processing/orthophoto.py:911) all inputs onto the same grid, then a per-pixel **distance-transform feather blend** ([`_compute_distance_weights`](src/processing/orthophoto.py:567) + [`_blend_tiles`](src/processing/orthophoto.py:644)) to remove visible seams in overlap zones.
+- **Output:** georeferenced, LZW-compressed, tiled, `uint8`, with overviews. Smallest file size of the three.
+- **Speed:** fastest.
+
+#### 2. OpenCV (experimental)
+- **Use when:** inputs are **not** georeferenced (e.g. raw drone JPEGs without RTK), or georeferencing is unreliable, but they share visible features in overlap regions.
+- **How it works:** loads + normalizes images to `uint8` BGR ([`_load_and_normalize`](src/processing/orthophoto.py:1175)), tries [`cv2.Stitcher_create`](src/processing/orthophoto.py:1265) first, and on failure falls back to a manual pipeline: SIFT (preferred) or ORB → BFMatcher + Lowe's ratio test → RANSAC homography → distance-transform feather blend ([`_warp_and_blend`](src/processing/orthophoto.py:1518)). Pairwise only — for N > 2 images it stitches sequentially.
+- **Output:** **pixel-space** TIFF (no CRS!) plus an optional PNG preview. LZW-compressed.
+- **Caveat:** raises a clear `RuntimeError` if matches < `opencv.min_matches`.
+
+#### 3. ODM (OpenDroneMap)
+- **Use when:** highest possible quality is needed and the user is willing to wait. Real photogrammetry — runs SfM, dense matching, mesh, orthorectification.
+- **How it works:** pre-flight checks Docker availability and the `opendronemap/odm` image ([`_should_use_docker`](src/processing/orthophoto.py:118)); falls back to a native install if Docker isn't there. Stages inputs in a temp dir, runs ODM with a configurable timeout (`processing.odm_timeout`, default 7200 s), then post-processes the `odm_orthophoto.tif` through the **same** [`optimize_orthophoto()`](src/processing/orthophoto.py:1052) used by the GDAL path → identical compression/tiling/uint8/overviews behavior.
+- **Output:** georeferenced, optimized TIFF.
+- **Caveat:** if neither Docker (with the ODM image) nor a native install is found, raises an actionable `RuntimeError` with installation pointers.
+
+### E. How to choose in the GUI
+
+A `dbc.Select` with **id `stitching-method-dropdown`** lives on the **Processing** tab of the project detail page ([`project_detail.py:273`](gui/components/project_detail.py:273)) with options *GDAL*, *OpenCV*, *ODM* and a **default value of `gdal`**. The selection is persisted on the [`Project.processing_config["orthophoto"]["stitching_method"]`](gui/models/project.py:71) field via the [`save_stitching_method` callback](gui/components/callbacks.py:821), and a sibling `stitching-method-warning` element ([`callbacks.py:794`](gui/components/callbacks.py:794)) displays inline guidance when the user picks `opencv` (experimental warning) or `odm` (Docker reminder).
+
+### F. Dependencies the user must install
+
+- **OpenCV path:** `pip install opencv-contrib-python` (the `-contrib` variant is required for SIFT in older OpenCV builds; modern wheels have SIFT in the main package too).
+  > Note: `requirements.txt` is in [`.codeassistantignore`](.codeassistantignore:1), so the agent did **not** edit it — please add `opencv-contrib-python` to it manually if it isn't there.
+- **ODM path:** Docker Desktop (or `docker` CLI on Linux) **plus** `docker pull opendronemap/odm`. Native ODM installs at `/opt/opendronemap`, `/usr/local/opendronemap`, or `~/OpenDroneMap` are also auto-detected.
+- **GDAL path:** no new dependencies. Already required by the rest of the project. `scipy` (used for the distance transform) is also already a dependency.
+
+### G. Known caveats and limitations
+
+- **OpenCV path produces no CRS.** The output TIFF is pixel-space; tools like QGIS will load it but won't know where it is on Earth. Don't feed this output to anything that expects a georeferenced raster.
+- **OpenCV manual fallback is pairwise only.** For N > 2 images it stitches them sequentially left-to-right; this can drift. Prefer `cv2.Stitcher` (the primary path) when possible.
+- **ODM is slow.** Multi-minute to multi-hour runtimes are normal; the timeout default is 2 hours.
+- **GDAL feather blending requires actual overlap.** If the two input images don't overlap geographically, the result will look like two separate footprints with empty space between them. This is **most likely the root cause of the user's original screenshot** — no stitcher, including ODM or OpenCV, can invent pixels in a gap. The good news is the file size is now small even in that case.
+
+### H. Expected behavior on the user's original two-image case
+
+- **File size:** **~3.5 GB → likely under 500 MB** (often a few hundred MB) thanks to `uint8` downcast + LZW compression + tight bounding box + internal overviews. Exact size depends on input resolution.
+- **Visual stitching:**
+  - If the two images **do** overlap → GDAL feather blending will produce a seamless mosaic.
+  - If they **don't** overlap (the most likely original cause) → both will appear in their correct geographic positions inside a much smaller file, but with a visible gap. Switching to ODM or OpenCV will **not** fix this — the user needs additional images that cover the gap.
+
+### I. Issues to address in a follow-up
+
+The orchestrator should decide whether to dispatch a code-mode follow-up for these. They were found during the read-only review and **were not fixed in this subtask** (architect mode cannot edit `.py`).
+
+1. ⚠️ **Config path mismatch for OpenCV settings.** [`config.yaml:34`](config.yaml:34) places the OpenCV block at `processing.opencv.*`, but [`OrthophotoProcessor.__init__`](src/processing/orthophoto.py:74) reads from `processing.orthophoto.opencv.*`. Result: OpenCV knobs from `config.yaml` are silently ignored; in-code defaults are used. **Fix:** either move the YAML block under `processing.orthophoto.opencv` (matches this document's recommended layout and the prompt's expected tree), or change the code paths in [`orthophoto.py:74-80`](src/processing/orthophoto.py:74) to read from `processing.opencv.*`. The first option is preferable because the prompt and this doc both describe `orthophoto.opencv`.
+2. ⚠️ **Pipeline executor reads from a non-standard path.** [`pipeline_executor.py:337`](gui/services/pipeline_executor.py:337) reads `config.get("orthophoto", {}).get("stitching_method", "gdal")` — i.e. from the project's `processing_config["orthophoto"]["stitching_method"]`, which is what the GUI writes. That part works. But the in-process `Config` singleton key is `processing.orthophoto.stitching_method`. The two paths are reconciled by `Pipeline._create_orthophoto` overriding `orthophoto_processor.stitching_method` for the duration of the call ([`pipeline.py:271-281`](src/core/pipeline.py:271)), so it functions — but the dual key naming is confusing. Worth a doc comment or a small helper to centralize the lookup.
+3. ⚠️ **Dispatcher branch is dead.** In [`_dispatch_stitching`](src/processing/orthophoto.py:250) the `if self.stitching_method == "odm"` branch and the `else` branch call the method with the same `(tiff_paths, output_dir)` signature — the ODM lambda already captures `processed_data` via closure. The two branches are functionally identical; the explicit `if` is dead code. Harmless, but confusing for a junior reader.
+4. ✅ **No old `gdal_merge.py` subprocess calls remain.** A grep confirms the legacy `subprocess.run([..., "gdal_merge.py", ...])` paths have been replaced by `gdal.Warp`. The fallback "last image wins" path under `blend.enabled=false` ([`orthophoto.py:868-911`](src/processing/orthophoto.py:868)) uses `gdal.Warp` rather than `gdal_merge.py`, which is the right choice.
+5. ⚠️ **`subprocess` import still needed for ODM but its purpose is no longer obvious.** [`orthophoto.py:10`](src/processing/orthophoto.py:10) imports `subprocess` only for ODM and Docker probes. Not dead, but a one-line comment near the import would help future readers.
+6. ⚠️ **`shutil` is imported twice.** Top-level at [`orthophoto.py:9`](src/processing/orthophoto.py:9) and again locally inside the ODM cleanup block at [`orthophoto.py:400`](src/processing/orthophoto.py:400). Harmless but should be removed.
+7. ⚠️ **`_convert_to_uint8` references `band.GetNoDataValue()` after the GDAL dataset context manager has exited** ([`orthophoto.py:449`](src/processing/orthophoto.py:449)). On strict GDAL builds this can raise; on most builds it works because the band Python object still holds a reference. Worth capturing the nodata value inside the `with` block.
+
+### Review checklist results
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 1 | Public entry point unchanged | ✅ | [`create_orthophoto(processed_data, output_dir)`](src/processing/orthophoto.py:155) — same 2-arg signature as before. |
+| 2 | Dispatcher correctness | ✅ | [`_dispatch_stitching`](src/processing/orthophoto.py:225) covers `gdal`/`opencv`/`odm`; default `gdal`; unknown values raise `ValueError`. (Minor dead `if/else` branch — see issue #3.) |
+| 3 | GDAL path | ✅ | Georeferenced output, distance-transform feather blend ([`_compute_distance_weights`](src/processing/orthophoto.py:567)), LZW + tiled + uint8 + overviews + tight bbox writer. |
+| 4 | OpenCV path | ✅ | Graceful `CV2_AVAILABLE` guard, `cv2.Stitcher` first, manual SIFT/ORB fallback, clear error on insufficient matches, uint8 LZW pixel-space TIFF. |
+| 5 | ODM path | ✅ | Docker + native pre-flight with actionable error, output post-processed via [`optimize_orthophoto`](src/processing/orthophoto.py:1052), temp dir cleaned up, stable `output_path`, configurable timeout. |
+| 6 | Config backward-compatible | ⚠️ | All loads use defaults — old configs still work. **But** the OpenCV block in `config.yaml` is at the wrong path (issue #1). |
+| 7 | GUI plumbing | ✅ | Stable `stitching-method-dropdown` id, default `gdal`, persisted on `project.processing_config.orthophoto.stitching_method`, forwarded through pipeline_executor → gop_adapter → `Pipeline.process(stitching_method=...)` → temporary attr override on the processor. |
+| 8 | No dead/duplicate code | ⚠️ | No legacy `gdal_merge.py` subprocess calls. But: dead dispatcher branch (issue #3), duplicate `shutil` import (issue #6). |
+| 9 | No tests added | ✅ | Confirmed — no test files added or modified. |
+| 10 | Logging | ✅ | Each method logs the chosen method, file count, and (for GDAL/optimize) input → output byte sizes with a percentage reduction. |
+
+### Files touched across Subtasks 1–5
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) — main file; new dispatcher + 3 backends + writer.
+- [`src/core/pipeline.py`](src/core/pipeline.py:1) — added `stitching_method` parameter on `Pipeline.process`.
+- [`src/core/config.py`](src/core/config.py:1) — defaults for the new orthophoto sections.
+- [`config.yaml`](config.yaml:17) — new `processing.orthophoto.{output,blend,stitching_method}` and `processing.opencv.*` sections (note path mismatch above).
+- [`gui/models/project.py`](gui/models/project.py:71) — default `stitching_method: gdal` on `Project.processing_config`.
+- [`gui/components/project_detail.py`](gui/components/project_detail.py:273) — dropdown UI element.
+- [`gui/components/callbacks.py`](gui/components/callbacks.py:794) — warning + persist callbacks.
+- [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py:337) — forwards the value into `parameters`.
+- [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:107) — forwards `stitching_method` to `Pipeline.process`.

@@ -204,7 +204,7 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                             html.H6(file.get("filename", "Untitled"),
                                                    className="mb-1"),
                                             html.Div([
-                                                html.P(f"Type: гиперспектральный ({'RGB' if file.get('file_type') == 'rgb' else 'HS'}) | "
+                                                html.P(f"Type: {'RGB' if file.get('file_type') == 'rgb' else 'гиперспектральный'} | "
                                                        f"Size: {format_file_size(file.get('file_size', 0))} | "
                                                        f"Uploaded: {format_date(file.get('upload_date', ''))}",
                                                        className="mb-1 text-muted small"),
@@ -264,6 +264,26 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                                  "value": "atmospheric_correction"},
                                             ],
                                             value=["atmospheric_correction"],
+                                        ),
+                                    ]),
+                                    
+                                    # Stitching method dropdown
+                                    html.Div([
+                                        html.H6("Stitching method", className="mb-3"),
+                                        dbc.Select(
+                                            id="stitching-method-dropdown",
+                                            options=[
+                                                {"label": "GDAL (georeferenced merge + feather blend) — recommended", "value": "gdal"},
+                                                {"label": "OpenCV (feature-based, experimental)", "value": "opencv"},
+                                                {"label": "OpenDroneMap (ODM)", "value": "odm"},
+                                            ],
+                                            value=project.get("processing_config", {}).get("orthophoto", {}).get("stitching_method", "gdal"),
+                                            className="mb-2"
+                                        ),
+                                        html.Small(
+                                            id="stitching-method-warning",
+                                            className="text-muted",
+                                            children=""
                                         ),
                                     ]),
                                 ], width=6),
