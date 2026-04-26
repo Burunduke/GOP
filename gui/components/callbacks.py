@@ -833,7 +833,7 @@ def register_callbacks(
             processing_config["orthophoto"]["stitching_method"] = selected_method
             
             # Save updated project
-            project_manager.update_project(project_id, {"processing_config": processing_config})
+            project_manager.update_processing_config(project_id, {"orthophoto": {"stitching_method": selected_method}})
             
             # Refresh project detail page
             updated_project = project_manager.get_project(project_id)

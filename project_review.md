@@ -649,3 +649,23 @@ In the overlap zone, the imagery from the image that **actually has data** wins;
 - Try raising `edge_erosion_px` to `4` or `6` if a thin black halo remains at seams.
 - If the inputs use a **non-zero pad color** (e.g. white), set `input_nodata` accordingly. Currently only a single integer is supported; a different color would be a follow-up enhancement.
 - If the inputs have an **alpha channel**, set `input_nodata: alpha`.
+
+### K. Recent Fixes — 2026-04-26
+
+Two runtime bugs surfaced after the orthophoto stitching overhaul and were fixed today.
+
+#### 1. `ProjectManager.update_project()` TypeError when saving stitching method
+
+- **File changed:** [`gui/components/callbacks.py`](gui/components/callbacks.py:836) — function `save_stitching_method` (around line 836).
+- **Symptom:** `TypeError: ProjectManager.update_project() takes 2 positional arguments but 3 were given`, raised when the user picked a stitching method in the GUI dropdown.
+- **Root cause:** the callback called `project_manager.update_project(project_id, {"processing_config": processing_config})` with a positional dict, but [`ProjectManager.update_project(self, project_id, **kwargs)`](gui/services/project_manager.py:1) only accepts keyword arguments.
+- **Fix:** replaced the call with the dedicated [`project_manager.update_processing_config(project_id, {"orthophoto": {"stitching_method": selected_method}})`](gui/services/project_manager.py:1), which is purpose-built for merging processing configuration and matches the [`ProcessingConfig`](gui/models/project.py:1) dataclass in [`gui/models/project.py`](gui/models/project.py:1).
+- **Why this approach:** reuses the existing API, no signature changes, and matches the pattern used elsewhere in the codebase.
+
+#### 2. `NameError: name 'warped_paths' is not defined` in orthophoto creation
+
+- **File changed:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) — function `_warp_to_common_grid`.
+- **Symptom:** `OrthophotoProcessor - ERROR - Error creating orthophoto with GDAL: name 'warped_paths' is not defined`, raised after warping the first image.
+- **Root cause:** `warped_paths` was appended to and returned, but never initialized at the start of the function.
+- **Fix:** added `warped_paths = []` at function scope, just before the per-image warping loop, so the variable is always defined before any reference (including error/cleanup paths).
+- **Why this approach:** minimal change, correct scope, preserves existing cleanup via the `tempfile.TemporaryDirectory()` context manager.

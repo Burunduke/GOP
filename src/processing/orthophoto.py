@@ -574,6 +574,9 @@ class OrthophotoProcessor:
         # Get nodata configuration
         input_nodata = self.blend_config["input_nodata"]
         
+        # Initialize the list to store warped file paths
+        warped_paths = []
+        
         for i, tiff_path in enumerate(tiff_paths):
             warped_path = os.path.join(temp_dir, f"warped_{i}.tif")
             self.logger.info(f"Warping image {i+1}/{len(tiff_paths)}: {os.path.basename(tiff_path)}")
