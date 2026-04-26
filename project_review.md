@@ -486,3 +486,35 @@ Users can experiment with different `input_nodata` values or switch to a differe
 - ✅ No new dependencies, no new config keys, no edits outside the two methods.
 
 **No follow-up needed** unless profiling on production data still shows pressure — in that case the next lever would be to chunk pass-1 mask construction by raster blocks instead of full-image arrays.
+
+### Performance: second round — cv2 distance transform + uint8 weights — 2026-04-26
+
+**Symptom:** After the first round, peak RAM dropped to ~10 GB (no more freezes) but still high. Two remaining hot allocations were the `distance_transform_edt` float64 intermediate (~3.2 GB momentarily for a 20k×20k canvas) and the float32 weight arrays themselves (~1.6 GB each on disk and in memory).
+
+**Fixes applied (all in [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1)):**
+
+1. **New helper [`OrthophotoProcessor._edt()`](src/processing/orthophoto.py:696)** — Euclidean distance transform on a bool mask returning **float32 directly**. Prefers `cv2.distanceTransform(src, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)` when `CV2_AVAILABLE`; falls back to `scipy.ndimage.distance_transform_edt(...).astype(np.float32, copy=False)` otherwise. Eliminates the float64 intermediate completely on machines that have OpenCV (cv2 is already an optional dependency used elsewhere in this file).
+2. **`_compute_distance_weights`** now calls `self._edt(np.asarray(mask, dtype=bool))` instead of `distance_transform_edt(~~mask)` (the double-inversion was a no-op anyway).
+3. **Quantize weights to `uint8` on save** — `weights_u8 = np.clip(weights * 255.0 + 0.5, 0, 255).astype(np.uint8)` then `np.save(...)`. Saves 4× both RAM (during save) and disk space.
+4. **`_blend_tiles`** casts only the small per-tile slice back to float32 and divides by 255: `w[y:y+th, x:x+tw].astype(np.float32) / 255.0`. The mmap stays untouched; the cast cost is per-tile, not per-canvas.
+
+**Why this approach:**
+- `cv2.distanceTransform` returns `float32` natively and is ~2-3× faster than scipy. Using it avoids ever allocating a full-canvas float64 array.
+- Quantizing weights to uint8 introduces ≤ 1/255 (~0.4%) error per pixel — invisible after the per-tile re-normalization in the blender.
+- The data contract between the two methods (`weights_*.npy` files) is preserved; only the dtype changed.
+
+**Junior-friendly takeaways:**
+1. `scipy.ndimage.distance_transform_edt` always returns `float64`. If you don't need that precision, `cv2.distanceTransform` is the same operation but in `float32` — half the RAM, no cast needed.
+2. When two stages communicate via `.npy` files, you can pick the smallest dtype that fits the value range. Weights in [0, 1] fit perfectly in uint8 quantized to [0, 255]; cast back only when you need the math.
+3. Always provide a graceful fallback when an optional dependency (cv2 here) might be absent. A small private helper like `_edt` is the cleanest pattern.
+
+**Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) — new method `_edt` (line 696), updates inside `_compute_distance_weights` (≈ line 893 and 911), and slice cast in `_blend_tiles` (≈ lines 1011–1013).
+
+**Verification:**
+- ✅ `ast.parse` passes.
+- ✅ `distance_transform_edt(...)` no longer called inside `_compute_distance_weights` (only inside the `_edt` fallback path).
+- ✅ `weights_*.npy` files now stored as `np.uint8`. `_blend_tiles` divides by 255.0 in the per-tile slice.
+- ✅ Function signatures, return types, config keys, top-level imports — all unchanged.
+- ✅ All previous invariants hold: ExitStack for warped datasets, `mmap_mode='r'` for weight files, mask streaming pass 1 / pass 2, single-image fast-path weights, Windows file-lock safety.
+
+**Expected impact:** peak RAM should drop from ~10 GB toward ~5–6 GB on a 20k×20k canvas (≈ 3 GB removed by killing the float64 distance transform, ≈ 1.2 GB by uint8 weights). If production data still shows pressure, the next lever is **Option 3** (eliminate the `weights_*.npy` files entirely and have `_blend_tiles` consume `dist_transform` slices directly via per-image disk memmaps written tile-aligned). That is invasive — touches the data contract — so we stop here unless profiling demands it.

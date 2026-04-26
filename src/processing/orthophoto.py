@@ -693,6 +693,29 @@ class OrthophotoProcessor:
             
         return valid_mask
         
+    def _edt(self, mask: np.ndarray) -> np.ndarray:
+        """Euclidean distance transform of a boolean mask, returning float32.
+        
+        Prefers cv2.distanceTransform (returns float32 directly, ~2-3x faster, no
+        float64 intermediate). Falls back to scipy.ndimage.distance_transform_edt
+        when OpenCV is unavailable.
+        
+        Args:
+            mask: 2D bool array. Distance is computed FROM zero pixels (i.e. the
+                  returned value at each True pixel is the distance to the nearest
+                  False pixel).
+        
+        Returns:
+            2D float32 array, same shape as mask.
+        """
+        if CV2_AVAILABLE:
+            # cv2.distanceTransform expects uint8 source, with non-zero = foreground.
+            src = mask.astype(np.uint8, copy=False)
+            # DIST_L2 with DIST_MASK_PRECISE gives near-exact Euclidean; float32 output.
+            return cv2.distanceTransform(src, cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        # Fallback: scipy returns float64 — cast immediately to keep RAM bounded.
+        return distance_transform_edt(mask).astype(np.float32, copy=False)
+        
     def _compute_target_resolution(self, tiff_paths: List[str]) -> tuple:
         """Compute target resolution as the finest (smallest) pixel size across all inputs.
         
@@ -864,12 +887,10 @@ class OrthophotoProcessor:
             # For multi-image areas, compute distance transform
             if np.any(multi_image_area):
                 # Compute distance to nearest invalid pixel within the multi-image area
-                # Invert the mask for distance transform (distance to invalid pixels)
-                inverted_mask = ~mask
-                dist_transform = distance_transform_edt(~inverted_mask)
-                
-                # Cast to float32 to reduce memory usage (edt returns float64)
-                dist_transform = dist_transform.astype(np.float32, copy=False)
+                # Distance from each valid pixel to the nearest invalid pixel.
+                # _edt() returns float32 directly when OpenCV is available, avoiding the
+                # float64 intermediate that scipy.distance_transform_edt would allocate.
+                dist_transform = self._edt(np.asarray(mask, dtype=bool))
                 
                 # Apply feather distance limit if configured
                 if self.blend_config["feather_distance_px"] > 0:
@@ -883,15 +904,17 @@ class OrthophotoProcessor:
                     weights[multi_image_area] = 1.0
                 
                 # Free memory
-                del dist_transform, inverted_mask
+                del dist_transform
             
-            # Save weights to file
+            # Quantize float32 weights in [0, 1] to uint8 in [0, 255] to save 4x RAM/disk.
+            # Blending precision is unaffected because _blend_tiles re-normalizes per tile.
+            weights_u8 = np.clip(weights * 255.0 + 0.5, 0, 255).astype(np.uint8)
             weight_path = os.path.join(temp_dir, f"weights_{i}.npy")
-            np.save(weight_path, weights)
+            np.save(weight_path, weights_u8)
             weight_paths.append(weight_path)
             
             # Free memory
-            del weights, mask, single_image_area, multi_image_area
+            del weights, weights_u8, mask, single_image_area, multi_image_area
         
         # Clean up temporary mask files (best-effort)
         for mask_path in mask_paths:
@@ -983,7 +1006,12 @@ class OrthophotoProcessor:
                         self.logger.info(f"Blending tile {total_tiles}: ({x}, {y}) size {tile_width}x{tile_height}")
                     
                     # Slice each weight array for this tile
-                    tile_weights = [w[y:y+tile_height, x:x+tile_width] for w in weight_arrays]
+                    # Weights are stored as uint8 (0..255) on disk to save RAM/disk space; convert
+                    # the small per-tile slice back to float32 in [0, 1] for the blending math.
+                    tile_weights = [
+                        w[y:y+tile_height, x:x+tile_width].astype(np.float32) / 255.0
+                        for w in weight_arrays
+                    ]
                     
                     # Process each band
                     for band_num in range(1, band_count + 1):
