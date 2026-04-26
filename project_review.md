@@ -518,3 +518,26 @@ Users can experiment with different `input_nodata` values or switch to a differe
 - ✅ All previous invariants hold: ExitStack for warped datasets, `mmap_mode='r'` for weight files, mask streaming pass 1 / pass 2, single-image fast-path weights, Windows file-lock safety.
 
 **Expected impact:** peak RAM should drop from ~10 GB toward ~5–6 GB on a 20k×20k canvas (≈ 3 GB removed by killing the float64 distance transform, ≈ 1.2 GB by uint8 weights). If production data still shows pressure, the next lever is **Option 3** (eliminate the `weights_*.npy` files entirely and have `_blend_tiles` consume `dist_transform` slices directly via per-image disk memmaps written tile-aligned). That is invasive — touches the data contract — so we stop here unless profiling demands it.
+
+### Fix for white-haze nodata blending bug — 2026-04-26
+
+#### 1. Problem observed
+
+In orthophoto outputs, a "white smoke / haze" effect appeared on overlapping image edges where one source image had valid pixels while the other had nodata (black or white border pixels). The mask was not properly excluding these nodata pixels during blending/averaging, so they got averaged with valid pixels and created the bright haze.
+
+#### 2. Root cause
+
+The `_compute_valid_mask` function was not properly detecting both black (0) and white (255) nodata pixels. When the configured nodata value was 0 (black), white pixels (255) were not being treated as nodata, causing them to contribute to the blending process.
+
+#### 3. Fix applied
+
+- Enhanced `_compute_valid_mask` to properly identify both black (0) and white (255) nodata pixels when input_nodata is configured as 0
+- Modified `_compute_distance_weights` to use the updated `_compute_valid_mask` function for more accurate mask computation
+
+#### 4. What the user will see now
+
+Overlap regions now blend correctly without the white smoke/haze effect. Both black and white nodata pixels are properly excluded from the final output.
+
+#### 5. Files modified
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — functions `_compute_valid_mask` (lines 651-710) and `_compute_distance_weights` (lines 810-835)

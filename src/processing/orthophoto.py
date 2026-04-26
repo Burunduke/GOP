@@ -679,11 +679,27 @@ class OrthophotoProcessor:
         if input_nodata is not None and input_nodata != "alpha":
             if bands >= 3:
                 # For RGB images, check if all bands are nodata
-                nodata_condition = np.all(data == input_nodata, axis=2)
-                valid_mask &= ~nodata_condition
+                # Handle both black (0) and white (255) nodata values
+                if isinstance(input_nodata, (int, float)):
+                    # Check for the specific nodata value
+                    nodata_condition = np.all(data == input_nodata, axis=2)
+                    valid_mask &= ~nodata_condition
+                    
+                    # Also check for white (255) if input_nodata is 0 (black)
+                    if input_nodata == 0:
+                        white_condition = np.all(data == 255, axis=2)
+                        valid_mask &= ~white_condition
+                else:
+                    # For other nodata values, check if all bands match
+                    nodata_condition = np.all(data == input_nodata, axis=2)
+                    valid_mask &= ~nodata_condition
             else:
                 # For single band, check if band equals nodata
                 valid_mask &= (data[:, :, 0] != input_nodata)
+                
+                # Also check for white (255) if input_nodata is 0 (black)
+                if input_nodata == 0:
+                    valid_mask &= (data[:, :, 0] != 255)
         
         # Check alpha channel if present
         if has_alpha and bands > 1:
@@ -791,43 +807,32 @@ class OrthophotoProcessor:
                 has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
                 band = src_ds.GetRasterBand(1)
                 nodata = band.GetNoDataValue()
-                input_nodata = self.blend_config["input_nodata"]
                 
-                # Read band 1 data for nodata check
-                band1_data = band.ReadAsArray()
+                # Read all bands data for nodata check
+                if band_count >= 3:
+                    # For multi-band images, read all bands to properly check nodata
+                    bands_data = []
+                    for b in range(1, band_count + 1):
+                        band_data = src_ds.GetRasterBand(b).ReadAsArray()
+                        bands_data.append(band_data)
+                    # Stack bands to create (height, width, bands) array
+                    data = np.stack(bands_data, axis=2)
+                    # Free individual band arrays
+                    for band_data in bands_data:
+                        del band_data
+                else:
+                    # For single band, read as is
+                    band1_data = band.ReadAsArray()
+                    data = band1_data[..., np.newaxis] if band1_data.ndim == 2 else band1_data
                 
                 # Read alpha band if needed
                 alpha_data = None
-                if has_alpha and input_nodata == "alpha":
+                if has_alpha and self.blend_config["input_nodata"] == "alpha":
                     alpha_band = src_ds.GetRasterBand(band_count)
                     alpha_data = alpha_band.ReadAsArray()
                 
-                # Build valid mask using per-band reads to reduce memory usage
-                # Initialize mask as all valid
-                valid_mask = np.ones(band1_data.shape, dtype=bool)
-                
-                # Check first band for nodata values
-                if nodata is not None:
-                    valid_mask &= (band1_data != nodata)
-                
-                # Check for configured nodata color
-                if input_nodata is not None and input_nodata != "alpha":
-                    if band_count >= 3:
-                        # For multi-band images, check if all bands are nodata
-                        # Build the "all bands == input_nodata" mask iteratively to avoid materializing full array
-                        all_eq = (band1_data == input_nodata)
-                        for b in range(2, band_count + 1):
-                            band_data = src_ds.GetRasterBand(b).ReadAsArray()
-                            all_eq &= (band_data == input_nodata)
-                            del band_data  # Free memory immediately
-                        valid_mask &= ~all_eq
-                    else:
-                        # For single band, check if band equals nodata
-                        valid_mask &= (band1_data != input_nodata)
-                
-                # Check alpha channel if present
-                if has_alpha and input_nodata == "alpha" and alpha_data is not None:
-                    valid_mask &= (alpha_data > 0)
+                # Build valid mask using the _compute_valid_mask function
+                valid_mask = self._compute_valid_mask(data, nodata, has_alpha)
                 
                 # Apply erosion if configured
                 edge_erosion_px = self.blend_config["edge_erosion_px"]
@@ -857,7 +862,9 @@ class OrthophotoProcessor:
                     combined_mask += valid_mask.astype(np.uint8)
                 
                 # Free memory
-                del valid_mask, band1_data
+                del valid_mask, data
+                if 'band1_data' in locals():
+                    del band1_data
                 if alpha_data is not None:
                     del alpha_data
         
