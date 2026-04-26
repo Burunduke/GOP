@@ -21,6 +21,7 @@ from ..utils.exceptions import ValidationError
 from ..utils.gdal_utils import open_gdal_dataset
 import numpy as np
 from scipy.ndimage import distance_transform_edt, binary_erosion
+import gc
 
 # Try to import cv2 with graceful error handling
 try:
@@ -1754,6 +1755,7 @@ class OrthophotoProcessor:
                 # Use geo-referenced stitching
                 result_img = self._geo_referenced_stitch(images, tiff_paths, min_x, min_y, max_x, max_y, pixel_size_x, pixel_size_y, srs)
             except Exception as e:
+                self.logger.warning(f"No geotransform on input(s); using feature-based (SIFT) stitching. Quality depends on overlap and texture; with only 2 images results may be unreliable.")
                 self.logger.warning(f"Geo-referenced stitching failed, falling back to homography: {e}")
                 result_img, _ = self._stitch_pair(images[0], images[1])
         else:
@@ -1784,6 +1786,14 @@ class OrthophotoProcessor:
                 else:
                     # Fall back to homography-based stitching
                     if len(images) > 2:
+                        # Count images without geotransforms
+                        missing_geotransform_count = 0
+                        for tiff_path in tiff_paths:
+                            metadata = get_raster_metadata(tiff_path)
+                            geotransform = metadata["geotransform"]
+                            if geotransform is None or all(v == 0 for v in geotransform):
+                                missing_geotransform_count += 1
+                        self.logger.warning(f"No geotransform on {missing_geotransform_count}/{len(tiff_paths)} input(s); using feature-based (SIFT) stitching. Quality depends on overlap and texture; with only 2 images results may be unreliable.")
                         self.logger.info("Manual fallback supports pairwise stitching only; for N>2 inputs, prefer cv2.Stitcher")
                         # Stitch pairs sequentially left-to-right
                         result_img = images[0]
@@ -2159,21 +2169,17 @@ class OrthophotoProcessor:
                     
                     # Process tile
                     if np.any(tile_overlap):
-                        # Compute distance transforms for this tile
-                        tile_dist1 = cv2.distanceTransform(tile_only_img1 | tile_overlap, cv2.DIST_L2, 5)
-                        tile_dist2 = cv2.distanceTransform(tile_only_img2 | tile_overlap, cv2.DIST_L2, 5)
+                        # Compute distance transforms for this tile (ensure float32)
+                        tile_dist1 = cv2.distanceTransform(tile_only_img1 | tile_overlap, cv2.DIST_L2, 5).astype(np.float32)
+                        tile_dist2 = cv2.distanceTransform(tile_only_img2 | tile_overlap, cv2.DIST_L2, 5).astype(np.float32)
                         
-                        # Normalize distances to weights (fix overflow by casting to float32)
-                        tile_dist1 = tile_dist1.astype(np.float32)
-                        tile_dist2 = tile_dist2.astype(np.float32)
-                        
-                        # Normalize each distance map to [0,1] before combining
+                        # Normalize each distance map to [0,1] before combining (in-place where possible)
                         max_dist1 = np.max(tile_dist1)
                         max_dist2 = np.max(tile_dist2)
                         if max_dist1 > 0:
-                            tile_dist1 = tile_dist1 / max_dist1
+                            tile_dist1 /= max_dist1  # In-place division
                         if max_dist2 > 0:
-                            tile_dist2 = tile_dist2 / max_dist2
+                            tile_dist2 /= max_dist2  # In-place division
                         
                         # Compute weight sum with guard against division by zero
                         tile_weight_sum = tile_dist1 + tile_dist2
@@ -2183,17 +2189,26 @@ class OrthophotoProcessor:
                         tile_w1 = np.where(tile_weight_sum > 0, tile_dist1 / tile_weight_sum, 0)
                         tile_w2 = np.where(tile_weight_sum > 0, tile_dist2 / tile_weight_sum, 0)
                         
+                        # Free intermediates
+                        del tile_dist1, tile_dist2, tile_weight_sum
+                        
                         # Apply blending in overlap area for this tile
                         tile_result = np.zeros((tile_h, tile_w, tile_warped_img1.shape[2]), dtype=np.float32)
                         for c in range(tile_warped_img1.shape[2]):
-                            tile_result[:, :, c] = (
-                                tile_w1 * tile_warped_img1[:, :, c].astype(np.float32) +
-                                tile_w2 * tile_warped_img2[:, :, c].astype(np.float32)
-                            )
-                        tile_result = np.clip(tile_result, 0, 255).astype(np.uint8)
+                            # Use in-place operations where possible
+                            weighted_img1 = tile_w1 * tile_warped_img1[:, :, c].astype(np.float32)
+                            weighted_img2 = tile_w2 * tile_warped_img2[:, :, c].astype(np.float32)
+                            tile_result[:, :, c] = weighted_img1 + weighted_img2
+                            # Free intermediates immediately
+                            del weighted_img1, weighted_img2
+                        
+                        tile_result = np.clip(tile_result, 0, 255, out=tile_result).astype(np.uint8)
                         
                         # Copy blended result to output
                         result[y:y_end, x:x_end] = tile_result
+                        
+                        # Free intermediates
+                        del tile_w1, tile_w2, tile_result
                     else:
                         # No overlap in this tile, copy directly
                         result[y:y_end, x:x_end] = tile_warped_img1
@@ -2222,6 +2237,9 @@ class OrthophotoProcessor:
         else:
             result[only_img1 > 0] = warped_img1[only_img1 > 0]
             result[only_img2 > 0] = warped_img2[only_img2 > 0]
+        
+        # Force garbage collection to free any remaining intermediates
+        gc.collect()
         
         return result
     
@@ -2315,6 +2333,9 @@ class OrthophotoProcessor:
         small_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
         
         self.logger.info(f"Downscaled image from {width}x{height} to {new_width}x{new_height} (scale={scale:.3f}) for feature detection")
+        
+        # Force garbage collection to free any intermediates
+        gc.collect()
         
         return small_img, scale
     
@@ -2412,6 +2433,9 @@ class OrthophotoProcessor:
         # Convert to uint8
         result = np.clip(normalized, 0, 255).astype(np.uint8)
         
+        # Force garbage collection to free any remaining intermediates
+        gc.collect()
+        
         self.logger.info("Geo-referenced stitching completed successfully")
         return result
     
@@ -2446,6 +2470,9 @@ class OrthophotoProcessor:
         # Calculate width and height in canvas pixels (use ceil for size)
         width = int(np.ceil((img_max_x - img_min_x) / pixel_size_x))
         height = int(np.ceil((img_max_y - img_min_y) / pixel_size_y))
+        
+        # Force garbage collection to free any intermediates
+        gc.collect()
         
         return offset_x, offset_y, width, height
     
@@ -2490,6 +2517,9 @@ class OrthophotoProcessor:
         # Resample image
         resampled = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
         
+        # Force garbage collection to free any intermediates
+        gc.collect()
+        
         return resampled
     
     def _compute_tile_weights(self, valid_mask: np.ndarray) -> np.ndarray:
@@ -2520,6 +2550,9 @@ class OrthophotoProcessor:
             weights = dist_transform / max_dist
         else:
             weights = np.ones_like(dist_transform, dtype=np.float32)
+        
+        # Force garbage collection to free any intermediates
+        gc.collect()
         
         return weights
     
@@ -2563,13 +2596,18 @@ class OrthophotoProcessor:
         if len(tile_region.shape) == 3:
             # Multi-band image
             for c in range(tile_region.shape[2]):
-                canvas_sum[y_start:y_end, x_start:x_end, c] += (
-                    tile_region[:, :, c].astype(np.float32) * weight_region
-                )
+                # Use in-place operations and explicit float32 casting
+                weighted_tile = tile_region[:, :, c].astype(np.float32)
+                weighted_tile *= weight_region  # In-place multiplication
+                canvas_sum[y_start:y_end, x_start:x_end, c] += weighted_tile
+                # Free intermediate
+                del weighted_tile
         else:
             # Single-band image
-            canvas_sum[y_start:y_end, x_start:x_end, 0] += (
-                tile_region.astype(np.float32) * weight_region
-            )
+            weighted_tile = tile_region.astype(np.float32)
+            weighted_tile *= weight_region  # In-place multiplication
+            canvas_sum[y_start:y_end, x_start:x_end, 0] += weighted_tile
+            # Free intermediate
+            del weighted_tile
         
         weight_sum[y_start:y_end, x_start:x_end] += weight_region

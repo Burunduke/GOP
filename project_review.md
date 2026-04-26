@@ -692,3 +692,57 @@ The OpenCV pipeline produces a continuous mosaic visually comparable to the GDAL
 2. If your inputs already carry geographic coordinates (geotransforms), trust them: feature-match-only stitching can drift and is better used as a *fallback*, not the primary path.
 3. Use `floor` for tile offsets and `ceil` for tile sizes when mapping geographic extents to pixel canvases — this guarantees adjacent tiles touch and you never get one-pixel black seams.
 4. Not every non-zero status from a third-party library is an error. `cv2.Stitcher` status `1` just means "I couldn't stitch — try something else"; log it at `info` and let your fallback do its job.
+
+### Known limitation — Non-georeferenced inputs in the OpenCV stitching pipeline — 2026-04-26
+
+#### 1. Limitation
+
+When input images lack a geotransform, the OpenCV pipeline cannot use the geo-referenced path (see the previous entry "Fix for OpenCV orthophoto black gaps & misplaced tiles") and falls back to feature-based stitching: SIFT keypoints + BFMatcher + RANSAC homography + distance-transform feathering.
+
+#### 2. Why it matters
+
+With only 2 non-georeferenced images, results may be unreliable: small overlap, homogeneous textures (grass, water, snow), or large scale/rotation differences can all cause poor alignment or outright failure. Note also that `cv2.Stitcher` itself requires ≥ 3 images, so it is not available as a safety net in the 2-image case.
+
+#### 3. Mitigation already in place
+
+A `logger.warning` now fires whenever this fallback is triggered, reporting how many of the inputs lack a geotransform so the user can immediately see why the geo-aware path was skipped.
+
+#### 4. Recommendation
+
+Prefer geotagged GeoTIFF inputs whenever possible. For non-georeferenced data, provide ≥ 3 images with substantial overlap and visually distinct texture to give SIFT enough features to match reliably.
+
+### Performance: memory optimization of orthophoto processing functions — 2026-04-26
+
+#### 1. Problem observed
+
+Several functions in the orthophoto processing pipeline were allocating multiple large arrays simultaneously, leading to high peak RAM usage. Functions like `_warp_and_blend`, `_geo_referenced_stitch`, and helper functions were not explicitly freeing intermediate arrays, causing memory to accumulate during processing of large images.
+
+#### 2. Root cause
+
+- Functions were allocating multiple full-canvas float32 arrays simultaneously without explicit cleanup
+- Intermediate variables were not being freed eagerly, relying only on Python's reference counting
+- No explicit garbage collection calls to ensure memory was freed promptly
+- Some operations were not using in-place operations where possible
+
+#### 3. Fix applied
+
+- Added `import gc` at the module level for explicit garbage collection
+- Added `del` statements to explicitly free intermediate arrays in `_warp_and_blend` function
+- Used in-place operations (`/=`) where possible to reduce memory allocations
+- Added `gc.collect()` calls at the end of memory-intensive functions:
+  - `_warp_and_blend`
+  - `_geo_referenced_stitch`
+  - `_compute_tile_weights`
+  - `_resample_to_canvas_resolution`
+  - `_tile_to_canvas_rect`
+  - `_prepare_for_features`
+- Optimized `_blend_tile_into_canvas` to use in-place operations and explicit cleanup
+- Ensured all computations use float32 dtype explicitly
+
+#### 4. What the user will see now
+
+Peak RAM usage during orthophoto processing should be reduced, especially when processing large images. The processing time may be slightly improved due to more efficient memory management. The visual quality of the output remains unchanged.
+
+#### 5. Files modified
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — Added gc import, added explicit memory cleanup in multiple functions, used in-place operations where possible
