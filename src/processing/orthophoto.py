@@ -46,7 +46,7 @@ class OrthophotoProcessor:
             config_instance: Optional configuration instance for dependency injection
         """
         self.config = get_config(config_instance)
-        self.logger = setup_logger("OrthophotoProcessor", level=logging.DEBUG)  # DEBUG level for diagnostics - temporary
+        self.logger = setup_logger("OrthophotoProcessor")  # Revert to default level
         self.odm_path = self._find_odm_path()
         
         # Load orthophoto output configuration with defaults
@@ -648,7 +648,7 @@ class OrthophotoProcessor:
             List of paths to weight files (.npy)
         """
         
-    def _compute_valid_mask(self, warped_array_or_dataset, nodata_value=None, has_alpha=False):
+    def _compute_valid_mask(self, data, nodata_value=None, has_alpha=False):
         """Compute a 2D boolean mask indicating valid pixels.
         
         A pixel is valid if:
@@ -657,15 +657,41 @@ class OrthophotoProcessor:
         - If an alpha band exists in the warped output, alpha > 0.
         
         Args:
-            warped_array_or_dataset: Either a numpy array or GDAL dataset
+            data: numpy array with shape (height, width, bands)
             nodata_value: Nodata value to check against
             has_alpha: Whether the dataset has an alpha band
             
         Returns:
             2D boolean numpy array where True indicates valid pixels
         """
-        # Implementation would go here
-        pass
+        # Assume data is already in (height, width, bands) format
+        height, width, bands = data.shape
+        
+        # Initialize mask as all valid
+        valid_mask = np.ones((height, width), dtype=bool)
+        
+        # Check first band for nodata values
+        if nodata_value is not None:
+            valid_mask &= (data[:, :, 0] != nodata_value)
+        
+        # Check for configured nodata color (default 0)
+        input_nodata = self.blend_config["input_nodata"]
+        if input_nodata is not None and input_nodata != "alpha":
+            if bands >= 3:
+                # For RGB images, check if all bands are nodata
+                nodata_condition = np.all(data == input_nodata, axis=2)
+                valid_mask &= ~nodata_condition
+            else:
+                # For single band, check if band equals nodata
+                valid_mask &= (data[:, :, 0] != input_nodata)
+        
+        # Check alpha channel if present
+        if has_alpha and bands > 1:
+            # Assume last band is alpha
+            alpha_band = data[:, :, -1]
+            valid_mask &= (alpha_band > 0)
+            
+        return valid_mask
         
     def _compute_target_resolution(self, tiff_paths: List[str]) -> tuple:
         """Compute target resolution as the finest (smallest) pixel size across all inputs.
@@ -712,27 +738,6 @@ class OrthophotoProcessor:
             return (xRes, yRes)
         else:
             raise RuntimeError("Could not determine target pixel resolution from inputs; please set processing.orthophoto.output.target_resolution explicitly in config.yaml")
-            # Check first band for nodata values
-            valid_mask &= (data[:, :, 0] != nodata_value)
-        
-        # Check for configured nodata color (default 0)
-        input_nodata = self.blend_config["input_nodata"]
-        if input_nodata is not None and input_nodata != "alpha":
-            if bands >= 3:
-                # For RGB images, check if all bands are nodata
-                nodata_condition = np.all(data == input_nodata, axis=2)
-                valid_mask &= ~nodata_condition
-            else:
-                # For single band, check if band equals nodata
-                valid_mask &= (data[:, :, 0] != input_nodata)
-        
-        # Check alpha channel if present
-        if has_alpha and bands > 1:
-            # Assume last band is alpha
-            alpha_band = data[:, :, -1]
-            valid_mask &= (alpha_band > 0)
-            
-        return valid_mask
         
     def _compute_distance_weights(self, warped_paths: List[str], temp_dir: str) -> List[str]:
         """
