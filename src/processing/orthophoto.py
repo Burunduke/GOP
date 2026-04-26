@@ -623,7 +623,9 @@ class OrthophotoProcessor:
             warp_options = gdal.WarpOptions(**warp_options_dict)
             
             # Perform the warp operation
-            gdal.Warp(warped_path, tiff_path, options=warp_options)
+            # Capture and immediately release the returned dataset to prevent file locks on Windows
+            warped_ds = gdal.Warp(warped_path, tiff_path, options=warp_options)
+            warped_ds = None  # Release dataset to prevent file lock on Windows
             warped_paths.append(warped_path)
             
         return warped_paths
@@ -945,7 +947,7 @@ class OrthophotoProcessor:
                     weighted_sum = None
                     weight_sum = None
         
-        # Close dataset
+        # Close dataset to release file lock on Windows
         dst_ds = None
 
     def _create_with_gdal(self, tiff_paths: List[str], output_dir: str) -> str:

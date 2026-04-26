@@ -669,3 +669,24 @@ Two runtime bugs surfaced after the orthophoto stitching overhaul and were fixed
 - **Root cause:** `warped_paths` was appended to and returned, but never initialized at the start of the function.
 - **Fix:** added `warped_paths = []` at function scope, just before the per-image warping loop, so the variable is always defined before any reference (including error/cleanup paths).
 - **Why this approach:** minimal change, correct scope, preserves existing cleanup via the `tempfile.TemporaryDirectory()` context manager.
+
+#### 3. Windows file lock (`WinError 32`) on temporary warped TIFFs during blending
+
+- **Symptom (log):**
+  ```
+  OrthophotoProcessor - INFO - Computing distance weights for blending
+  OrthophotoProcessor - ERROR - Error creating orthophoto with GDAL: [WinError 32] ... 'C:\Temp\tmpd13illax\warped_0.tif'
+  ```
+- **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — functions `_compute_distance_weights` (≈ lines 750–764) and `_blend_tiles` (≈ lines 922–929).
+- **Root cause:** during the blending step, each `warped_*.tif` was opened via `gdal.Open(...)` and the resulting `Dataset` object was not explicitly released before `tempfile.TemporaryDirectory()` tried to delete the temp files. On Windows, an unreleased GDAL `Dataset` keeps an OS-level file lock, which blocks deletion → `WinError 32`.
+- **Fix:** wrapped each `gdal.Open(...)` of warped temp files inside the project's portable custom context manager [`open_gdal_dataset(...)`](src/utils/gdal_utils.py:1) from [`src/utils/gdal_utils.py`](src/utils/gdal_utils.py:1). This guarantees `ds = None` on both success and exception paths, releasing the file lock before cleanup.
+- **Why this approach:** the custom context manager is portable across all GDAL versions (GDAL's own `with` support requires ≥ 3.8 and GDAL is unpinned in [`requirements.txt`](requirements.txt:1)). It keeps the code junior-friendly and consistent with the rest of the codebase.
+- **Junior-friendly takeaway:** on Windows, GDAL holds an OS file lock for as long as a `Dataset` object exists. Always release datasets — either via the project's `open_gdal_dataset` context manager or by explicitly assigning `ds = None` in a `try/finally` — before any file deletion, rename, or re-open.
+
+#### 4. Additional Windows file lock prevention — 2026-04-26
+
+- **Symptom:** `WinError 32` when cleaning up temporary directory after orthophoto creation.
+- **Root cause:** The `gdal.Warp` function returns a GDAL Dataset object that was not being explicitly released, causing a file lock on Windows that prevented temporary warped TIFF files from being deleted.
+- **Fix:** Captured the return value of `gdal.Warp` and explicitly set it to `None` to release the file lock in `_warp_to_common_grid` function.
+- **Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_warp_to_common_grid` (line 626).
+- **Why this approach:** Ensures that all GDAL Dataset objects are properly released on Windows to prevent file locks during temporary directory cleanup.
