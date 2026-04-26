@@ -24,6 +24,7 @@ processing:
       target_dtype: uint8    # uint8 | preserve
       build_overviews: true
       overview_levels: [2, 4, 8, 16]
+      target_resolution: auto    # auto | <float meters/degrees per pixel> | [xRes, yRes]
     blend:
       enabled: true            # if false, fall back to "last image wins" old behavior
       method: feather          # feather (distance-transform) is the only method for now
