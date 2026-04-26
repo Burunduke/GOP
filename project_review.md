@@ -610,3 +610,29 @@ OpenDroneMap requires a minimum of 3 overlapping images to successfully create a
 - **Root cause:** Missing closing parenthesis in `register_callbacks` function in `gui/components/callbacks.py`
 - **Fix:** Added missing closing parenthesis to properly close the function
 - **Files modified:** [`gui/components/callbacks.py`](gui/components/callbacks.py)
+
+### Fix for OpenCV OutOfMemoryError in _warp_and_blend function — 2026-04-26
+
+#### 1. Problem observed
+
+When running orthophoto stitching with method `opencv` on large images, the `_warp_and_blend` function was failing with `numpy._core._exceptions._ArrayMemoryError: Unable to allocate 2.43 GiB for an array with shape (22427, 29122) and data type float32`. This occurred at line 2027 where `weight_sum = dist1 + dist2` was trying to allocate multiple full-canvas float32 arrays simultaneously, exceeding available RAM.
+
+#### 2. Root cause
+
+The blending step in `_warp_and_blend` was allocating multiple full-canvas float32 arrays (dist1, dist2, weight_sum, weighted images, etc.) simultaneously, with each full-canvas float32 array consuming ~2.43 GiB. The function allocated 6-10 of these arrays at once, exceeding available memory.
+
+#### 3. Fix applied
+
+- Implemented tile-based processing with 2048x2048 tiles to process the canvas in smaller chunks
+- Replaced full-canvas distance transform computations with tile-local computations
+- Ensured only one tile's worth of temporary float32 arrays are allocated at any time
+- Added explicit memory cleanup by letting variables go out of scope at the end of each tile iteration
+- Preserved visual equivalence by maintaining the same distance-based weighting algorithm
+
+#### 4. What the user will see now
+
+Large images can now be processed without running out of memory. The stitching process will be slightly slower due to the tiling overhead, but will complete successfully. The visual quality of the output remains the same.
+
+#### 5. Files modified
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_warp_and_blend` (lines 2020-2081)

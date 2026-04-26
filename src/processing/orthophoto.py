@@ -2019,33 +2019,66 @@ class OrthophotoProcessor:
         
         # For overlap area, use distance transform for feathered blending
         if np.any(overlap):
-            # Compute distance transforms
-            dist1 = cv2.distanceTransform(only_img1 | overlap, cv2.DIST_L2, 5)
-            dist2 = cv2.distanceTransform(only_img2 | overlap, cv2.DIST_L2, 5)
+            # Use tile-based processing to avoid memory issues with large canvases
+            tile_size = 2048  # Process in 2048x2048 tiles
+            result = np.zeros_like(warped_img1, dtype=np.uint8)
             
-            # Normalize distances to weights
-            weight_sum = dist1 + dist2
-            # Avoid division by zero
-            weight_sum[weight_sum == 0] = 1
+            # Process tiles
+            for y in range(0, canvas_height, tile_size):
+                for x in range(0, canvas_width, tile_size):
+                    # Define tile boundaries
+                    y_end = min(y + tile_size, canvas_height)
+                    x_end = min(x + tile_size, canvas_width)
+                    tile_h = y_end - y
+                    tile_w = x_end - x
+                    
+                    # Extract tile regions
+                    tile_overlap = overlap[y:y_end, x:x_end]
+                    tile_only_img1 = only_img1[y:y_end, x:x_end]
+                    tile_only_img2 = only_img2[y:y_end, x:x_end]
+                    tile_warped_img1 = warped_img1[y:y_end, x:x_end]
+                    tile_warped_img2 = warped_img2[y:y_end, x:x_end]
+                    
+                    # Process tile
+                    if np.any(tile_overlap):
+                        # Compute distance transforms for this tile
+                        tile_dist1 = cv2.distanceTransform(tile_only_img1 | tile_overlap, cv2.DIST_L2, 5)
+                        tile_dist2 = cv2.distanceTransform(tile_only_img2 | tile_overlap, cv2.DIST_L2, 5)
+                        
+                        # Normalize distances to weights
+                        tile_weight_sum = tile_dist1 + tile_dist2
+                        # Avoid division by zero
+                        tile_weight_sum[tile_weight_sum == 0] = 1
+                        
+                        # Compute normalized weights
+                        tile_w1 = tile_dist1 / tile_weight_sum
+                        tile_w2 = tile_dist2 / tile_weight_sum
+                        
+                        # Apply blending in overlap area for this tile
+                        tile_result = np.zeros((tile_h, tile_w, tile_warped_img1.shape[2]), dtype=np.float32)
+                        for c in range(tile_warped_img1.shape[2]):
+                            tile_result[:, :, c] = (
+                                tile_w1 * tile_warped_img1[:, :, c].astype(np.float32) +
+                                tile_w2 * tile_warped_img2[:, :, c].astype(np.float32)
+                            )
+                        tile_result = np.clip(tile_result, 0, 255).astype(np.uint8)
+                        
+                        # Copy blended result to output
+                        result[y:y_end, x:x_end] = tile_result
+                    else:
+                        # No overlap in this tile, copy directly
+                        result[y:y_end, x:x_end] = tile_warped_img1
             
-            # Compute normalized weights
-            w1 = dist1 / weight_sum
-            w2 = dist2 / weight_sum
-            
-            # Apply blending in overlap area
-            result = np.zeros_like(warped_img1, dtype=np.float32)
-            if len(warped_img1.shape) == 3:
-                for c in range(warped_img1.shape[2]):
-                    result[:, :, c] = (
-                        w1 * warped_img1[:, :, c].astype(np.float32) +
-                        w2 * warped_img2[:, :, c].astype(np.float32)
-                    )
+            # Apply single-image areas (outside overlap)
+            # In areas where only img1 exists, keep img1
+            # In areas where only img2 exists, use img2
+            if len(result.shape) == 3:
+                for c in range(result.shape[2]):
+                    result[only_img1 > 0, c] = warped_img1[only_img1 > 0, c]
+                    result[only_img2 > 0, c] = warped_img2[only_img2 > 0, c]
             else:
-                result = (
-                    w1 * warped_img1.astype(np.float32) +
-                    w2 * warped_img2.astype(np.float32)
-                )
-            result = np.clip(result, 0, 255).astype(np.uint8)
+                result[only_img1 > 0] = warped_img1[only_img1 > 0]
+                result[only_img2 > 0] = warped_img2[only_img2 > 0]
         else:
             # No overlap, just combine images
             result = warped_img1.copy()
