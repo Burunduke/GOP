@@ -754,12 +754,12 @@ class OrthophotoProcessor:
         gdal.UseExceptions()
         
         weight_paths = []
+        mask_paths = []
         
         # First, compute a combined mask to identify overlap areas
         combined_mask = None
-        masks = []
         
-        # Read all masks first
+        # Pass 1: Compute masks, save to disk, and accumulate combined_mask
         for i, warped_path in enumerate(warped_paths):
             self.logger.debug(f"About to open GDAL dataset for distance weights: {warped_path}")
             with open_gdal_dataset(warped_path) as src_ds:
@@ -768,27 +768,53 @@ class OrthophotoProcessor:
                 has_alpha = band_count in [2, 4]  # Grayscale+alpha or RGB+alpha
                 band = src_ds.GetRasterBand(1)
                 nodata = band.GetNoDataValue()
+                input_nodata = self.blend_config["input_nodata"]
                 
-                # Read data for mask computation
-                data = src_ds.ReadAsArray()
-                if data.ndim == 2:
-                    data = np.expand_dims(data, axis=2)
-                elif data.ndim == 3 and data.shape[0] < data.shape[2]:
-                    # Assume first dimension is bands, need to transpose
-                    data = np.transpose(data, (1, 2, 0))
+                # Read band 1 data for nodata check
+                band1_data = band.ReadAsArray()
                 
-                # Create valid data mask using helper
-                mask = self._compute_valid_mask(data, nodata, has_alpha)
+                # Read alpha band if needed
+                alpha_data = None
+                if has_alpha and input_nodata == "alpha":
+                    alpha_band = src_ds.GetRasterBand(band_count)
+                    alpha_data = alpha_band.ReadAsArray()
+                
+                # Build valid mask using per-band reads to reduce memory usage
+                # Initialize mask as all valid
+                valid_mask = np.ones(band1_data.shape, dtype=bool)
+                
+                # Check first band for nodata values
+                if nodata is not None:
+                    valid_mask &= (band1_data != nodata)
+                
+                # Check for configured nodata color
+                if input_nodata is not None and input_nodata != "alpha":
+                    if band_count >= 3:
+                        # For multi-band images, check if all bands are nodata
+                        # Build the "all bands == input_nodata" mask iteratively to avoid materializing full array
+                        all_eq = (band1_data == input_nodata)
+                        for b in range(2, band_count + 1):
+                            band_data = src_ds.GetRasterBand(b).ReadAsArray()
+                            all_eq &= (band_data == input_nodata)
+                            del band_data  # Free memory immediately
+                        valid_mask &= ~all_eq
+                    else:
+                        # For single band, check if band equals nodata
+                        valid_mask &= (band1_data != input_nodata)
+                
+                # Check alpha channel if present
+                if has_alpha and input_nodata == "alpha" and alpha_data is not None:
+                    valid_mask &= (alpha_data > 0)
                 
                 # Apply erosion if configured
                 edge_erosion_px = self.blend_config["edge_erosion_px"]
                 if edge_erosion_px > 0:
                     structure = np.ones((3, 3), dtype=bool)
-                    mask = binary_erosion(mask, structure=structure, iterations=edge_erosion_px)
+                    valid_mask = binary_erosion(valid_mask, structure=structure, iterations=edge_erosion_px)
                 
                 # Log valid pixel ratio
-                total_pixels = mask.size
-                valid_pixels = np.sum(mask)
+                total_pixels = valid_mask.size
+                valid_pixels = np.sum(valid_mask)
                 valid_ratio = (valid_pixels / total_pixels) * 100 if total_pixels > 0 else 0
                 
                 filename = os.path.basename(warped_path)
@@ -796,17 +822,33 @@ class OrthophotoProcessor:
                 erosion_info = f"erosion={edge_erosion_px}px"
                 self.logger.info(f"{filename}: valid pixels = {valid_pixels} / {total_pixels} ({valid_ratio:.1f}%) after {nodata_info} and {erosion_info}")
                 
-                masks.append(mask)
+                # Save mask to disk and update combined_mask
+                mask_path = os.path.join(temp_dir, f"mask_{i}.npy")
+                np.save(mask_path, valid_mask)
+                mask_paths.append(mask_path)
                 
                 # Update combined mask
                 if combined_mask is None:
-                    combined_mask = mask.astype(np.uint8)
+                    combined_mask = valid_mask.astype(np.uint8)
                 else:
-                    combined_mask += mask.astype(np.uint8)
+                    combined_mask += valid_mask.astype(np.uint8)
+                
+                # Free memory
+                del valid_mask, band1_data
+                if alpha_data is not None:
+                    del alpha_data
         
-        # Compute weights for each image
-        for i, (warped_path, mask) in enumerate(zip(warped_paths, masks)):
+        # Force garbage collection between passes
+        import gc
+        gc.collect()
+        
+        # Pass 2: Load masks via memory mapping and compute weights
+        for i, warped_path in enumerate(warped_paths):
             self.logger.info(f"Computing weights for image {i+1}/{len(warped_paths)}")
+            
+            # Load mask via memory mapping
+            mask_path = mask_paths[i]
+            mask = np.load(mask_path, mmap_mode='r')
             
             # For pixels where exactly one image is valid, force weight = 1
             # For pixels where multiple images are valid, use distance transform
@@ -826,6 +868,9 @@ class OrthophotoProcessor:
                 inverted_mask = ~mask
                 dist_transform = distance_transform_edt(~inverted_mask)
                 
+                # Cast to float32 to reduce memory usage (edt returns float64)
+                dist_transform = dist_transform.astype(np.float32, copy=False)
+                
                 # Apply feather distance limit if configured
                 if self.blend_config["feather_distance_px"] > 0:
                     dist_transform = np.minimum(dist_transform, self.blend_config["feather_distance_px"])
@@ -836,17 +881,30 @@ class OrthophotoProcessor:
                     weights[multi_image_area] = dist_transform[multi_image_area] / max_dist
                 else:
                     weights[multi_image_area] = 1.0
+                
+                # Free memory
+                del dist_transform, inverted_mask
             
             # Save weights to file
             weight_path = os.path.join(temp_dir, f"weights_{i}.npy")
             np.save(weight_path, weights)
             weight_paths.append(weight_path)
             
+            # Free memory
+            del weights, mask, single_image_area, multi_image_area
+        
+        # Clean up temporary mask files (best-effort)
+        for mask_path in mask_paths:
+            try:
+                os.remove(mask_path)
+            except Exception as e:
+                self.logger.debug(f"Could not remove temporary mask file {mask_path}: {e}")
+        
         return weight_paths
 
-    def _blend_tiles(self, warped_paths: List[str], weight_paths: List[str], 
-                   output_path: str, width: int, height: int, 
-                   pixel_size_x: float, pixel_size_y: float, 
+    def _blend_tiles(self, warped_paths: List[str], weight_paths: List[str],
+                   output_path: str, width: int, height: int,
+                   pixel_size_x: float, pixel_size_y: float,
                    min_x: float, min_y: float, max_x: float, max_y: float, srs) -> None:
         """
         Blend warped images using precomputed weights in tiled fashion.
@@ -863,6 +921,7 @@ class OrthophotoProcessor:
             srs: Spatial reference system
         """
         from osgeo import gdal
+        from contextlib import ExitStack
         gdal.UseExceptions()
         
         # Tile size for processing (avoid loading entire images into memory)
@@ -905,62 +964,62 @@ class OrthophotoProcessor:
         dst_ds.SetGeoTransform(geotransform)
         dst_ds.SetProjection(srs.ExportToWkt())
         
-        # Process tiles
-        total_tiles = 0
-        for y in range(0, height, tile_size):
-            for x in range(0, width, tile_size):
-                tile_width = min(tile_size, width - x)
-                tile_height = min(tile_size, height - y)
-                total_tiles += 1
-                
-                if total_tiles % 100 == 0:
-                    self.logger.info(f"Blending tile {total_tiles}: ({x}, {y}) size {tile_width}x{tile_height}")
-                
-                # Initialize accumulators for this tile
-                weighted_sum = None
-                weight_sum = None
-                
-                # Load weights for this tile
-                tile_weights = []
-                for weight_path in weight_paths:
-                    weights = np.load(weight_path)
-                    tile_weights.append(weights[y:y+tile_height, x:x+tile_width])
-                
-                # Process each band
-                for band_num in range(1, band_count + 1):
-                    # Initialize accumulators for this band if needed
-                    if weighted_sum is None:
+        # Load all weight arrays once via memory-map before the tile loop
+        weight_arrays = [np.load(p, mmap_mode='r') for p in weight_paths]
+        
+        # Open each warped GDAL dataset once before the tile loop
+        with ExitStack() as stack:
+            warped_datasets = [stack.enter_context(open_gdal_dataset(p)) for p in warped_paths]
+            
+            # Process tiles
+            total_tiles = 0
+            for y in range(0, height, tile_size):
+                for x in range(0, width, tile_size):
+                    tile_width = min(tile_size, width - x)
+                    tile_height = min(tile_size, height - y)
+                    total_tiles += 1
+                    
+                    if total_tiles % 100 == 0:
+                        self.logger.info(f"Blending tile {total_tiles}: ({x}, {y}) size {tile_width}x{tile_height}")
+                    
+                    # Slice each weight array for this tile
+                    tile_weights = [w[y:y+tile_height, x:x+tile_width] for w in weight_arrays]
+                    
+                    # Process each band
+                    for band_num in range(1, band_count + 1):
+                        # Initialize accumulators for this band
                         weighted_sum = np.zeros((tile_height, tile_width), dtype=np.float32)
                         weight_sum = np.zeros((tile_height, tile_width), dtype=np.float32)
-                    
-                    # Accumulate weighted values from each image
-                    for i, (warped_path, weights) in enumerate(zip(warped_paths, tile_weights)):
-                        self.logger.debug(f"About to open GDAL dataset for blending: {warped_path}")
-                        with open_gdal_dataset(warped_path) as src_ds:
-                            self.logger.debug(f"Opened GDAL dataset for blending: {warped_path}")
+                        
+                        # Accumulate weighted values from each image using pre-opened datasets
+                        for i, src_ds in enumerate(warped_datasets):
                             band = src_ds.GetRasterBand(band_num)
                             data = band.ReadAsArray(xoff=x, yoff=y, win_xsize=tile_width, win_ysize=tile_height)
                             
                             # Apply weights
-                            weighted_sum += data.astype(np.float32) * weights
-                            weight_sum += weights
+                            weighted_sum += data.astype(np.float32) * tile_weights[i]
+                            weight_sum += tile_weights[i]
+                            
+                            del data  # Free memory immediately
+                        
+                        # Normalize by weight sum
+                        # Avoid division by zero
+                        with np.errstate(divide='ignore', invalid='ignore'):
+                            result = np.where(weight_sum > 0, weighted_sum / weight_sum, 0)
+                        
+                        # Convert to uint8
+                        result = np.clip(result, 0, 255).astype(np.uint8)
+                        
+                        # Write to output
+                        dst_band = dst_ds.GetRasterBand(band_num)
+                        dst_band.WriteArray(result, xoff=x, yoff=y)
+                        dst_band.SetNoDataValue(0)
+                        
+                        # Free memory
+                        del weighted_sum, weight_sum, result
                     
-                    # Normalize by weight sum
-                    # Avoid division by zero
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        result = np.where(weight_sum > 0, weighted_sum / weight_sum, 0)
-                    
-                    # Convert to uint8
-                    result = np.clip(result, 0, 255).astype(np.uint8)
-                    
-                    # Write to output
-                    dst_band = dst_ds.GetRasterBand(band_num)
-                    dst_band.WriteArray(result, xoff=x, yoff=y)
-                    dst_band.SetNoDataValue(0)
-                    
-                    # Reset accumulators for next band
-                    weighted_sum = None
-                    weight_sum = None
+                    # Free memory for tile_weights at the end of each tile iteration
+                    del tile_weights
         
         # Close dataset to release file lock on Windows
         dst_ds = None

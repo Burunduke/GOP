@@ -440,3 +440,49 @@ Users can experiment with different `input_nodata` values or switch to a differe
 - **Actual code change:** Implemented the `_compute_valid_mask` function in `src/processing/orthophoto.py` to return a proper 2D boolean mask instead of `None`.
 - **File modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — function `_compute_valid_mask` (lines 651-694).
 - **Diagnostic logging:** All temporary DEBUG logging has been removed, but `logger.exception` calls have been retained for better error reporting.
+
+### Performance: memory optimization of orthophoto blending — 2026-04-26
+
+**Symptom:** High peak RAM at the log line `Computing weights for image i/N` and during tile blending in [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1). On large canvases (e.g. 20k×20k px) the process could consume several GB and risk OOM on smaller machines.
+
+**Root causes (two independent hotspots):**
+
+1. In [`OrthophotoProcessor._compute_distance_weights()`](src/processing/orthophoto.py:742):
+   - All N per-image boolean masks were kept simultaneously in a Python `masks` list.
+   - The mask was derived from a full multi-band `ReadAsArray()` call (loaded RGB(A) just to produce a 2D bool).
+   - `scipy.ndimage.distance_transform_edt` returned `float64` — twice the necessary size.
+2. In [`OrthophotoProcessor._blend_tiles()`](src/processing/orthophoto.py:905):
+   - `np.load(weight_path)` was called **inside** the per-tile, per-band loop — the full canvas weight array was reloaded for every tile × every image.
+   - The same warped TIFF was reopened via `gdal.Open` once per band per tile.
+
+**Fixes applied (two subtasks, both in `src/processing/orthophoto.py`):**
+
+| Subtask | Method | Change |
+|---|---|---|
+| A | `_compute_distance_weights` | Stream each per-image mask to disk as `mask_i.npy` and reload via `np.load(..., mmap_mode='r')` in pass 2. Replace `ReadAsArray()` with per-band reads (band 1 + optional alpha + iterative all-bands-equal-nodata). Cast `distance_transform_edt` result to `float32`. `gc.collect()` between passes. Best-effort cleanup of `mask_*.npy`. |
+| B | `_blend_tiles` | Open all warped GDAL datasets once via `contextlib.ExitStack` (guarantees Windows-safe release on exit). Load all weight arrays once with `mmap_mode='r'` and slice per tile. Add `del` of intermediates inside the tile loop. |
+
+**Why this approach:**
+- **`mmap_mode='r'`** lets NumPy read only the slice we need from disk — perfect for tiled processing. Keeps the API (`np.save` / `np.load` of `.npy`) unchanged so the data contract between `_compute_distance_weights` and `_blend_tiles` is preserved.
+- **`ExitStack`** is the junior-friendly idiom for managing N context managers at once and is required to keep the GDAL Windows-lock guarantee from section K above.
+- **Per-band reads** avoid ever materializing the full `(H, W, bands)` array when all we need is a 2D bool mask.
+- **`float32` distance transform** halves the largest single allocation in pass 2.
+
+**Junior-friendly takeaways:**
+1. If you need the same NumPy array many times across small windows, save it once and reload with `mmap_mode='r'` — don't `np.load` the whole file inside a loop.
+2. Don't `ReadAsArray()` an entire multi-band raster if you only need one band's worth of information — read the bands you actually need.
+3. `scipy.ndimage.distance_transform_edt` returns `float64`; cast to `float32` immediately when full precision isn't required.
+4. When opening N GDAL datasets, use `contextlib.ExitStack` so all of them are released even if an exception is raised mid-loop.
+
+**Files modified:** [`src/processing/orthophoto.py`](src/processing/orthophoto.py:1) — `_compute_distance_weights` (≈ lines 742–903) and `_blend_tiles` (≈ lines 905–1025).
+
+**Verification:**
+- ✅ `ast.parse` passes.
+- ✅ Function signatures and return values unchanged (`List[str]` of `weights_*.npy`, `None` respectively).
+- ✅ `combined_mask` accumulator semantics bit-identical (still `uint8`, `+= mask.astype(np.uint8)`).
+- ✅ Single-image weight = 1.0 path preserved; multi-image weight = `dist / max_dist` preserved.
+- ✅ Tile/band traversal order, geotransform, projection, nodata-set behavior unchanged in `_blend_tiles`.
+- ✅ All GDAL datasets released by function exit (Windows-lock safety preserved).
+- ✅ No new dependencies, no new config keys, no edits outside the two methods.
+
+**No follow-up needed** unless profiling on production data still shows pressure — in that case the next lever would be to chunk pass-1 mask construction by raster blocks instead of full-image arrays.
