@@ -593,8 +593,6 @@ class OrthophotoProcessor:
             warp_options_dict = {
                 "format": "GTiff",
                 "outputBounds": common_bounds,
-                "width": width,
-                "height": height,
                 "xRes": xRes,
                 "yRes": yRes,
                 "resampleAlg": "bilinear",
