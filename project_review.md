@@ -603,3 +603,10 @@ OpenDroneMap requires a minimum of 3 overlapping images to successfully create a
 - Informative hint text is displayed explaining why ODM is disabled or available
 - Auto-fallback mechanism switches selection from ODM to GDAL when ODM becomes unavailable
 - Dynamic updates occur when project file count changes (adding/removing images)
+
+#### 6. Fix for callback registration error (2026-04-26)
+
+- **Symptom:** `IndexError: list index out of range` in Dash callback registration
+- **Root cause:** Missing closing parenthesis in `register_callbacks` function in `gui/components/callbacks.py`
+- **Fix:** Added missing closing parenthesis to properly close the function
+- **Files modified:** [`gui/components/callbacks.py`](gui/components/callbacks.py)
