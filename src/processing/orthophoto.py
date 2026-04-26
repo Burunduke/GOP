@@ -81,6 +81,7 @@ class OrthophotoProcessor:
             "ransac_reproj_threshold": self.config.get("processing.orthophoto.opencv.ransac_reproj_threshold", 5.0),
             "min_matches": self.config.get("processing.orthophoto.opencv.min_matches", 10),
             "try_use_gpu": self.config.get("processing.orthophoto.opencv.try_use_gpu", False),
+            "max_feature_dim": self.config.get("processing.orthophoto.opencv.max_feature_dim", 4000),
         }
 
     def _is_docker_available(self) -> bool:
@@ -1727,16 +1728,20 @@ class OrthophotoProcessor:
         Returns:
             Tuple of (kp1, des1, kp2, des2, detector_name)
         """
+        # Prepare images for feature detection (downscale if needed)
+        small_img1, scale1 = self._prepare_for_features(img1)
+        small_img2, scale2 = self._prepare_for_features(img2)
+        
         # Convert to grayscale if needed
-        if len(img1.shape) == 3:
-            gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        if len(small_img1.shape) == 3:
+            gray1 = cv2.cvtColor(small_img1, cv2.COLOR_BGR2GRAY)
         else:
-            gray1 = img1
+            gray1 = small_img1
             
-        if len(img2.shape) == 3:
-            gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+        if len(small_img2.shape) == 3:
+            gray2 = cv2.cvtColor(small_img2, cv2.COLOR_BGR2GRAY)
         else:
-            gray2 = img2
+            gray2 = small_img2
         
         # Choose detector
         detector_name = self.opencv_config["detector"]
@@ -1773,6 +1778,19 @@ class OrthophotoProcessor:
         
         if des1 is None or des2 is None:
             raise RuntimeError("OpenCV stitching failed: could not detect features in one or both images")
+        
+        # Rescale keypoints back to original image coordinates if downscaling was applied
+        if scale1 != 1.0:
+            # Rescale keypoints for img1
+            scale1_inv = 1.0 / scale1
+            for kp in kp1:
+                kp.pt = (kp.pt[0] * scale1_inv, kp.pt[1] * scale1_inv)
+        
+        if scale2 != 1.0:
+            # Rescale keypoints for img2
+            scale2_inv = 1.0 / scale2
+            for kp in kp2:
+                kp.pt = (kp.pt[0] * scale2_inv, kp.pt[1] * scale2_inv)
         
         return kp1, des1, kp2, des2, detector_name
     
@@ -2022,3 +2040,38 @@ class OrthophotoProcessor:
             self.logger.warning(f"Could not save with GDAL: {e}")
             cv2.imwrite(output_path, image)
             self.logger.info(f"Saved orthophoto without compression: {output_path}")
+
+    def _prepare_for_features(self, img: np.ndarray) -> tuple:
+        """
+        Prepare image for feature detection by downscaling if needed.
+        
+        Args:
+            img: Input image array
+            
+        Returns:
+            Tuple of (processed_image, scale_factor) where scale_factor is the
+            ratio of original size to processed size (1.0 if no scaling applied)
+        """
+        max_dim = self.opencv_config["max_feature_dim"]
+        height, width = img.shape[:2]
+        
+        # Check if downscaling is needed
+        max_current_dim = max(height, width)
+        if max_current_dim <= max_dim:
+            # No downscaling needed
+            self.logger.info(f"Image size {width}x{height} within limit ({max_dim}px), using original size for features")
+            return img, 1.0
+        
+        # Calculate scale factor
+        scale = max_dim / max_current_dim
+        
+        # Calculate new dimensions
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        
+        # Downscale image
+        small_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        
+        self.logger.info(f"Downscaled image from {width}x{height} to {new_width}x{new_height} (scale={scale:.3f}) for feature detection")
+        
+        return small_img, scale

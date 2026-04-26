@@ -541,3 +541,28 @@ Overlap regions now blend correctly without the white smoke/haze effect. Both bl
 #### 5. Files modified
 
 - [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — functions `_compute_valid_mask` (lines 651-710) and `_compute_distance_weights` (lines 810-835)
+
+### Fix for OpenCV OutOfMemoryError in orthophoto stitching — 2026-04-26
+
+#### 1. Problem observed
+
+When running orthophoto stitching with method `opencv` on 2 large GeoTIFF images, SIFT feature detection was failing with `cv2.error: (-4:Insufficient memory) Failed to allocate 7785817216 bytes` (~7.25 GB). This occurred in the `_detect_and_match` function when `detector.detectAndCompute` was called on full-resolution images.
+
+#### 2. Root cause
+
+SIFT feature detection was being run on full-resolution TIFF images that were too large to fit in memory. The images were not being downscaled before feature detection, causing the memory allocation error.
+
+#### 3. Fix applied
+
+- Added a new configuration parameter `max_feature_dim` (default 4000) to control the maximum dimension for feature detection
+- Created a helper function `_prepare_for_features` that downscales images to a safe size before feature detection
+- Modified `_detect_and_match` to use the helper function and rescale keypoints back to original coordinates
+- Added informative logging when downscaling is applied
+
+#### 4. What the user will see now
+
+Large images are automatically downscaled for feature detection, preventing memory errors. The final stitched output still retains full resolution since keypoints are rescaled back to original coordinates for homography computation.
+
+#### 5. Files modified
+
+- [`src/processing/orthophoto.py`](src/processing/orthophoto.py) — functions `_prepare_for_features` (new) and `_detect_and_match` (modified)
