@@ -6,7 +6,6 @@ pipeline including data loading and orthophoto creation.
 """
 
 import os
-import json
 import numpy as np
 import time
 from typing import Dict, Any, Optional, List
@@ -41,7 +40,7 @@ class HyperspectralProcessor:
     Scientific-oriented implementation with modern processing methods.
     """
 
-    def __init__(self, cache_enabled: bool = True, cache_dir: Optional[str] = None):
+    def __init__(self, cache_enabled: bool = False, cache_dir: Optional[str] = None):
         """
         Initialize hyperspectral data processor.
 
@@ -63,6 +62,9 @@ class HyperspectralProcessor:
     def load_data(self, file_path: str, **kwargs) -> HyperspectralData:
         """
         Load hyperspectral data from file.
+        
+        NOTE: This method is kept for backward compatibility only and is not used
+        in the streaming processing path. For new code, use the streaming methods.
 
         Args:
             file_path: Path to file
@@ -103,7 +105,8 @@ class HyperspectralProcessor:
             data = np.zeros((height, width, bands), dtype=np.float32)
             for band_idx in range(bands):
                 band = dataset.GetRasterBand(band_idx + 1)
-                data[:, :, band_idx] = band.ReadAsArray()
+                # Read as float32 directly (Step 7)
+                data[:, :, band_idx] = band.ReadAsArray(buf_type=gdal.GDT_Float32)
 
             dataset = None  # Close dataset
 
@@ -111,100 +114,19 @@ class HyperspectralProcessor:
             self.validator.validate_data(data)
 
             self.logger.info(f"[{os.path.basename(file_path)}] Data successfully loaded and validated")
+            # Warn if this method is used since it's kept for backward compatibility only
+            self.logger.warning(
+                f"[{os.path.basename(file_path)}] load_data() is deprecated and kept for backward compatibility only. "
+                "Use streaming methods for new code."
+            )
             return data
 
         except Exception as e:
             self.logger.error(f"Error loading data: {e}")
             raise FileError(f"Error loading data: {e}")
 
-    def process_pipeline(
-        self, data: HyperspectralData, pipeline_config: Dict[str, Any]
-    ) -> ProcessingResult:
-        """
-        Execute simplified processing pipeline - only loads and returns data.
-
-        Args:
-            data: Input hyperspectral data
-            pipeline_config: Pipeline configuration
-
-        Returns:
-            Processing results
-        """
-        try:
-            self.logger.info("Starting simplified processing pipeline")
-
-            # Validate input data
-            self.validator.validate_data(data)
-
-            result = {
-                "processed_data": data,
-                "metadata": {
-                    "original_shape": data.shape,
-                    "processing_steps": ["data_loading"],
-                },
-            }
-
-            self.logger.info("Processing pipeline completed successfully")
-            return result
-
-        except Exception as e:
-            self.logger.error(f"Error in processing pipeline: {e}")
-            raise ProcessingError(f"Error in processing pipeline: {e}")
 
 
-    def save_results(self, results: ProcessingResult, output_dir: str) -> str:
-        """
-        Save processing results.
-
-        Args:
-            results: Processing results
-            output_dir: Output directory
-
-        Returns:
-            Path to saved results
-        """
-        try:
-            os.makedirs(output_dir, exist_ok=True)
-
-            # Save processed data as GeoTIFF
-            if "processed_data" in results:
-                if not GDAL_AVAILABLE:
-                    raise ImportError(
-                        "GDAL library is required for saving data. Install with: pip install gdal"
-                    )
-
-                data: np.ndarray = results["processed_data"]
-                height, width, bands = data.shape
-
-                tif_path = os.path.join(output_dir, "hyperspectral_processed.tif")
-                driver = gdal.GetDriverByName("GTiff")
-                dataset = driver.Create(tif_path, width, height, bands, gdal.GDT_Float32)
-                for band_idx in range(bands):
-                    band = dataset.GetRasterBand(band_idx + 1)
-                    band.WriteArray(data[:, :, band_idx])
-                dataset.FlushCache()
-                dataset = None  # Close dataset
-
-                self.logger.info(f"Saved GeoTIFF: {tif_path}")
-
-            # Save metadata as JSON
-            if "metadata" in results:
-                metadata = results["metadata"]
-                # Convert non-serializable types (e.g. tuples) to lists
-                serializable_metadata = json.loads(
-                    json.dumps(metadata, default=lambda o: list(o) if isinstance(o, tuple) else str(o))
-                )
-                json_path = os.path.join(output_dir, "metadata.json")
-                with open(json_path, "w", encoding="utf-8") as f:
-                    json.dump(serializable_metadata, f, indent=2)
-                self.logger.info(f"Saved metadata: {json_path}")
-
-            self.logger.info(f"Results saved to: {output_dir}")
-            return output_dir
-
-        except Exception as e:
-            self.logger.error(f"Error saving results: {e}")
-            raise FileError(f"Error saving results: {e}")
 
     def process(self, input_path: str, output_dir: str) -> Dict[str, Any]:
         """
@@ -222,48 +144,21 @@ class HyperspectralProcessor:
         self.logger.info(f"[hsp] process: start input={input_basename} output={output_dir}")
 
         try:
-            # Step 1: Load data from file
-            self.logger.info("[hsp] process: Step 1/4 load_data - start")
-            load_start_time = time.perf_counter()
-            with ResourceMonitor("process.load_data", logger=self.logger):
-                data = self.load_data(input_path)
-            load_duration = time.perf_counter() - load_start_time
-            self.logger.info(
-                f"[hsp] process: Step 1/4 load_data - end "
-                f"shape={data.shape} dtype={data.dtype} "
-                f"duration={load_duration:.2f}s"
-            )
-
-            # Step 2: Get preprocessing configuration
+            # Get preprocessing configuration
             preprocessing_config = self.config.get("processing", {})
-
-            # Step 3: Apply preprocessing steps
-            self.logger.info("[hsp] process: Step 2/4 _apply_preprocessing - start")
+            
+            # Use streaming path instead of loading full cube (Step 5 + Step 7)
+            self.logger.info("[hsp] process: Step 1/2 _apply_preprocessing_streaming - start")
             preprocess_start_time = time.perf_counter()
-            with ResourceMonitor("process.apply_preprocessing", logger=self.logger, interval_s=30.0):
-                data, applied_steps, metadata = self._apply_preprocessing(data, input_path, preprocessing_config)
-                # Drop the original reference to free memory
-                processed_data = data
-                data = None  # Explicitly drop reference
+            with ResourceMonitor("process.apply_preprocessing_streaming", logger=self.logger, interval_s=30.0):
+                tiff_paths, metadata = self._apply_preprocessing_streaming(input_path, output_dir, preprocessing_config)
             preprocess_duration = time.perf_counter() - preprocess_start_time
             self.logger.info(
-                f"[hsp] process: Step 2/4 _apply_preprocessing - end "
-                f"shape={processed_data.shape} dtype={processed_data.dtype} "
-                f"duration={preprocess_duration:.2f}s"
+                f"[hsp] process: Step 1/2 _apply_preprocessing_streaming - end "
+                f"tiffs={len(tiff_paths)} duration={preprocess_duration:.2f}s"
             )
 
-            # Step 4: Save results as per-band GeoTIFFs
-            self.logger.info("[hsp] process: Step 3/4 _save_band_tiffs - start")
-            save_start_time = time.perf_counter()
-            with ResourceMonitor("process._save_band_tiffs", logger=self.logger):
-                tiff_paths = self._save_band_tiffs(processed_data, input_path, output_dir, metadata)
-            save_duration = time.perf_counter() - save_start_time
-            self.logger.info(
-                f"[hsp] process: Step 3/4 _save_band_tiffs - end "
-                f"tiffs={len(tiff_paths)} duration={save_duration:.2f}s"
-            )
-
-            # Step 5: Prepare result dictionary for orthophoto processor
+            # Prepare result dictionary for orthophoto processor
             result = {
                 "tiff_paths": tiff_paths,
                 "metadata": metadata
@@ -271,7 +166,7 @@ class HyperspectralProcessor:
 
             process_duration = time.perf_counter() - process_start_time
             self.logger.info(
-                f"[hsp] process: Step 4/4 done - "
+                f"[hsp] process: Step 2/2 done - "
                 f"tiffs={len(tiff_paths)} total_duration={process_duration:.2f}s"
             )
             return result
@@ -631,5 +526,291 @@ class HyperspectralProcessor:
         duration = time.perf_counter() - start_time
         self.logger.info(f"[hsp] _save_band_tiffs: end duration={duration:.2f}s")
         return tiff_paths
+
+    def _iter_bands(self, input_path: str):
+        """
+        Generator that yields (band_index, band_array_2d_float32) one at a time using GDAL.
+        
+        Args:
+            input_path: Path to input file
+            
+        Yields:
+            tuple: (band_index, band_array_2d_float32)
+        """
+        if not GDAL_AVAILABLE:
+            raise ImportError(
+                "GDAL library is required for loading data. Install with: pip install gdal"
+            )
+        
+        # Open dataset
+        ds = gdal.Open(input_path, gdal.GA_ReadOnly)
+        if ds is None:
+            raise FileError(f"Failed to open file: {input_path}")
+        
+        try:
+            # Iterate through bands
+            for i in range(ds.RasterCount):
+                band = ds.GetRasterBand(i + 1)
+                # Read as float32 directly (Step 7)
+                arr = band.ReadAsArray(buf_type=gdal.GDT_Float32)
+                yield i, arr
+                # Explicitly delete the array to free memory immediately
+                del arr
+        finally:
+            # Close dataset
+            ds = None
+
+    def _save_single_band_tiff(self, band_arr: np.ndarray, index: int, input_path: str,
+                                 output_dir: str, metadata: Dict[str, Any]) -> str:
+        """
+        Save a single band array as GeoTIFF.
+        
+        Args:
+            band_arr: 2D numpy array of band data
+            index: Band index (0-based)
+            input_path: Path to input file
+            output_dir: Output directory
+            metadata: Metadata dictionary
+            
+        Returns:
+            Path to saved GeoTIFF
+        """
+        from ...utils.gdal_utils import write_raster
+        
+        os.makedirs(output_dir, exist_ok=True)
+        tiff_path = os.path.join(output_dir, f"band_{index:03d}.tif")
+        
+        # Write raster with georeferencing from source
+        write_raster(
+            band_arr,
+            tiff_path,
+            source_path=input_path,
+            geotransform=metadata.get("transform"),
+            projection=metadata.get("crs"),
+            data_type=6  # gdal.GDT_Float32
+        )
+        
+        return tiff_path
+
+    def _apply_preprocessing_streaming(self, input_path: str, output_dir: str, config: Dict[str, Any]) -> tuple:
+        """
+        Apply preprocessing steps to hyperspectral data in a streaming fashion.
+        
+        Args:
+            input_path: Path to input file
+            output_dir: Output directory
+            config: Processing configuration
+            
+        Returns:
+            Tuple of (tiff_paths, metadata)
+        """
+        from ...utils.gdal_utils import get_raster_metadata
+        
+        self.logger.info(f"[hsp] _apply_preprocessing_streaming: start input={input_path}")
+        
+        # Get source metadata
+        try:
+            source_metadata = get_raster_metadata(input_path)
+        except Exception as e:
+            self.logger.warning(f"Could not extract metadata from source: {e}")
+            source_metadata = {}
+        
+        # Build metadata for output
+        metadata = {
+            "crs": source_metadata.get("projection", None),
+            "transform": source_metadata.get("geotransform", None),
+            "source_files": [input_path],
+            "applied_steps": []
+        }
+        
+        # Open dataset to get dimensions
+        ds = gdal.Open(input_path, gdal.GA_ReadOnly)
+        if ds is None:
+            raise FileError(f"Failed to open file: {input_path}")
+        
+        try:
+            bands = ds.RasterCount
+            width = ds.RasterXSize
+            height = ds.RasterYSize
+            
+            # Update metadata with dimensions
+            metadata.update({
+                "width": width,
+                "height": height,
+                "band_count": bands,
+                "dtype": "float32"
+            })
+            
+            self.logger.info(f"[hsp] _apply_preprocessing_streaming: {bands} bands, {width}x{height} pixels")
+            
+            # Preprocessing configuration
+            radiometric_config = config.get("radiometric_correction", {})
+            atmospheric_config = config.get("atmospheric_correction", {})
+            noise_config = config.get("noise_reduction", {})
+            spectral_config = config.get("spectral_calibration", {})
+            
+            # Pre-compute global statistics if needed
+            dark_value = None
+            mean_value = None
+            atm_correction = None
+            
+            # 1. Compute dark current value if needed (per-band approximation)
+            if radiometric_config.get("method") == "dark_current":
+                self.logger.info("[hsp] _apply_preprocessing_streaming: computing dark current")
+                dark_percentile = radiometric_config.get("dark_percentile", 1)
+                per_band = np.empty(bands, dtype=np.float32)
+                
+                # First pass: compute per-band percentiles
+                for i, band_arr in self._iter_bands(input_path):
+                    per_band[i] = np.percentile(band_arr, dark_percentile)
+                    # Free memory immediately
+                    del band_arr
+                
+                dark_value = float(per_band.min())
+                metadata["applied_steps"].append("dark_current_subtraction")
+                self.logger.info(f"[hsp] _apply_preprocessing_streaming: dark_value={dark_value}")
+            
+            # 2. Compute flat field mean if needed
+            if radiometric_config.get("method") == "flat_field":
+                self.logger.info("[hsp] _apply_preprocessing_streaming: computing flat field mean")
+                sum_mean = 0.0
+                
+                # First pass: compute mean across all bands
+                for i, band_arr in self._iter_bands(input_path):
+                    sum_mean += band_arr.mean()
+                    # Free memory immediately
+                    del band_arr
+                
+                mean_value = np.float32(sum_mean / bands)
+                metadata["applied_steps"].append("flat_field_correction")
+                self.logger.info(f"[hsp] _apply_preprocessing_streaming: mean_value={mean_value}")
+            
+            # 3. Get atmospheric correction factor if needed
+            if atmospheric_config.get("enabled", False):
+                method = atmospheric_config.get("method", "simplified")
+                if method == "simplified":
+                    atm_correction = np.float32(atmospheric_config.get("correction_factor", 0.95))
+                    metadata["applied_steps"].append("atmospheric_correction")
+                    self.logger.info(f"[hsp] _apply_preprocessing_streaming: atm_correction={atm_correction}")
+                else:
+                    self.logger.warning(f"Atmospheric correction method '{method}' not implemented, skipping")
+            
+            # 4. Process bands one by one
+            tiff_paths = []
+            bands_processed = 0
+            log_interval = max(1, bands // 10)  # Log every 10% or at least every band
+            
+            self.logger.info("[hsp] _apply_preprocessing_streaming: processing bands")
+            
+            for i, band_arr in self._iter_bands(input_path):
+                # Log progress
+                if bands_processed % log_interval == 0 or bands_processed == bands - 1:
+                    self.logger.info(f"[hsp] Streaming band {bands_processed+1}/{bands}")
+                
+                # Apply preprocessing steps in order
+                
+                # 1. Dark current subtraction
+                if dark_value is not None:
+                    band_arr -= dark_value  # In-place subtraction
+                
+                # 2. Flat field correction
+                if mean_value is not None and mean_value > 0:
+                    band_arr /= mean_value  # In-place division
+                
+                # 3. Radiometric correction
+                if radiometric_config.get("method") == "empirical_line":
+                    gain = np.float32(radiometric_config.get("gain", 1.0))
+                    offset = np.float32(radiometric_config.get("offset", 0.0))
+                    band_arr *= gain  # In-place multiplication
+                    band_arr += offset  # In-place addition
+                    if "radiometric_correction" not in metadata["applied_steps"]:
+                        metadata["applied_steps"].append("radiometric_correction")
+                
+                # 4. Atmospheric correction
+                if atm_correction is not None:
+                    band_arr *= atm_correction  # In-place multiplication
+                
+                # 5. Noise filtering (per-band 2-D filters only)
+                if noise_config.get("method"):
+                    method = noise_config.get("method")
+                    
+                    # Try to use scipy if available
+                    try:
+                        from scipy.ndimage import median_filter, uniform_filter
+                        scipy_available = True
+                    except ImportError:
+                        scipy_available = False
+                        self.logger.info("scipy not available, noise filtering skipped")
+                    
+                    if method == "savgol" and scipy_available:
+                        try:
+                            from scipy.signal import savgol_filter
+                            window_length = noise_config.get("savgol_window", 11)
+                            polyorder = noise_config.get("savgol_polyorder", 3)
+                            # Ensure window_length is odd and less than array size
+                            window_length = min(window_length, band_arr.shape[0], band_arr.shape[1])
+                            if window_length % 2 == 0:
+                                window_length -= 1
+                            if window_length >= 3:
+                                band_arr = savgol_filter(band_arr, window_length, polyorder)
+                                if "noise_filtering_savgol" not in metadata["applied_steps"]:
+                                    metadata["applied_steps"].append("noise_filtering_savgol")
+                            else:
+                                # Fallback to median filter
+                                band_arr = median_filter(band_arr, size=3)
+                                if "noise_filtering_median" not in metadata["applied_steps"]:
+                                    metadata["applied_steps"].append("noise_filtering_median")
+                        except Exception as e:
+                            self.logger.warning(f"Error applying Savitzky-Golay filter: {e}, falling back to median filter")
+                            band_arr = median_filter(band_arr, size=3)
+                            if "noise_filtering_median" not in metadata["applied_steps"]:
+                                metadata["applied_steps"].append("noise_filtering_median")
+                    elif method == "median" and scipy_available:
+                        band_arr = median_filter(band_arr, size=3)
+                        if "noise_filtering_median" not in metadata["applied_steps"]:
+                            metadata["applied_steps"].append("noise_filtering_median")
+                    elif method == "mean" and scipy_available:
+                        band_arr = uniform_filter(band_arr, size=3)
+                        if "noise_filtering_mean" not in metadata["applied_steps"]:
+                            metadata["applied_steps"].append("noise_filtering_mean")
+                    elif method == "gaussian" and scipy_available:
+                        from scipy.ndimage import gaussian_filter
+                        sigma = noise_config.get("gaussian_sigma", 1.0)
+                        band_arr = gaussian_filter(band_arr, sigma=sigma)
+                        if "noise_filtering_gaussian" not in metadata["applied_steps"]:
+                            metadata["applied_steps"].append("noise_filtering_gaussian")
+                    elif method in ("pca", "mnf"):
+                        # Method is not implemented - log warning and skip noise reduction
+                        self.logger.warning(f"noise_reduction.method='{method}' is not implemented yet; skipping noise reduction")
+                    else:
+                        # Other methods or scipy not available - skip
+                        self.logger.info(f"Skipping noise reduction method '{method}'")
+                
+                # 6. Normalization
+                if spectral_config.get("normalization", False):
+                    min_val = band_arr.min()
+                    max_val = band_arr.max()
+                    span = max_val - min_val
+                    if span > 0:
+                        band_arr -= min_val  # In-place subtraction
+                        band_arr /= span     # In-place division
+                    if "normalization_minmax" not in metadata["applied_steps"]:
+                        metadata["applied_steps"].append("normalization_minmax")
+                
+                # Save band immediately
+                tiff_path = self._save_single_band_tiff(band_arr, i, input_path, output_dir, metadata)
+                tiff_paths.append(tiff_path)
+                
+                # Free memory
+                del band_arr
+                
+                bands_processed += 1
+            
+            self.logger.info(f"[hsp] _apply_preprocessing_streaming: processed {bands_processed} bands")
+            return tiff_paths, metadata
+            
+        finally:
+            # Close dataset
+            ds = None
 
 

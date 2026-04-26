@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 # Unconditional import - if this fails, the adapter should raise a clear exception
 from src.core.pipeline import Pipeline
+from src.utils.image_type import detect_image_type
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class GOPAdapter:
         
         Args:
             data_path: Path to input data (file or directory)
-            processing_type: Type of processing
+            processing_type: Type of processing (stage name)
             parameters: Additional processing parameters
             
         Returns:
@@ -61,19 +62,39 @@ class GOPAdapter:
                 if not files:
                     raise Exception(f"No files found in directory: {data_path}")
                 
-                # For now, use the first file (this should be improved to handle multiple files properly)
-                # In a real implementation, we might want to process all files or select a main file
-                first_file = files[0]
-                actual_data_path = os.path.join(data_path, first_file)
-                logger.info(f"Processing first file from directory: {actual_data_path}")
+                # Detect image type for each file
+                file_types = []
+                file_paths = []
+                for file in files:
+                    file_path = os.path.join(data_path, file)
+                    file_type = detect_image_type(file_path)
+                    file_types.append(file_type)
+                    file_paths.append(file_path)
+                
+                # Defense-in-depth homogeneity check
+                if len(set(file_types)) > 1:
+                    raise ValueError(
+                        "Нельзя объединить RGB и гиперспектральные изображения "
+                        "в один ортофотоплан. Загрузите только один тип файлов."
+                    )
+                
+                # Determine sensor type
+                sensor_type = file_types[0] if file_types else "hyperspectral"
+                logger.info(f"Detected sensor type: {sensor_type} for directory: {data_path}")
+                
+                # Use the first file for processing
+                actual_data_path = file_paths[0]
             else:
+                # For single file, detect its type
+                sensor_type = detect_image_type(data_path)
                 actual_data_path = data_path
+                logger.info(f"Detected sensor type: {sensor_type} for file: {data_path}")
             
-            # Call the real pipeline process method
+            # Call the real pipeline process method with correct sensor_type
             result = self.pipeline.process(
                 input_path=actual_data_path,
                 output_dir=parameters.get('output_dir'),
-                sensor_type=processing_type
+                sensor_type=sensor_type
             )
             return result
         except Exception as e:
@@ -114,10 +135,25 @@ class GOPAdapter:
     def _process_sync(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Synchronous data processing"""
         try:
+            # Detect sensor type for the input path
+            input_path = config['input_path']
+            import os
+            if os.path.isdir(input_path):
+                # Get list of files in directory
+                files = [f for f in os.listdir(input_path) if os.path.isfile(os.path.join(input_path, f))]
+                if files:
+                    # Detect image type for the first file
+                    first_file_path = os.path.join(input_path, files[0])
+                    sensor_type = detect_image_type(first_file_path)
+                else:
+                    sensor_type = "hyperspectral"  # Default fallback
+            else:
+                sensor_type = detect_image_type(input_path)
+            
             result = self.pipeline.process(
                 input_path=config['input_path'],
                 output_dir=config['output_dir'],
-                sensor_type=config.get('sensor_type', 'hyperspectral')
+                sensor_type=sensor_type
             )
             return result
         except Exception as e:

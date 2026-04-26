@@ -3,6 +3,9 @@ Caching module for hyperspectral data processing.
 
 This module provides LRU caching functionality for hyperspectral data processing
 operations, including both in-memory and disk-based caching.
+
+NOTE: This cache is not used by default after the streaming refactor.
+For new code, consider per-band caching if needed.
 """
 
 import os

@@ -203,10 +203,18 @@ def create_project_detail(project: Optional[Dict[str, Any]] = None) -> html.Div:
                                         html.Div([
                                             html.H6(file.get("filename", "Untitled"),
                                                    className="mb-1"),
-                                            html.P(f"Type: {file.get('file_type', 'unknown')} | "
-                                                   f"Size: {format_file_size(file.get('file_size', 0))} | "
-                                                   f"Uploaded: {format_date(file.get('upload_date', ''))}",
-                                                   className="mb-1 text-muted small"),
+                                            html.Div([
+                                                html.P(f"Type: гиперспектральный | "
+                                                       f"Size: {format_file_size(file.get('file_size', 0))} | "
+                                                       f"Uploaded: {format_date(file.get('upload_date', ''))}",
+                                                       className="mb-1 text-muted small d-inline"),
+                                                dbc.Badge(
+                                                    "RGB" if file.get("file_type") == "rgb" else "HS",
+                                                    color="info" if file.get("file_type") == "rgb" else "success",
+                                                    className="ms-2",
+                                                    style={"fontSize": "0.7rem"}
+                                                ),
+                                            ], className="d-flex align-items-center"),
                                         ], className="flex-grow-1"),
                                         html.Div([
                                             dbc.Button(

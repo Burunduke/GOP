@@ -15,6 +15,11 @@ from .config import Config, get_config, create_config
 from ..processing.hyperspectral import HyperspectralProcessor
 from ..processing.orthophoto import OrthophotoProcessor
 from ..utils.logger import setup_logger
+from ..utils.image_type import detect_image_type
+from ..utils.gdal_utils import get_raster_metadata
+import tempfile
+from osgeo import gdal
+import os
 
 # Type aliases for better type safety
 PipelineResult = Dict[str, Any]
@@ -70,11 +75,100 @@ class Pipeline:
 
         self.logger.info("GOP scientific pipeline initialized")
 
+    def _prepare_rgb_inputs(self, input_path: str, work_dir: str) -> Dict[str, Any]:
+        """
+        Prepare RGB inputs for orthophoto processor.
+        
+        RGB images skip hyperspectral preprocessing because they only have 3–4 bands.
+        
+        Args:
+            input_path: Path to input file or directory
+            work_dir: Working directory for temporary files
+            
+        Returns:
+            Dictionary with tiff_paths and metadata for orthophoto processor
+        """
+        self.logger.info(f"[pipeline] Preparing RGB inputs from: {input_path}")
+        
+        # Get list of input files
+        if os.path.isdir(input_path):
+            # Get all files in directory
+            input_files = []
+            for f in os.listdir(input_path):
+                file_path = os.path.join(input_path, f)
+                if os.path.isfile(file_path):
+                    input_files.append(file_path)
+        else:
+            input_files = [input_path]
+        
+        # Filter to only image files
+        image_extensions = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".geotiff"}
+        image_files = []
+        for file_path in input_files:
+            _, ext = os.path.splitext(file_path)
+            if ext.lower() in image_extensions:
+                image_files.append(file_path)
+        
+        if not image_files:
+            raise ValueError("No image files found in input")
+        
+        self.logger.info(f"[pipeline] Found {len(image_files)} image files")
+        
+        # Convert non-GeoTIFF files to temporary GeoTIFFs
+        tiff_paths = []
+        rgb_work_dir = os.path.join(work_dir, "rgb_converted")
+        os.makedirs(rgb_work_dir, exist_ok=True)
+        
+        for i, file_path in enumerate(image_files):
+            _, ext = os.path.splitext(file_path)
+            ext = ext.lower()
+            
+            if ext in {".tif", ".tiff", ".geotiff"}:
+                # Already a GeoTIFF, use as-is
+                tiff_paths.append(file_path)
+                self.logger.info(f"[pipeline] Using existing GeoTIFF: {file_path}")
+            else:
+                # Convert PNG/JPG/JPEG to temporary GeoTIFF
+                tiff_path = os.path.join(rgb_work_dir, f"converted_{i:03d}.tif")
+                self.logger.info(f"[pipeline] Converting {ext} to GeoTIFF: {tiff_path}")
+                
+                # Use gdal.Translate to convert
+                gdal.Translate(tiff_path, file_path, format="GTiff")
+                tiff_paths.append(tiff_path)
+        
+        # Build metadata
+        metadata = {
+            "source_files": image_files,
+            "applied_steps": [],  # No preprocessing steps for RGB
+        }
+        
+        # Try to get metadata from first file if possible
+        try:
+            if image_files:
+                first_file = image_files[0]
+                file_metadata = get_raster_metadata(first_file)
+                metadata.update({
+                    "width": file_metadata.get("width"),
+                    "height": file_metadata.get("height"),
+                    "band_count": file_metadata.get("bands"),
+                    "dtype": file_metadata.get("bands_metadata", {}).get("band_1", {}).get("data_type") if file_metadata.get("bands_metadata") else None,
+                    "crs": file_metadata.get("projection"),
+                    "transform": file_metadata.get("geotransform"),
+                })
+        except Exception as e:
+            self.logger.warning(f"[pipeline] Could not extract metadata from source files: {e}")
+        
+        self.logger.info(f"[pipeline] Prepared {len(tiff_paths)} TIFF files for orthophoto processing")
+        return {
+            "tiff_paths": tiff_paths,
+            "metadata": metadata
+        }
+
     def process(
         self,
         input_path: str,
         output_dir: Optional[str] = None,
-        sensor_type: str = "Hyperspectral",
+        sensor_type: Optional[str] = None,
     ) -> PipelineResult:
         """
         Complete data processing cycle with scientific methodology
@@ -82,10 +176,7 @@ class Pipeline:
         Args:
             input_path: Path to input data
             output_dir: Directory for saving results
-            sensor_type: Sensor type ('RGB', 'Multispectral', 'Hyperspectral')
-            segmentation_mask: Path to segmentation mask (if None, will be created)
-            use_refinement: Use boundary refinement for segmentation
-            compression_ratio: Compression ratio for segmentation
+            sensor_type: Sensor type ('rgb', 'hyperspectral', or None for auto-detection)
 
         Returns:
             Dictionary with processing results
@@ -97,11 +188,34 @@ class Pipeline:
             output_dir = output_dir or self.config.get("output.results_dir", "results")
             os.makedirs(output_dir, exist_ok=True)
 
-            # Stage 1: Hyperspectral data preprocessing
-            self.logger.info("Stage 1: Hyperspectral data preprocessing")
-            processed_data = self._preprocess_hyperspectral(input_path, output_dir)
+            # Auto-detect sensor type if not provided
+            if sensor_type is None:
+                if os.path.isdir(input_path):
+                    # Get first file in directory for detection
+                    files = [f for f in os.listdir(input_path) if os.path.isfile(os.path.join(input_path, f))]
+                    if files:
+                        first_file_path = os.path.join(input_path, files[0])
+                        sensor_type = detect_image_type(first_file_path)
+                    else:
+                        sensor_type = "hyperspectral"  # Default fallback
+                else:
+                    sensor_type = detect_image_type(input_path)
 
-            # Stage 2: Orthophoto creation
+            self.logger.info(f"Processing with sensor type: {sensor_type}")
+
+            # Branch based on sensor type
+            if sensor_type == "rgb":
+                # RGB images skip hyperspectral preprocessing because they only have 3–4 bands
+                self.logger.info("Stage 1: RGB processing (skipping hyperspectral preprocessing)")
+                processed_data = self._prepare_rgb_inputs(input_path, output_dir)
+            elif sensor_type == "hyperspectral" or sensor_type is None:
+                # Hyperspectral processing (existing behavior)
+                self.logger.info("Stage 1: Hyperspectral data preprocessing")
+                processed_data = self._preprocess_hyperspectral(input_path, output_dir)
+            else:
+                raise ValueError(f"Unknown sensor_type: {sensor_type}")
+
+            # Stage 2: Orthophoto creation (same for both paths)
             self.logger.info("Stage 2: Orthophoto creation")
             orthophoto_path = self._create_orthophoto(processed_data, output_dir)
 

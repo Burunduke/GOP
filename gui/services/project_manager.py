@@ -16,6 +16,7 @@ from gui.models.project import (
 )
 from gui.config import config
 from gui.utils.file_utils import sanitize_project_name
+from src.utils.image_type import detect_image_type
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,7 @@ class ProjectManager:
         filename: str,
         file_content: Optional[bytes] = None,
         file_path: Optional[str] = None,
-        file_type: str = "hyperspectral"
+        file_type: Optional[str] = None
     ) -> Optional[ProjectFile]:
         """
         Add file to project.
@@ -309,7 +310,7 @@ class ProjectManager:
         project_file = ProjectFile(
             filename=filename,
             original_name=filename,
-            file_type=file_type,
+            file_type=file_type or "",  # Will be detected after file is saved
             file_size=file_size,
             checksum=checksum,
         )
@@ -331,6 +332,16 @@ class ProjectManager:
         
         project_file.file_path = str(final_file_path)
         
+        # Detect image type if not provided
+        if not project_file.file_type:
+            try:
+                detected_type = detect_image_type(str(final_file_path))
+                project_file.file_type = detected_type
+                logger.info(f"Detected image type: {detected_type} for {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to detect image type for {filename}: {e}")
+                project_file.file_type = "hyperspectral"  # Default fallback
+        
         # Update project
         project.files.append(project_file.to_dict())
         
@@ -348,7 +359,7 @@ class ProjectManager:
         self,
         project_id: str,
         source_path: str,
-        file_type: str = "hyperspectral",
+        file_type: Optional[str] = None,
         copy: bool = True,
     ) -> Optional[ProjectFile]:
         """
@@ -392,7 +403,7 @@ class ProjectManager:
         project_file = ProjectFile(
             filename=filename,
             original_name=filename,
-            file_type=file_type,
+            file_type=file_type or "",  # Will be detected after file is saved
             file_size=file_size,
             checksum=checksum,
         )
@@ -411,6 +422,16 @@ class ProjectManager:
             shutil.move(str(source), str(final_file_path))
 
         project_file.file_path = str(final_file_path)
+
+        # Detect image type if not provided
+        if not project_file.file_type:
+            try:
+                detected_type = detect_image_type(str(final_file_path))
+                project_file.file_type = detected_type
+                logger.info(f"Detected image type: {detected_type} for {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to detect image type for {filename}: {e}")
+                project_file.file_type = "hyperspectral"  # Default fallback
 
         # Update project
         project.files.append(project_file.to_dict())
@@ -524,6 +545,16 @@ class ProjectManager:
         # Check if project has files
         if not project.files:
             logger.error(f"Project {project.name} has no files to process")
+            return None
+        
+        # Check if project has mixed file types
+        file_types = {f.get("file_type", "hyperspectral") for f in project.files}
+        if "rgb" in file_types and "hyperspectral" in file_types:
+            error_msg = (
+                "Нельзя объединить RGB и гиперспектральные изображения "
+                "в один ортофотоплан. Загрузите только один тип файлов."
+            )
+            logger.error(error_msg)
             return None
         
         if project.status == ProjectStatus.RUN.value:

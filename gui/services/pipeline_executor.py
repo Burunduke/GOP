@@ -327,9 +327,10 @@ class PipelineExecutor:
             
             # For hyperspectral processing, we need to pass the directory containing files
             # The processor should handle multiple files in the directory
+            # Note: processing_type is the stage name, not the sensor type - GOPAdapter derives that from files
             result = self.gop_adapter.process_data(
                 data_path=str(files_dir),
-                processing_type=stage,
+                processing_type=stage,  # Stage name (not sensor type - GOPAdapter derives that from files)
                 parameters={**config.get(stage, {}), "output_dir": run_folder}
             )
             return result if isinstance(result, dict) else {"metrics": {}, "output_files": []}

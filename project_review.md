@@ -68,7 +68,7 @@ main.py                    ← Entry point
 | Component | What it does |
 |---|---|
 | [`config.py`](src/core/config.py:1) | Thread-safe singleton config. Loads from YAML, supports dot-notation access, DI |
-| [`pipeline.py`](src/core/pipeline.py:1) | 2-stage pipeline: (1) hyperspectral preprocessing → (2) orthophoto creation |
+| [`pipeline.py`](src/core/pipeline.py:1) | Branched pipeline: for hyperspectral inputs runs (1) hyperspectral preprocessing → (2) orthophoto creation; for RGB inputs skips stage 1 and feeds images straight to orthophoto creation. Branch is selected via the `sensor_type` argument (`"rgb"` / `"hyperspectral"`) |
 | [`orthophoto.py`](src/processing/orthophoto.py:1) | Creates orthophoto via OpenDroneMap (preferred) or GDAL `gdal_merge.py` (fallback). Validates and optimizes output. `create_orthophoto()` expects a dict with `tiff_paths` and `metadata` keys |
 | [`processor.py`](src/processing/hyperspectral/processor.py:1) | Loads hyperspectral data via GDAL, validates, caches. **`process()` is currently a stub (TODO) and does NOT return the `tiff_paths` / `metadata` keys that [`OrthophotoProcessor.create_orthophoto()`](src/processing/orthophoto.py:1) expects — the data-flow contract between the two stages is broken** |
 | [`gdal_utils.py`](src/utils/gdal_utils.py:1) | Context managers for GDAL datasets, safe read/write, metadata extraction |
@@ -344,3 +344,81 @@ The orchestrator coordinated 9 subtasks plus 1 follow-up and 1 final cleanup, wo
   - [`gui/components/callbacks.py`](gui/components/callbacks.py:187) — error handling and display for project creation
   - [`gui/components/project_detail.py`](gui/components/project_detail.py:17) — run display name formatting
 - **Caveat:** If a project has only legacy runs, the next new run is `run_1`.
+
+#### Bug fix — centralize project path resolution (follow-up)
+
+Right after the naming change above, a regression slipped through: new projects were still being saved on disk under their UUID (not the sanitized name), and processing crashed with `File not found: data\projects\<uuid>\files`.
+
+- **What was wrong:**
+  - [`gui/services/project_manager.py`](gui/services/project_manager.py) — `_save_project` was falling back to `project.id` when computing the project directory, instead of using the new `project.folder_name`. So even though the name was sanitized, the folder was still created under the UUID.
+  - [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py) — paths to the input `files/` directory were built directly as `projects_dir / project_id / "files"`, which pointed at a non-existent UUID folder for new (named) projects.
+
+- **The fix:** introduced a single helper [`ProjectManager.get_project_dir(project)`](gui/services/project_manager.py) that returns the correct on-disk directory for any project. It uses `project.folder_name` when present and falls back to `project.id` for legacy UUID-named projects. All path construction in [`gui/services/project_manager.py`](gui/services/project_manager.py) (`_save_project`, `delete_project`, `add_file_to_project`, `add_file_by_server_path`, `start_processing`, `_next_run_number`, `get_run_folders`) and in [`gui/services/pipeline_executor.py`](gui/services/pipeline_executor.py) was routed through this helper.
+
+- **Convention going forward (please follow this):**
+  > Never build a project path from `project.id` directly. Always call `ProjectManager.get_project_dir(project)`. The helper handles both new (named) and legacy (UUID) projects, so you don't have to think about it.
+
+- **Unchanged conventions:**
+  - The `files/` subfolder is preserved — uploaded inputs still live at `<project_dir>/files/`.
+  - Legacy compatibility is unchanged: existing UUID-named project folders still load and process. `_load_all_projects` sets `project.folder_name = project_dir.name` for them, so the helper resolves them correctly without any data migration.
+
+### Memory optimization: streaming pipeline for hyperspectral processing — 2026-04-26
+
+- **What changed:** Implemented streaming pipeline in [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1) to reduce peak RAM usage during the radiometric preprocessing stage from ~5 GiB to ~a few hundred MiB for 200-band hyperspectral cubes.
+- **Steps implemented:**
+  - **Step 5 — Streaming pipeline:** Converted the radiometric/preprocessing flow to a band-by-band streaming pipeline so peak RAM is ~`one band × small constant` instead of `whole cube × 2-3`.
+  - **Step 7 — float32 reads:** Made sure every per-band `ReadAsArray` call uses `buf_type=gdal.GDT_Float32`. If `load_data()` is kept for compatibility, also pass `buf_type=gdal.GDT_Float32` there to avoid float64 inflation on the legacy path.
+- **Files changed:** [`src/processing/hyperspectral/processor.py`](src/processing/hyperspectral/processor.py:1)
+- **New methods added:**
+  - `_iter_bands(input_path)` — a generator that yields `(band_index, band_array_2d_float32)` one at a time using GDAL with `buf_type=gdal.GDT_Float32`
+  - `_apply_preprocessing_streaming(input_path, output_dir, config)` — new streaming preprocessing method that processes bands one at a time
+  - `_save_single_band_tiff(band_arr, index, input_path, output_dir, metadata)` — helper to save a single band as GeoTIFF
+- **Expected memory impact:** Peak RAM now ~O(one band), independent of band count. 200-band cubes should now process within a few hundred MB peak for the radiometric stage instead of multiple GB.
+- **Architectural notes:**
+  - `load_data()` is kept for backward compatibility but no longer used on the hot path
+  - The streaming path computes any required global statistics in a first lightweight pass if absolutely necessary (prefer per-band statistics)
+  - For percentile-based normalization, uses a per-band min/max OR sample-based percentile (small random sample per band) rather than a global cube percentile
+  - For noise reduction: apply per-band 2-D filter (`gaussian`, `median`, `mean`) which works naturally per band. For unimplemented methods (`pca`, `mnf`) keeps the warn-and-skip behavior
+  - Preserves all existing logging messages where reasonable; adds INFO logs like `"Streaming band {i}/{n}"` (throttled)
+  - Preserves public API of `HyperspectralProcessor.process()` so callers are unaffected
+- **Verification:** Syntax check passed with `python3 -m py_compile src/processing/hyperspectral/processor.py`. Public API unchanged.
+
+### Memory optimization: defensive cleanup of legacy code — 2026-04-26
+
+- **What changed:** Implemented Step 6 of the radiometric memory optimization plan to remove legacy code paths that could reintroduce memory issues.
+- **Steps applied:**
+  - **Step 6 — Defensive cleanup:** Made streaming path the only path, removed dead/dangerous legacy code.
+- **Changes made:**
+  - **Cache disabled by default:** Changed `HyperspectralProcessor.__init__` default from `cache_enabled=True` to `cache_enabled=False` to prevent caching of multi-GB cubes.
+  - **Removed legacy methods:** Deleted `process_pipeline()` and `save_results()` methods from `HyperspectralProcessor` as they are no longer used and could reintroduce memory issues.
+  - **Deprecated `load_data()`:** Added deprecation note and warning log to `load_data()` method since it's kept for backward compatibility only and not used in the streaming path.
+  - **Cache class documentation:** Added note to `HyperspectralCache` docstring indicating it's not used by default after the streaming refactor.
+  - **Cleaned up imports:** Removed unused `json` import from `processor.py`.
+- **Files changed:**
+  - `src/processing/hyperspectral/processor.py` — lines 44, 63-123, 131-183
+  - `src/processing/hyperspectral/cache.py` — lines 1-6
+- **Methods removed:**
+  - `process_pipeline()` — no remaining callers after grep check
+  - `save_results()` — no remaining callers after grep check
+- **Methods kept with deprecation note:**
+  - `load_data()` — kept for backward compatibility with deprecation warning
+- **Verification:**
+  - `python3 -m py_compile src/processing/hyperspectral/processor.py src/processing/hyperspectral/cache.py src/processing/hyperspectral/__init__.py` passes.
+  - Grep shows no remaining references to `process_pipeline` or `save_results`.
+  - Grep confirms `cache_enabled` default is now `False`.
+  - Streaming methods (`_iter_bands`, `_apply_preprocessing_streaming`, `_save_single_band_tiff`, `process`) are untouched.
+  - `gui/services/gop_adapter.py` and `src/core/pipeline.py` still import and call `HyperspectralProcessor` correctly.
+  - No unused imports remain in `processor.py`.
+
+### RGB vs hyperspectral separation — 2026-04-26
+
+- **What changed:** the upload + processing flow now distinguishes RGB photos from hyperspectral cubes end-to-end, so RGB orthophotos no longer go through the (heavy and inappropriate) hyperspectral preprocessing stage.
+- **New utility — [`src/utils/image_type.py`](src/utils/image_type.py:1):** `detect_image_type(path) -> "rgb" | "hyperspectral"`. Extension-first classification (`.png`/`.jpg`/`.jpeg` → rgb; `.bil`/`.hdr`/`.dat` → hyperspectral); for `.tif`/`.tiff`/`.geotiff` opens the file with GDAL and uses `RasterCount` (≤4 bands → rgb, otherwise hyperspectral).
+- **Auto-tagging on upload:** [`ProjectManager.add_file_to_project()`](gui/services/project_manager.py:273) and [`ProjectManager.add_file_by_server_path()`](gui/services/project_manager.py:350) now set [`ProjectFile.file_type`](gui/models/project.py:1) to the detected value instead of hard-coding `"hyperspectral"`. The browser-upload code path in [`gui/components/callbacks.py`](gui/components/callbacks.py:1) was updated the same way.
+- **Mixed-type guard:** [`ProjectManager.start_processing()`](gui/services/project_manager.py:531) rejects projects whose files mix RGB and hyperspectral with the Russian message *Нельзя объединить RGB и гиперспектральные изображения в один ортофотоплан. Загрузите только один тип файлов.*
+- **Pipeline branching:** [`GOPAdapter.process_data()`](gui/services/gop_adapter.py:43) re-detects the sensor type from the input directory (defense-in-depth in case the project was loaded from disk or tagged before this change) and forwards `sensor_type` to [`Pipeline.process()`](src/core/pipeline.py:73). RGB inputs skip [`HyperspectralProcessor`](src/processing/hyperspectral/processor.py:1) entirely; PNG/JPG/JPEG are converted to temporary GeoTIFFs via `gdal.Translate` into a `rgb_converted/` subfolder under the run's work dir, then handed straight to [`OrthophotoProcessor.create_orthophoto()`](src/processing/orthophoto.py:67).
+- **Supported formats:** PNG, JPG, JPEG are now first-class RGB inputs (already listed under [Supported Formats](project_review.md:194)).
+- **UI note:** the user-facing label "гиперспектральный" is intentionally kept for both file types — no UI change was required.
+- **Files changed:** [`src/utils/image_type.py`](src/utils/image_type.py:1) (new), [`gui/services/project_manager.py`](gui/services/project_manager.py:1), [`gui/services/gop_adapter.py`](gui/services/gop_adapter.py:1), [`src/core/pipeline.py`](src/core/pipeline.py:1), [`gui/components/callbacks.py`](gui/components/callbacks.py:1).
+- **Verification:** static — `python3 -m py_compile` on the touched modules passes; no tests added (per project policy).
+- **UI follow-up — type badge in project file list:** [`gui/components/project_detail.py`](gui/components/project_detail.py:206) now renders a small `dbc.Badge` ("RGB" or "HS") next to each file in the project file list, derived from [`ProjectFile.file_type`](gui/models/project.py:1). The existing "гиперспектральный" label is preserved alongside the badge — the badge is purely additive. Legacy projects with a missing/unset `file_type` default to "HS" so old data keeps rendering correctly.

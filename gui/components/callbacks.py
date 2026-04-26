@@ -759,7 +759,7 @@ def register_callbacks(
                     project_id=project_id,
                     filename=filename,
                     file_content=file_bytes,
-                    file_type="hyperspectral"  # Default type, could be enhanced
+                    file_type=None  # Will be auto-detected
                 )
                 added_count += 1
             except Exception as e:
