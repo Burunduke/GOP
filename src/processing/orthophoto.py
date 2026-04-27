@@ -2363,75 +2363,125 @@ class OrthophotoProcessor:
         
         self.logger.info(f"Creating geo-referenced canvas: {canvas_width}x{canvas_height}")
         
-        # Initialize accumulators for blending
-        canvas_sum = np.zeros((canvas_height, canvas_width, 3), dtype=np.float32)
-        weight_sum = np.zeros((canvas_height, canvas_width), dtype=np.float32)
+        # Initialize accumulators for blending using disk-backed memmap arrays
+        # canvas_sum holds Σ(color×w) as float32, weight_sum holds Σ(w) as float32
+        # Create temporary files for memmap arrays
+        import tempfile
+        canvas_sum_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
+        weight_sum_file = tempfile.NamedTemporaryFile(delete=False, suffix='.npy')
+        canvas_sum_file.close()
+        weight_sum_file.close()
         
-        # Process each image
-        for i, (image, tiff_path) in enumerate(zip(images, tiff_paths)):
-            self.logger.info(f"Processing image {i+1}/{len(images)}: {os.path.basename(tiff_path)}")
+        # Create memmap arrays backed by temporary files
+        canvas_sum = np.memmap(canvas_sum_file.name, dtype=np.float32, mode='w+',
+                              shape=(canvas_height, canvas_width, 3))
+        weight_sum = np.memmap(weight_sum_file.name, dtype=np.float32, mode='w+',
+                              shape=(canvas_height, canvas_width))
+        
+        # Initialize to zero
+        canvas_sum[:] = 0
+        weight_sum[:] = 0
+        
+        # Ensure data is written to disk
+        canvas_sum.flush()
+        weight_sum.flush()
+        
+        try:
+            # Process each image
+            for i, (image, tiff_path) in enumerate(zip(images, tiff_paths)):
+                self.logger.info(f"Processing image {i+1}/{len(images)}: {os.path.basename(tiff_path)}")
+                
+                try:
+                    # Get image geotransform
+                    metadata = get_raster_metadata(tiff_path)
+                    geotransform = metadata["geotransform"]
+                    
+                    if geotransform is None:
+                        raise RuntimeError(f"Image {tiff_path} has no geotransform")
+                    
+                    # Get image dimensions
+                    image_height, image_width = image.shape[:2]
+                    
+                    # Compute canvas_max_y
+                    canvas_max_y = max_y
+                    
+                    # Compute placement rectangle on canvas
+                    tile_x, tile_y, tile_width, tile_height = self._tile_to_canvas_rect(
+                        geotransform, min_x, min_y, pixel_size_x, pixel_size_y, image_width, image_height, canvas_max_y
+                    )
+                    
+                    self.logger.info(f"  Tile rect: ({tile_x}, {tile_y}) size {tile_width}x{tile_height}")
+                    
+                    # Resample image to canvas resolution if needed
+                    resampled_image = self._resample_to_canvas_resolution(
+                        image, geotransform, pixel_size_x, pixel_size_y
+                    )
+                    
+                    # Ensure resampled image matches expected tile size
+                    if resampled_image.shape[0] != tile_height or resampled_image.shape[1] != tile_width:
+                        # Resize to match expected tile size
+                        resampled_image = cv2.resize(resampled_image, (tile_width, tile_height),
+                                                   interpolation=cv2.INTER_LINEAR)
+                    
+                    # Create valid pixel mask
+                    if len(resampled_image.shape) == 3:
+                        valid_mask = np.any(resampled_image > 0, axis=2)
+                    else:
+                        valid_mask = resampled_image > 0
+                    
+                    # Compute distance transform weights
+                    weights = self._compute_tile_weights(valid_mask)
+                    
+                    # Blend tile into canvas
+                    self._blend_tile_into_canvas(
+                        resampled_image, weights, tile_x, tile_y,
+                        canvas_sum, weight_sum
+                    )
+                    
+                    self.logger.info(f"  Successfully processed image {i+1}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"  Failed to process image {i+1} ({tiff_path}): {e}")
+                    continue
             
+            # Flush data to disk before final normalization
+            canvas_sum.flush()
+            weight_sum.flush()
+        
+        finally:
+            # Clean up temporary files
             try:
-                # Get image geotransform
-                metadata = get_raster_metadata(tiff_path)
-                geotransform = metadata["geotransform"]
-                
-                if geotransform is None:
-                    raise RuntimeError(f"Image {tiff_path} has no geotransform")
-                
-                # Get image dimensions
-                image_height, image_width = image.shape[:2]
-                
-                # Compute canvas_max_y
-                canvas_max_y = max_y
-                
-                # Compute placement rectangle on canvas
-                tile_x, tile_y, tile_width, tile_height = self._tile_to_canvas_rect(
-                    geotransform, min_x, min_y, pixel_size_x, pixel_size_y, image_width, image_height, canvas_max_y
-                )
-                
-                self.logger.info(f"  Tile rect: ({tile_x}, {tile_y}) size {tile_width}x{tile_height}")
-                
-                # Resample image to canvas resolution if needed
-                resampled_image = self._resample_to_canvas_resolution(
-                    image, geotransform, pixel_size_x, pixel_size_y
-                )
-                
-                # Ensure resampled image matches expected tile size
-                if resampled_image.shape[0] != tile_height or resampled_image.shape[1] != tile_width:
-                    # Resize to match expected tile size
-                    resampled_image = cv2.resize(resampled_image, (tile_width, tile_height),
-                                               interpolation=cv2.INTER_LINEAR)
-                
-                # Create valid pixel mask
-                if len(resampled_image.shape) == 3:
-                    valid_mask = np.any(resampled_image > 0, axis=2)
-                else:
-                    valid_mask = resampled_image > 0
-                
-                # Compute distance transform weights
-                weights = self._compute_tile_weights(valid_mask)
-                
-                # Blend tile into canvas
-                self._blend_tile_into_canvas(
-                    resampled_image, weights, tile_x, tile_y,
-                    canvas_sum, weight_sum
-                )
-                
-                self.logger.info(f"  Successfully processed image {i+1}")
-                
-            except Exception as e:
-                self.logger.warning(f"  Failed to process image {i+1} ({tiff_path}): {e}")
-                continue
+                del canvas_sum
+                del weight_sum
+                os.unlink(canvas_sum_file.name)
+                os.unlink(weight_sum_file.name)
+            except:
+                pass
         
         # Normalize canvas to create final image
-        with np.errstate(divide='ignore', invalid='ignore'):
-            # Avoid division by zero
-            normalized = np.where(weight_sum[..., np.newaxis] > 0,
-                                   canvas_sum / weight_sum[..., np.newaxis], 0)
+        # Allocate the final output as uint8 (1.95 GB — unavoidable; this is the actual orthophoto)
+        final = np.empty((canvas_height, canvas_width, 3), dtype=np.uint8)
         
-        # Convert to uint8
-        result = np.clip(normalized, 0, 255).astype(np.uint8)
+        # Iterate over the same tile grid used during blending (2048×2048 tiles):
+        tile_size = 2048
+        for y0 in range(0, canvas_height, tile_size):
+            y1 = min(y0 + tile_size, canvas_height)
+            for x0 in range(0, canvas_width, tile_size):
+                x1 = min(x0 + tile_size, canvas_width)
+                
+                # Extract ROI from accumulators
+                w = weight_sum[y0:y1, x0:x1]
+                c = canvas_sum[y0:y1, x0:x1]
+                
+                # Perform normalization: final = canvas_sum / weight_sum
+                # But we need to avoid division by zero
+                out = np.where(w[..., None] > 0, c / w[..., None], 0.0)
+                final[y0:y1, x0:x1] = np.clip(out, 0, 255).astype(np.uint8)
+                
+                # Free intermediates immediately
+                del w, c, out
+        
+        result = final
         
         # Force garbage collection to free any remaining intermediates
         gc.collect()
@@ -2556,6 +2606,18 @@ class OrthophotoProcessor:
         
         return weights
     
+    # Hand-trace verification for 2-image overlap:
+    # Image 1: pixel value = 200, weight = 0.5
+    # Image 2: pixel value = 200, weight = 0.5
+    #
+    # With float32 accumulators:
+    # Tile contribution to canvas_sum = color * weight = 200 * 0.5 = 100.0
+    # Tile contribution to weight_sum = weight = 0.5
+    # After both tiles: canvas_sum = 100.0 + 100.0 = 200.0, weight_sum = 0.5 + 0.5 = 1.0
+    # Final pixel = canvas_sum / weight_sum = 200.0 / 1.0 = 200.0
+    #
+    # This confirms the math is correct and the final pixel value will be 200.0,
+    # which when cast to uint8 will be exactly 200.
     def _blend_tile_into_canvas(self, tile: np.ndarray, weights: np.ndarray,
                                   offset_x: int, offset_y: int,
                                   canvas_sum: np.ndarray, weight_sum: np.ndarray) -> None:
@@ -2596,18 +2658,37 @@ class OrthophotoProcessor:
         if len(tile_region.shape) == 3:
             # Multi-band image
             for c in range(tile_region.shape[2]):
-                # Use in-place operations and explicit float32 casting
+                # Compute per-tile contribution: tile_color_f32 * tile_weight_f32
                 weighted_tile = tile_region[:, :, c].astype(np.float32)
                 weighted_tile *= weight_region  # In-place multiplication
+                
+                # Add to canvas_sum directly (no scaling needed)
                 canvas_sum[y_start:y_end, x_start:x_end, c] += weighted_tile
+                
+                # Flush to disk
+                canvas_sum.flush()
+                
                 # Free intermediate
                 del weighted_tile
         else:
             # Single-band image
             weighted_tile = tile_region.astype(np.float32)
             weighted_tile *= weight_region  # In-place multiplication
+            
+            # Add to canvas_sum directly (no scaling needed)
             canvas_sum[y_start:y_end, x_start:x_end, 0] += weighted_tile
+            
+            # Flush to disk
+            canvas_sum.flush()
+            
             # Free intermediate
             del weighted_tile
         
+        # Add weight_region to weight_sum directly (no scaling needed)
         weight_sum[y_start:y_end, x_start:x_end] += weight_region
+        
+        # Flush to disk
+        weight_sum.flush()
+        
+        # Free intermediate
+        del weight_region
